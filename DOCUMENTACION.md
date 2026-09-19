@@ -8,32 +8,50 @@
 5. [MediaPipe Hand Landmarker](#mediapipe-hand-landmarker)
 6. [Sistema de Juego](#sistema-de-juego)
 7. [Control por Mano](#control-por-mano)
-8. [API de OpenCV usada](#api-de-opencv-usada)
-9. [API de Pygame usada](#api-de-pygame-pygame-ce-257-usada)
-10. [Optimizaciones](#optimizaciones)
-11. [Sistema de Sprites y Personalizacion](#sistema-de-sprites-y-personalizacion)
-12. [Sistema de Audio](#sistema-de-audio)
+8. [Sistema de Texto](#sistema-de-texto)
+9. [Sistema de Sprites](#sistema-de-sprites)
+10. [Sistema de Audio](#sistema-de-audio)
+11. [Menu, Dificultad y Ajustes](#menu-dificultad-y-ajustes)
+12. [Estadisticas de Partida](#estadisticas-de-partida)
+13. [API de OpenCV usada](#api-de-opencv-usada)
+14. [API de Pygame usada](#api-de-pygame-pygame-ce-usada)
+15. [Optimizaciones](#optimizaciones)
+16. [Historial de correcciones](#historial-de-correcciones)
 
 ---
 
 ## Registro de Tecnologias
 
-| Tecnologia | Version | Tipo | Propósito |
-|-----------|---------|------|-----------|
-| Python | 3.14.6 | Lenguaje | Lenguaje de programacion principal |
-| pygame-ce | 2.5.7 | Biblioteca de juegos | Renderizado grafico, ventana, entrada de usuario |
-| SDL2 (incluido en pygame-ce) | 2.32.10 | Motor grafico | Backend de renderizado, audio, eventos |
-| opencv-python | 5.0.0 | Vision por computadora | Captura de camara, conversion de color |
-| NumPy | 2.5.1 | Computacion cientifica | Arreglos multidimensionales para procesamiento de imagenes |
-| mediapipe | 0.10.35 | ML/IA | Deteccion de mano en tiempo real |
-| hand_landmarker.task | 1 (float16) | Modelo ML | 21 landmarks por mano para tracking |
-| MediaPipe Tasks API | - | SDK | Interfaz de programacion para ML tasks |
+| Tecnologia | Tipo | Proposito |
+|-----------|------|-----------|
+| Python 3.14 | Lenguaje | Lenguaje de programacion principal |
+| pygame-ce 2.5.x | Biblioteca de juegos | Renderizado grafico, ventana, entrada, audio |
+| SDL2 (incluido en pygame-ce) | Motor grafico | Backend de renderizado, audio, eventos |
+| opencv-python | Vision por computadora | Captura de camara, conversion de color |
+| NumPy | Computacion cientifica | Arreglos para procesamiento de imagenes y sintesis de audio |
+| Pillow | Procesamiento de imagenes | Generacion procedural de los sprites (solo en tools/, no en tiempo de juego) |
+| mediapipe | ML/IA | Deteccion de mano en tiempo real |
+| hand_landmarker.task | Modelo ML | 21 landmarks por mano para tracking |
 
 ---
 
 ## Descripcion General
 
-Es un juego de nave espacial contra asteroides y naves alienigenas controlado por gestos de mano usando la camara web y MediaPipe Hand Landmarker. El jugador mueve una nave espacial con la mano y dispara una rafaga de balas (triple con el power-up correspondiente) para destruir asteroides que caen desde arriba. Cada 5 asteroides destruidos otorga un power-up aleatorio. Aparecen jefes de oleada en las oleadas 5, 10, 15 y 20 (el ultimo es el jefe final, con sprites propios y 3 fases). Naves alienigenas aparecen desde la oleada 2 y disparan al jugador. El puntaje maximo y la oleada mas alta se guardan entre partidas, y el juego tiene musica y efectos de sonido generados proceduralmente (ver "Sistema de Sprites y de Audio" al final de este documento).
+Nave vs Asteroides es un juego de nave espacial contra asteroides y naves
+alienigenas controlado por gestos de mano usando la camara web y MediaPipe
+Hand Landmarker. El jugador mueve la nave con la mano y cierra el puño para
+disparar (rafaga de 3 balas con el buff correspondiente). Cada 5 asteroides
+destruidos aparece un power-up. Hay jefes de oleada en las oleadas 5, 10, 15
+y 20; el ultimo ("La Anomalia Final") tiene 3 fases y sprite propio.
+
+Antes de jugar el menu deja elegir la dificultad (facil/normal/dificil) y
+tiene una pantalla de ajustes (volumen, sensibilidad de mano, camara). Al
+terminar la partida se muestra precision de disparo, tiempo sobrevivido y
+el desglose de enemigos destruidos, ademas del puntaje y el record.
+
+Todos los graficos (naves, enemigos, asteroides, jefes, power-ups) y todo
+el audio (musica y efectos) son generados de forma procedural por los
+scripts de `tools/`; no hay ningun asset descargado de internet.
 
 ---
 
@@ -46,214 +64,232 @@ Proyecto/
 ├── README.md                   # Instrucciones de usuario
 ├── DOCUMENTACION.md            # Este archivo
 ├── progreso.json               # Puntaje maximo y oleada maxima (se crea solo)
-├── custom_skins.json           # Colores de nave personalizados (se crea solo)
+├── ajustes.json                # Volumen, sensibilidad, camara, pantalla completa (se crea solo)
+├── custom_skins.json           # Color de nave personalizado, si se usa (se crea solo)
 ├── models/
-│   └── hand_landmarker.task  # Modelo de deteccion de mano de MediaPipe (7.8 MB)
+│   └── hand_landmarker.task    # Modelo de deteccion de mano de MediaPipe
 ├── assets/
 │   ├── sprites/                # PNG generados por tools/generate_sprites.py
+│   │   ├── ships/               # scout, tank, interceptor, bomber (x body/wing/detail)
+│   │   ├── enemies/              # fighter, drone, gunner (x body/wing/detail)
+│   │   ├── asteroids/             # 14 variantes (un PNG cada una)
+│   │   ├── boss/                 # mothership (saucer), dragon, titan (x body/wing/detail)
+│   │   └── powerups/              # 10 tipos de bonus (x body/detail)
 │   └── audio/                  # WAV generados por tools/generate_audio.py (sfx/ y music/)
 ├── tools/
 │   ├── generate_sprites.py     # Genera los PNG de assets/sprites (Pillow + numpy)
 │   ├── generate_audio.py       # Genera los WAV de assets/audio (numpy)
 │   └── preview_sprites.py      # Hoja de contacto para revisar sprites (solo desarrollo)
 └── modules/                    # Todos los modulos del juego
-    ├── __init__.py             # Hace que modules/ sea un paquete Python
-    ├── constants.py            # Constantes globales (colores, dimensiones, indices)
-    ├── skins.py                # Colores de nave personalizados (custom_skins.json)
+    ├── __init__.py
+    ├── constants.py            # Constantes globales (colores, dimensiones, buffs, dificultad)
+    ├── skins.py                # Aspectos/colores de nave (custom_skins.json)
     ├── progress.py             # Puntaje/oleada maxima (progreso.json)
+    ├── settings.py             # Ajustes del jugador (ajustes.json)
     ├── entities/
-    │   ├── ship.py              # Clase Ship (jugador con sistema de buffs)
+    │   ├── ship.py              # Clase Ship (jugador, buffs, disparo)
     │   ├── bullet.py             # Clase Bullet (bala del jugador)
-    │   ├── asteroid.py           # Clases Asteroid, Particle, Explosion (visual)
-    │   ├── enemy.py              # AlienShip, AlienBullet
-    │   ├── powerup.py            # Clase PowerUp y tipos de buffs
-    │   └── boss.py               # FinalBoss (jefe de la oleada 20) + FinalBossBullet
+    │   ├── asteroid.py           # Asteroid, Particle, Explosion
+    │   ├── enemy.py              # AlienShip, AlienBullet (enemigos comunes)
+    │   ├── powerup.py            # PowerUp y tipos de buff
+    │   └── boss.py               # FinalBoss (oleada 20) + FinalBossBullet
     ├── core/
-    │   └── boss_system.py       # BossDefinition, WaveBoss (oleadas 5/10/15) + WaveBossBullet
+    │   └── boss_system.py       # BossDefinition, BossReward, WaveBoss (oleadas 5/10/15) + WaveBossBullet
     └── systems/
         ├── input.py              # Integracion con MediaPipe Hand Landmarker
         ├── sprites.py            # Carga/tintado/cache de los PNG de assets/sprites
         ├── audio.py              # Reproduccion de efectos y musica (assets/audio)
-        ├── menu.py               # Menu principal, personalizacion, selector de color
-        ├── ui.py                 # HUD, pantallas de countdown/game over/victoria
-        └── fonts.py              # Carga de fuentes con cache
+        ├── menu.py               # Menu principal, dificultad, ajustes
+        ├── ui.py                 # HUD, countdown, game over/victoria, estadisticas
+        └── fonts.py              # Fuente de terminal + cache de texto renderizado
 ```
 
 ---
 
 ## Modulos
 
-> **Nota:** las rutas de esta seccion son historicas (de una version anterior
-> del proyecto, cuando todo vivia directo en `modules/`). La ubicacion actual
-> de cada clase esta en el arbol de arriba (`modules/entities/`, `modules/core/`,
-> `modules/systems/`); el contenido descrito abajo sigue siendo valido salvo
-> que se indique lo contrario mas adelante.
-
 ### `modules/constants.py`
-Define todas las constantes del juego. Sin dependencias externas.
+Todas las constantes del juego, sin dependencias de otros modulos (para
+poder importarse desde cualquier lado sin ciclos).
 
-**Contenido:**
-- Dimensiones de pantalla (`SCREEN_WIDTH`, `SCREEN_HEIGHT`, `GAME_WIDTH`, `GAME_HEIGHT`)
-- Dimensiones del preview de camara (`PREVIEW_WIDTH`, `PREVIEW_HEIGHT`)
-- FPS objetivo
-- Colores RGB (constantes nombradas: `WHITE`, `RED`, `GREEN`, `CYAN`, `YELLOW`, `BLUE`, `ORANGE`, `PURPLE`, `PINK`, `DARK_BG`, `DARKER_BG`)
-- Dimensiones de la nave (`SHIP_WIDTH`, `SHIP_HEIGHT`)
+- Dimensiones de pantalla y del area de juego (`SCREEN_WIDTH/HEIGHT`, `GAME_WIDTH/HEIGHT`)
+- Paleta de colores nombrada (`WHITE`, `ROSA`, `AZUL`, `ELECTRICO`, etc.) mas alias en ingles (`RED`, `CYAN`...) para el codigo mas viejo
 - Indices de landmarks de MediaPipe (muñeca, dedos, articulaciones)
-- Constantes de power-ups (`POWERUP_SPAWN_EVERY`, `BUFF_TYPE_*`, `BUFF_DURATION*`)
-- Constantes del boss (`BOSS_SPAWN_WAVE`, `BOSS_MAX_HP`, `BOSS_SPEED`, etc.)
+- Constantes de power-ups: `BUFF_TYPE_*`, `BUFF_DURATION_*`, `LIGHTNING_ZAP_INTERVAL`, `LIGHTNING_RADIUS`
+- Constantes de jefes: `BOSS_SPAWN_WAVE`, `FINAL_BOSS_SPAWN_WAVE`, `FINAL_BOSS_MAX_HP`, etc.
+- `DIFICULTADES` (mapa nombre -> multiplicador) y `DIFICULTAD_DEFECTO`
 
-### `modules/ship.py`
-Clase `Ship` - la nave del jugador.
+### `modules/skins.py`
+Aspectos (colores) de cada clase de nave. Cada aspecto es un diccionario
+con `body_color`, `wing_color`, `glow_color` y `flame_color`; hay 4
+predefinidos por clase mas el aspecto `custom` (color elegido a mano,
+persistido en `custom_skins.json`). La nave siempre arranca con el aspecto
+`default` porque ya no hay pantalla de menu para elegir otro, pero el
+sistema entero sigue funcionando si algo pide un `skin_id` distinto.
 
-**Dependencias:** `pygame`, `math`, `modules.constants`, `modules.bullet`
+### `modules/progress.py`
+Puntaje maximo y oleada mas alta alcanzada, guardados en `progreso.json`.
+Tolerante a archivo ausente o corrupto (usa los valores por defecto y
+sigue andando). `registrar_partida(puntaje, oleada)` se llama una sola vez
+al terminar la partida y devuelve si se establecio un record nuevo.
 
-**Atributos:**
-- `x`, `y` - posicion actual
-- `target_x`, `target_y` - posicion destino (seteada por la mano)
-- `speed` - velocidad de interpolacion
-- `shoot_cooldown` / `shoot_delay` - control de cadencia de disparo
-- `lives` - vidas del jugador (3 al inicio, max 5)
-- `triple_shot_active` - si el buff triple shot esta activo
-- `buffs` - diccionario de buffs activos con timers
-- `thrust_particles` - particulas de energia de los motores
-- `engine_flame_phase` - animacion de llama del motor
+### `modules/settings.py`
+Ajustes del jugador guardados en `ajustes.json`, mismo patron tolerante a
+errores que `progress.py`: `volumen_musica`, `volumen_sfx`, `silenciado`,
+`pantalla_completa`, `sensibilidad_mano` y `camera_index`. `cargar()` se
+llama una vez al arrancar `main()`; `get(clave)`/`set_valor(clave, valor)`
+leen y escriben (esta ultima persiste a disco en el momento).
 
-**Metodos:**
-- `update()` - interpolacion suave, limites de pantalla, degradacion de buffs
-- `draw()` - renderiza la nave con glow, cockpit, wing accents, flame animation
-- `shoot()` - retorna lista de 1 o 3 bullets segun triple_shot
-- `apply_buff(buff_type)` - aplica un buff y retorna mensaje
-- `take_damage()` - reduce vidas, activa invencibilidad temporal
+### `modules/entities/ship.py`
+Clase `Ship`, la nave del jugador.
 
-### `modules/bullet.py`
-Clase `Bullet` - bala del jugador. Ligera, sin dependencias externas.
+**Atributos clave:** `x/y` (posicion), `target_x/target_y` (destino, lo
+fija la mano detectada), `lives/max_lives`, `invincible_timer` (parpadeo
+tras un golpe), `buffs` (diccionario de buffs activos con su timer),
+`lightning_active`/`lightning_zap_cooldown` (campo electrico).
 
-**Dependencias:** `pygame`, `modules.constants`
+**Metodos:** `update()` interpola la nave hacia el destino y hace avanzar
+timers/buffs; `draw()` dibuja el sprite, la barra de vida y las auras de
+cada buff activo; `shoot()` devuelve 1 o 3 `Bullet` segun el buff de
+rafaga triple; `apply_buff(tipo)` aplica un buff y devuelve un mensaje;
+`take_damage()` resta una vida (o un golpe de escudo) y activa la
+invencibilidad temporal — devuelve `True` solo si de verdad se perdio una
+vida (ver la nota sobre este metodo en
+[Historial de correcciones](#historial-de-correcciones)); `puede_descargar_rayo()`
+/ `reiniciar_descarga_rayo()` controlan la cadencia del campo electrico.
 
-**Metodos:**
-- `update()` - mueve la bala hacia arriba
-- `draw()` - dibuja la bala como circulo amarillo con borde blanco
+### `modules/entities/bullet.py`
+Clase `Bullet`: bala del jugador, viaja recto hacia arriba con una estela
+que se desvanece. `piercing=True` (buff o clase bombardero) evita que se
+desactive al primer impacto.
 
-### `modules/asteroid.py`
-Clases `Asteroid`, `Particle`, `Explosion` - entorno del juego y efectos visuales.
+### `modules/entities/asteroid.py`
+- **Asteroid**: usa uno de los 14 sprites de `assets/sprites/asteroids`
+  (tintado y rotado); si faltan los PNG cae a un poligono aleatorio.
+- **Particle**: chispa individual con velocidad aleatoria y desvanecimiento.
+- **Explosion**: grupo de `Particle` para el efecto de destruccion; la
+  reutilizan tambien enemigos, jefes y power-ups, no solo los asteroides.
 
-**Dependencias:** `pygame`, `random`, `math`, `modules.constants`
+### `modules/entities/enemy.py`
+- **AlienShip**: nave enemiga comun (variantes fighter/drone/gunner, ver
+  `ENEMY_VARIANTS`). Entra por un costado o por arriba, avanza hacia el
+  lado opuesto y dispara `AlienBullet` a intervalos aleatorios. Aparecen
+  desde la oleada 2.
+- **AlienBullet**: bala pequeña que viaja en linea recta segun el lado de
+  origen.
 
-**Asteroid:**
-- Forma poligonal aleatoria generada en `__init__` (7-12 vertices)
-- Tres capas de color (base, dark, light) para textura rocosa
-- Crateres generados procedimentalmente (3-6 por asteroide)
-- Destellos blancos al ser golpeada (`flash_timer`)
-- Rotacion continua con `rot_speed`
+Los jefes de oleada **no** viven aca (antes habia una clase `BossShip`
+vieja en este archivo, sin usar; se elimino, ver
+[Historial de correcciones](#historial-de-correcciones)): estan en
+`modules/core/boss_system.py` y `modules/entities/boss.py`.
 
-**Particle:**
-- Particulas individuales con alpha fade-out
-- Velocidad aleatoria, vida limitada
-- Tamaño se escala con la vida restante
+### `modules/entities/powerup.py`
+Clase `PowerUp`: capsula que cae lentamente y desaparece si no se recoge.
+`buff_type` es uno de los `BUFF_TYPE_*` de `constants.py`; color, etiqueta
+e icono salen de ahi. `random_buff_type()` sortea un tipo de "drop comun"
+(no incluye los permanentes que solo reparten los jefes) y
+`buff_duration(tipo)` da la duracion en frames.
 
-**Explosion:**
-- Coleccion de 20+ particles para efecto de destruccion
+| Tipo | Etiqueta | Efecto |
+|------|----------|--------|
+| `extra_life` | +1 | Vida extra instantanea |
+| `fast_shoot` | FAST | Cadencia de disparo mejorada |
+| `triple_shot` | 3X | Rafaga de 3 balas |
+| `shield` | DEF | Absorbe 3 golpes |
+| `piercing` | PEN | Las balas atraviesan varios objetivos |
+| `attract` | MAG | Imanta los power-ups cercanos |
+| `lightning_field` | RAYO | Campo electrico: zapea lo mas cercano cada ~0.2s (ver mas abajo) |
+| `damage_up`, `speed_up`, `max_life_up`, `rapid_fire` | DMG+/SPD+/MAX+/RAPID | Permanentes, solo los reparten los jefes |
 
-### `modules/powerup.py`
-Clase `PowerUp` - objetos de poder que aparecen cada 5 asteroides destruidos.
+**Bonus "Rayo" (campo electrico):** mientras esta activo, cada
+`LIGHTNING_ZAP_INTERVAL` frames la nave descarga un rayo sobre el
+asteroide/alien/jefe mas cercano dentro de `LIGHTNING_RADIUS` (ver
+`Ship.puede_descargar_rayo()`/`reiniciar_descarga_rayo()` en `ship.py` y el
+bloque que arma el rayo en el bucle principal de `main.py`). El rayo se
+dibuja como una linea quebrada (`dibujar_rayo()` en `main.py`) que se
+desvanece en unos pocos frames. Asteroides y naves alien mueren de un
+zap; los jefes reciben daño normal (`take_damage`).
 
-**Dependencias:** `pygame`, `random`, `math`, `modules.constants`
+### `modules/entities/boss.py`
+Clase `FinalBoss` (oleada 20, "La Anomalia Final") + `FinalBossBullet`.
+Tiene 3 fases (sube al pasar 66% y 33% de vida) y cada fase agrega
+patrones de ataque (`SPREAD`, `AIMED`, `CIRCULAR`, `SPIRAL`, `RAIN`). Usa
+el sprite "anomaly" (comparte archivo con "saucer", ver `mothership_*.png`)
+si esta disponible, si no cae al dibujo vectorial.
 
-**Tipos de buff:**
-| Tipo | Color | Etiqueta | Duracion |
-|------|-------|----------|----------|
-| EXTRA_LIFE | ROJO | +1 | Instantaneo |
-| FAST_SHOOT | CYAN | FAST | 400 frames (~7s) |
-| TRIPLE_SHOT | PURPLE | 3X | 500 frames (~8s) |
+### `modules/core/boss_system.py`
+- **BossDefinition**: datos fijos de un jefe de oleada (vida, velocidad,
+  patrones, colores, `body_type` para elegir sprite, `rewards`).
+- **BossReward**: un buff que el jefe reparte al morir.
+- **BOSS_DEFINITIONS**: la lista de los 4 jefes (`sentinel` oleada 5,
+  `dragon` oleada 10, `titan` oleada 15, `anomalia` oleada 20 — este ultimo
+  en realidad se instancia como `FinalBoss`, no como `WaveBoss`).
+- **WaveBoss** / **WaveBossBullet**: instancia jugable de un jefe de oleada
+  construida a partir de una `BossDefinition`. Mismo esquema de fases que
+  `FinalBoss`. Agregar un jefe nuevo es sumar una `BossDefinition` sin
+  tocar la logica de `WaveBoss`.
 
-**Metodos:**
-- `update()` - movimiento hacia abajo, pulso visual, expiracion
-- `draw()` - circulo pulsante con etiqueta
-
-### `modules/alien_ship.py`
-Clases `AlienShip`, `AlienBullet`, `BossShip`, `BossBullet` - enemigos.
-
-**Dependencias:** `pygame`, `random`, `math`, `modules.constants`
-
-**AlienShip:**
-- Entra desde izquierda, derecha o arriba
-- Movimiento sinusoidal
-- Dispara balas alienigenas periodicamente
-- Al ser destruida da +50 puntos y spawnea un power-up
-
-**AlienBullet:**
-- Balas pequenas disparadas por naves alienigenas
-- Direccion segun el lado de origen
-
-**BossShip (oleada 10):**
-- 55px de tamaño, 200 HP
-- Se mueve de lado a lado en la parte superior
-- Dispara 3 rayos verticales cada 25 frames
-- Barra de vida visible (colorea segun HP: verde > 50%, amarillo > 25%, rojo restante)
-- Animaciones de daño: glow rojo, particulas de chispa, core se oscurece
-- Al destruirse: explosion de 50 particulas + 3 power-ups aleatorios + 500 puntos
-
-**BossBullet:**
-- Balas grandes (radius 4) disparadas por el boss
-- Color rojo con centro amarillo
-- Se mueven hacia abajo a 5px/frame
-
-### `modules/hand_tracker.py`
+### `modules/systems/input.py`
 Integracion con MediaPipe para deteccion de mano.
 
-**Dependencias:** `cv2`, `numpy`, `mediapipe`, `importlib`
+- `init_hand_landmarker(model_path)`: crea el detector en modo VIDEO.
+- `process_camera_frame(detector, frame, timestamp_ms)`: detecta la mano,
+  o devuelve `None` si el frame-skip descarta ese frame.
+- `is_fist(hand_lm)`: puño cerrado = punta de los 4 dedos por encima de su
+  propia articulacion PIP.
+- `find_hand_position(hand_lm, game_w, game_h, sensibilidad=1.0)`: posicion
+  de la muñeca mapeada al area de juego; `sensibilidad` amplifica (>1.0) o
+  atenua (<1.0) el desplazamiento respecto del centro (ver
+  [Menu, Dificultad y Ajustes](#menu-dificultad-y-ajustes)).
 
-**Funciones:**
-- `init_hand_landmarker(model_path)` - crea el detector con opciones Video mode
-- `process_camera_frame(detector, frame, timestamp_ms)` - procesa frame y retorna resultado
-- `is_fist(hand_lm)` - detecta si la mano esta cerrada (puño) comparando tips vs PIPs
-- `find_hand_position(hand_lm, game_w, game_h)` - retorna coordenadas x, y de la muñeca
+### `modules/systems/menu.py`
+Ver la seccion [Menu, Dificultad y Ajustes](#menu-dificultad-y-ajustes).
+
+### `modules/systems/ui.py`
+HUD y pantallas del juego en si (no del menu): `draw_countdown`,
+`draw_hud`/`draw_buff_hud` (con las clases `ModernHUD`, `HealthBar`,
+`BuffChip`, `BuffHUD`), `draw_camera_preview`, `draw_boss_rewards`, y
+`draw_game_over`/`draw_victory_screen` con las estadisticas de la partida
+(ver [Estadisticas de Partida](#estadisticas-de-partida)).
+
+### `modules/systems/fonts.py`
+Ver la seccion [Sistema de Texto](#sistema-de-texto).
 
 ### `main.py`
-Entry point - contiene el bucle principal del juego.
+Punto de entrada: inicializa pygame, carga progreso/ajustes, abre la
+camara con OpenCV y corre el bucle principal a 60 FPS.
 
-**Flujo principal:**
-1. Inicializa pygame (pantalla completa 1280x720) y MediaPipe
-2. Abre camara web con OpenCV (640x480)
-3. Bucle de juego a 60 FPS:
-   a. Lee eventos (ESC, R, QUIT)
-   b. Captura frame de camara
-   c. Detecta mano con MediaPipe `detect_for_video()`
-   d. Actualiza posicion de nave (interpolacion suave)
-   e. Detecta puño → dispara rafaga de 3 balas
-   f. Actualiza balas, asteroides, alien ships, boss ships, boss bullets
-   g. Detecta colisiones (balas↔asteroides, balas↔aliens, boss bullets↔nave, aliens↔nave, asteroides↔nave, powerups↔nave)
-   h. Spawnea power-ups cada 5 kills de asteroides
-   i. Spawnea naves alienigenas tras oleada 2
-   j. Spawnea boss en oleada 10
-   k. Actualiza particles, explosiones
-   l. Renderiza todo en pygame (game area + camera preview)
-   m. Muestra countdown inicial (5s)
+**Flujo por frame (resumen):**
+1. Lee eventos (`ESC`, `F11` pantalla completa, `M` silenciar, `P` pausa,
+   clicks/teclas del menu).
+2. Si el menu esta activo, lo actualiza/dibuja y saltea el resto (`continue`).
+3. Lee un frame de camara y detecta la mano (una sola vez por frame).
+4. Mueve la nave hacia la mano (con la sensibilidad configurada) y dispara
+   si detecta puño.
+5. Actualiza balas, asteroides, naves alien, jefes, power-ups, particulas
+   y el campo electrico si esta activo.
+6. Resuelve colisiones (balas↔asteroides/aliens/jefes, aliens/asteroides/
+   balas de jefe↔nave, power-ups↔nave) y actualiza las estadisticas de la
+   partida en el proceso.
+7. Dibuja todo (area de juego + HUD + preview de camara) y hace `flip()`.
 
 ---
 
 ## MediaPipe Hand Landmarker
 
-### Version utilizada
-MediaPipe 0.10.35 (ultima version antes de 1.0 que elimino la API de `solutions`).
-
 ### API
 `mediapipe.tasks.python.vision.HandLandmarker`
 
-- `HandLandmarkerOptions` para configurar deteccion
-  - `base_options` con `model_asset_path` apuntando al modelo descargado
-  - `running_mode=VIDEO` optimizado para video en tiempo real
-  - `num_hands=1` detecta solo una mano
-- `HandLandmarker.create_from_options(options)` crea el detector
-- `detect_for_video(image, timestamp_ms)` deteccion con timestamp (baja latencia)
-- `HandLandmarkerResult` con `hand_landmarks` lista de landmarks por mano
+- `HandLandmarkerOptions` con `base_options` (ruta al modelo),
+  `running_mode=VIDEO` y `num_hands=1`.
+- `HandLandmarker.create_from_options(options)` crea el detector.
+- `detect_for_video(image, timestamp_ms)` usa el timestamp para tracking
+  temporal entre frames (menos latencia que tratar cada frame suelto).
 
 ### Modelo
-`hand_landmarker.task` (7.8 MB, float16) - descargado de Google Cloud Storage
-- 21 puntos de referencia (landmarks) por mano detectada
-- Cada landmark tiene `.x`, `.y`, `.z` (coordenadas normalizadas 0.0-1.0)
+`hand_landmarker.task` (float16) con 21 landmarks por mano detectada, cada
+uno con `.x`, `.y`, `.z` normalizados entre 0.0 y 1.0.
 
-### Indices de landmarks
 ```
 0: WRIST (muñeca) - usado para posicionar la nave
 1-4: THUMB (pulgar)
@@ -264,86 +300,227 @@ MediaPipe 0.10.35 (ultima version antes de 1.0 que elimino la API de `solutions`
 ```
 
 ### Deteccion de puño (fist)
-Se verifica que las puntas de los 4 dedos (8, 12, 16, 20) esten por encima de sus respectivas articulaciones PIP (6, 10, 14, 18). Si `tip.y < pip.y` para todos los dedos, la mano esta cerrada -> se dispara.
+Se verifica que las puntas de los 4 dedos (8, 12, 16, 20) esten por encima
+de sus respectivas articulaciones PIP (6, 10, 14, 18). Si se cumple para
+los 4, la mano esta cerrada y se dispara.
 
 ### Por que MediaPipe Tasks en vez de MediaPipe Solutions
-- MediaPipe `solutions` fue deprecado en versiones 0.10+
-- La API de `tasks` es la unica disponible en versiones modernas
-- `detect_for_video()` usa timestamps para tracking temporal, reduciendo latencia
-- Modelo float16 optimizado para rendimiento en tiempo real
+`solutions` esta deprecado desde las versiones 0.10+; `tasks` es la API
+vigente, y `detect_for_video()` con timestamps reduce la latencia
+perceptible frente a procesar cada frame como imagen suelta.
 
 ---
 
 ## Sistema de Juego
 
-### Nave del Jugador
-- Forma de poligono tipo flecha con cockpit
-- Glow cyan debajo de la nave
-- Animacion de llama del motor (3 capas, pulsante)
-- Wing accents en cyan claro
-- Invencibilidad temporal al tomar damage (parpadea cada 3 frames)
-- 3 vidas al inicio, max 5
-- Sistema de buffs visuales (iconos sobre la nave)
+### Nave del jugador
+Sprite propio por clase (scout/tank/interceptor/bomber, cada una con su
+velocidad/cadencia/vida y un buff de clase), glow, animacion de llama del
+motor, parpadeo de invencibilidad tras un golpe, barra de vida propia y
+las auras visuales de cada buff activo (escudo, perforante, iman, campo
+electrico).
 
-### Asteroides
-- Poligonos irregulares (7-12 vertices) generados proceduralmente
-- Tres capas de color (base, dark, light) para efecto rocoso
-- 3-6 crateres decorativos por asteroide
-- Destellos blancos al ser destruidos (`flash_timer`)
-- Diversos tamanos (18-38 pixeles)
-- Velocidad y rotacion aleatorias
-
-### Balas del Jugador
-- 1 o 3 balas segun triple_shot (disparo en rafaga)
-- Amarillas con borde blanco
-- Velocidad: 9 pixels/frame hacia arriba
-
-### Balas Alienigenas
-- Balas pequeas (radius 3) disparadas por AlienShip
-- Naranjas con borde blanco
-- Velocidad: 4 pixels/frame
-
-### Balas del Boss
-- Balas grandes (radius 4) despues de la barra
-- Rotacion
-- Color ROJO
-- Barra de vida mostrable
-
-### Oleadas
-- Cada 250 frames(~4 segundos) aumenta la oleada
-- Mas asteroides por oleada (`spawn_rate = max(15, 70 - wave * 5)`)
-- Naves alienigenas aparecen desde oleada 2
-- Boss aparece en oleada 10
+### Oleadas y dificultad
+La oleada sube cada ~250 frames (~4 segundos). Mas asteroides y naves
+alien por oleada segun `dificultad` (multiplicador elegido al empezar mas
+un incremento fijo cada jefe derrotado). Naves alien desde la oleada 2;
+jefes en las oleadas 5, 10, 15 y 20.
 
 ### Colisiones
-- Balas ↔ Asteroides: distancia < size + radius
-- Balas ↔ Naves alienigenas: distancia < ship_size + radius
-- Balas del boss ↔ Nave: distancia < radius + SHIP_WIDTH/2
-- Asteroids ↔ Nave: distancia < size + SHIP_WIDTH/2
-- Power-ups ↔ Nave: distancia < radius + SHIP_WIDTH/2
+- Balas ↔ Asteroides / Naves alien / Jefes: por distancia entre centros.
+- Balas de jefe / Naves alien / Asteroides ↔ Nave: idem, activan
+  `Ship.take_damage()`.
+- Power-ups ↔ Nave: al tocarse se aplica el buff (`Ship.apply_buff`).
+- Campo electrico ↔ lo mas cercano: ver el bonus "Rayo" mas arriba.
 
 ---
 
 ## Control por Mano
 
 ### Flujo de deteccion
-1. OpenCV captura frame de la camara web (640x480)
-2. Frame volteado horizontalmente (espejo)
-3. Convertido de BGR a RGB
-4. Creado `mediapipe.Image` desde el array NumPy RGB
-5. `detect_for_video()` procesa el frame con timestamp
-6. Se extrae el landmark de la muñeca (WRIST, indice 0)
-7. Se mapea de coordenadas normalizadas (0-1) a coordenadas del juego
-8. Se verifica si es puño comparando tips vs PIPs de los 4 dedos
-9. Si es puño → se dispara rafaga de 3 balas
+1. OpenCV captura un frame de la camara (una sola vez por frame de juego).
+2. Se voltea horizontalmente (espejo) y se convierte de BGR a RGB.
+3. Se arma un `mediapipe.Image` desde el array NumPy y se detecta la mano
+   con `detect_for_video()`.
+4. Se toma el landmark de la muñeca (indice 0) y se mapea a coordenadas
+   del area de juego, aplicando la sensibilidad configurada.
+5. Se revisa si es puño (4 dedos cerrados) y, si lo es, se dispara.
 
 ### Interpolacion suave
-La posicion destino del jugador se interpola gradualmente usando:
+La nave no salta directo al destino: `Ship.update()` la acerca gradualmente
+(`x += (target_x - x) * velocidad_de_interpolacion`), lo que evita
+movimientos bruscos por temblores de la mano o del tracking.
+
+### Sensibilidad
+El ajuste "Sensibilidad" (pantalla de Ajustes, 0.5x a 2.0x) amplifica o
+atenua el desplazamiento de la mano respecto del centro de la camara antes
+de mapearlo al area de juego (`find_hand_position`, ver
+`modules/systems/input.py`). Con 2.0x un movimiento chico de mano mueve la
+nave el doble; con 0.5x hace falta mover la mano el doble para el mismo
+desplazamiento en pantalla.
+
+---
+
+## Sistema de Texto
+
+Todo el texto del juego (menu, HUD, jefes, pantallas de fin de partida)
+pasa por `modules/systems/fonts.py`, que define una unica fuente "de
+terminal" para dar ese aire binario/de codigo:
+
+```python
+FUENTE_DIGITAL = "lucidaconsole,consolas,couriernew,ubuntumono"
 ```
-x += (target_x - x) * speed
-speed = 0.18
+
+`pygame.font.SysFont` prueba los nombres en ese orden y usa el primero
+instalado en el sistema; Lucida Console (la fuente clasica de la consola
+de Windows) es la que mas se acerca a un aspecto "hacker/binario" de las
+disponibles sin depender de una fuente pixel-art de terceros.
+
+El texto se renderiza limpio y con antialias (sin bloques de pixel art:
+esa etapa se probo y se saco porque volvia ilegibles palabras en minuscula
+a menos de ~20px de alto) y se le agrega un contorno oscuro fino
+(`_contorno_texto`) para que se lea bien sobre fondos con estrellas,
+explosiones y luces parpadeantes.
+
+**Puntos de entrada:**
+- `render_text(text, size, color, ...)`: crea la fuente por tamaño (con
+  cache) y renderiza; cachea tambien la superficie final.
+- `render_texto_pixelado(fuente, texto, color, ancho_maximo=None, ...)`:
+  igual pero con un objeto `Font` ya creado (por ejemplo, para reducir el
+  texto de un boton si no entra). El nombre quedo de una version anterior
+  con pixel art real; hoy solo aplica el contorno.
+
+---
+
+## Sistema de Sprites
+
+> Detalle de generacion en `tools/generate_sprites.py` (Pillow + NumPy) y
+> de carga/cache en `modules/systems/sprites.py`.
+
+### Capas tintables
+Cada nave/enemigo/jefe se exporta en 2 o 3 capas PNG:
+
+| Archivo | Contenido | Tintado en runtime |
+|---------|-----------|---------------------|
+| `<clase>_body.png` | Casco, en escala de grises | Si (color principal) |
+| `<clase>_wing.png` | Alas/anillo, en escala de grises | Si (color secundario) |
+| `<clase>_detail.png` | Cabina, luces, contorno, iconos | No |
+
+El tintado multiplica la capa gris por un color
+(`pygame.BLEND_RGBA_MULT`): un pixel gris 255 da el color puro y los
+grises mas oscuros producen el sombreado, asi que un solo PNG cubre
+infinitas combinaciones de color. Los power-ups solo tienen `body` +
+`detail` (no tienen "ala").
+
+### Que se genera
+- **4 naves** (scout/tank/interceptor/bomber) x 3 capas.
+- **14 asteroides**, un PNG cada uno, con "familias" de forma distintas
+  (redonda/alargada/irregular/fragmento/afilada).
+- **3 enemigos comunes** (fighter/drone/gunner) x 3 capas.
+- **3 siluetas de jefe**: `saucer` (platillo clasico, se guarda como
+  `mothership_*.png` por compatibilidad — la usan el jefe Centinela y La
+  Anomalia Final), `dragon` (casco alargado con colmillos y ojo
+  luminoso) y `titan` (casco hexagonal blindado con remaches grandes). Las
+  tres comparten la posicion del anillo de nodos y la plataforma de la
+  cupula, porque `boss.py`/`boss_system.py` dibujan encima, en tiempo
+  real, la cupula animada, el piloto y las luces parpadeantes usando esas
+  coordenadas fijas.
+- **10 tipos de power-up**: una capsula compartida (estilo caja de bonus
+  de recreativa, con remaches y tapa brillante) mas un icono grabado
+  distinto por tipo (corazon, rayo, iman, escudo, espada...) y una
+  etiqueta de texto debajo para que se entienda de un vistazo que hace
+  cada uno.
+
+### Carga y cache (`modules/systems/sprites.py`)
+`load_raw` cachea cada PNG (devuelve `None` si falta); `get_ship_surface`,
+`get_enemy_surface`, `get_asteroid_surface`, `get_boss_surface` y
+`get_powerup_surface` componen+tiñen+escalan y cachean el resultado;
+`get_rotated` cachea rotaciones en pasos de 6 grados. Los colores de cache
+se cuantizan a multiplos de 8 para no generar cientos de superficies al
+arrastrar un selector. Si falta `assets/sprites/` entero, todas las
+funciones devuelven `None` y cada entidad dibuja su version vectorial de
+respaldo: el juego nunca se cae por un PNG faltante.
+
+Regenerar todo: `python tools/generate_sprites.py`.
+
+---
+
+## Sistema de Audio
+
+Los WAV se sintetizan con NumPy (ondas seno/cuadrada/sierra + ruido
+blanco) y se guardan con el modulo estandar `wave`, sin libreria de audio
+externa (`tools/generate_audio.py`). Produce 7 efectos
+(`assets/audio/sfx/*.wav`: disparo, explosion, impacto, powerup, boton,
+alerta_jefe, victoria) y 3 pistas de musica en loop
+(`assets/audio/music/*.wav`: menu, juego, muerte).
+
+`modules/systems/audio.py` sigue la misma filosofia que `sprites.py`: si
+`pygame.mixer` no puede inicializarse o faltan los WAV, todas las
+funciones fallan en silencio.
+
+| Funcion | Que hace |
+|---------|----------|
+| `inicializar()` | Inicia el mixer y precarga los efectos |
+| `sonido_*()` | Reproduce un efecto |
+| `reproducir_musica("menu"/"juego"/"muerte", loop=...)` | Cambia de pista solo si no es ya la actual; la de muerte suena una vez |
+| `pausar_musica()` / `reanudar_musica()` | Tecla P |
+| `set_volumen_musica(v)` / `set_volumen_sfx(v)` | Sliders de la pantalla de Ajustes |
+| `alternar_silencio()` | Tecla M o boton de Ajustes; devuelve el nuevo estado |
+
+---
+
+## Menu, Dificultad y Ajustes
+
+`modules/systems/menu.py` define `MenuScene`, cuyo atributo `state`
+controla que pantalla esta activa:
+
+- **`"main"`**: los 3 botones — JUGAR, AJUSTES, SALIR.
+- **`"dificultad"`**: se entra al elegir JUGAR. Botones FACIL / NORMAL /
+  DIFICIL (multiplicadores en `constants.DIFICULTADES`, ver mas abajo).
+  Elegir uno arranca la partida devolviendo
+  `"START_GAME:<nave>:<skin>:<dificultad>"`, que `main.py` interpreta para
+  llamar a `reset_game()` con esa dificultad como base.
+- **`"settings"`**: sliders de volumen de musica y efectos
+  (`modules/systems/audio.py`), slider de sensibilidad de mano (0.5x-2.0x),
+  y botones de silencio, pantalla completa y camara. Estos ultimos dos
+  devuelven las señales `"TOGGLE_FULLSCREEN"` / `"CHANGE_CAMERA"`, que
+  `main.py` resuelve recreando la ventana o reabriendo `cv2.VideoCapture`
+  con el indice nuevo. Todo se persiste al toque via `modules/settings.py`.
+
+> Nota: la version anterior del menu tenia una pantalla de "PERSONALIZAR"
+> para elegir nave/color con un selector HSV (`ColorPicker`, `ShipCard`,
+> `SkinCard`). Se removio a pedido (junto con las clases correspondientes,
+> que quedaban sin usar) y en su lugar esta la pantalla de Ajustes.
+
+### Dificultad
+```python
+DIFICULTADES = {"facil": 0.75, "normal": 1.0, "dificil": 1.4}
 ```
-Esto evita movimientos bruscos.
+El multiplicador elegido es el valor inicial de la variable `dificultad`
+en `main.py`, que ademas sube +0.2 cada vez que se derrota un jefe de
+oleada. Afecta la velocidad de aparicion y la velocidad de asteroides y
+naves alien (mas alto = mas dificil).
+
+---
+
+## Estadisticas de Partida
+
+`main.py` trackea, ademas del puntaje y la oleada:
+
+- **Disparos y aciertos**: `stats_disparos` sube por cada bala disparada;
+  `stats_aciertos` por cada impacto contra un asteroide, nave alien o
+  jefe (piercing puede sumar mas de un acierto por bala). La precision
+  mostrada es `aciertos / disparos * 100`.
+- **Tiempo sobrevivido**: se calcula en `terminar_partida()` a partir de
+  `start_time`, descontando la cuenta regresiva inicial.
+- **Enemigos destruidos por tipo**: asteroides (reutiliza `asteroid_kills`),
+  alienigenas y jefes, contados tanto si el kill fue por bala como por el
+  campo electrico.
+
+`stats_actuales()` arma el diccionario que consumen
+`draw_game_over`/`draw_victory_screen` (`modules/systems/ui.py`) para
+mostrar "Precision: X%   Tiempo: M:SS" y "Asteroides: N   Alienigenas: N
+Jefes: N" en la pantalla de fin de partida.
 
 ---
 
@@ -351,280 +528,87 @@ Esto evita movimientos bruscos.
 
 | Funcion | Uso |
 |---------|-----|
-| `cv2.VideoCapture(0)` | Abre la camara web |
-| `cap.read()` | Lee un frame |
+| `cv2.VideoCapture(indice)` | Abre la camara web (el indice sale de Ajustes) |
+| `cap.read()` | Lee un frame (una sola vez por frame de juego) |
 | `cv2.flip(frame, 1)` | Volteo horizontal (espejo) |
-| `cv2.cvtColor(frame, COLOR_BGR2RGB)` | Conversion de color |
-| `cv2.resize(frame, (w, h))` | Redimensionar para preview |
-| `frame.shape[:2]` | Obtener alto y ancho del frame |
+| `cv2.cvtColor(frame, COLOR_BGR2RGB)` | Conversion de color para MediaPipe |
+| `cv2.resize(frame, (w, h))` | Redimensionar para el preview |
 
 ---
 
-## API de Pygame (pygame-ce 2.5.7) usada
+## API de Pygame (pygame-ce) usada
 
 | Funcion/Metodo | Uso |
 |----------------|-----|
 | `pygame.init()` | Inicializa todos los sub-modulos |
-| `pygame.display.set_mode(size, FULLSCREEN)` | Crea ventana pantalla completa |
+| `pygame.display.set_mode(size, FULLSCREEN\|0)` | Crea la ventana (pantalla completa o no, segun Ajustes) |
 | `pygame.display.flip()` | Actualiza toda la pantalla |
-| `pygame.Surface((w, h))` | Crea superficie off-screen para doble buffer |
-| `pygame.image.frombuffer(data, size, fmt)` | Crea superficie pygame desde array numpy (sin copia) |
-| `pygame.font.SysFont(name, size)` | Crea fuente de texto renderizable |
+| `pygame.Surface((w, h), SRCALPHA)` | Superficies off-screen para componer capas con transparencia |
+| `pygame.font.SysFont(name, size)` | Fuente de texto (cacheada en `modules/systems/fonts.py`) |
+| `pygame.mask.from_surface(...)` | Silueta del texto para el contorno |
 | `surface.blit(source, pos)` | Dibuja una superficie sobre otra |
-| `pygame.draw.polygon/surface/circle/rect/ellipse()` | Dibuja formas geometricas |
-| `pygame.draw.circle(screen, color, pos, radius)` | Dibuja circulos para balas y efectos |
-| `pygame.time.Clock().tick(FPS)` | Controla FPS y retorna milisegundos transcurridos |
-| `pygame.event.get()` | Obtiene eventos de entrada del sistema |
-| `pygame.KEYDOWN` | Evento de tecla presionada |
-| `pygame.K_ESCAPE`, `pygame.K_r` | Constantes de teclas |
-| `pygame.image.frombuffer()` | Creacion directa desde buffer numpy sin copia |
-
----
-
-## Framework y Modelos de ML adicionales
-
-| Tecnologia | Version | Uso |
-|-----------|---------|-----|
-| MediaPipe Tasks Python | incluido en mediapipe 0.10.35 | SDK para ML inference |
-| Hand Landmarker model | float16 v1 | Deteccion de 21 landmarks por mano |
-| BaseOptions | incluido | Configuracion de carga de modelo |
-| RunningMode | enum | Modo VIDEO para latencia baja |
-
----
-
-## Desarrollo y herramientas
-
-| Herramienta | Uso |
-|------------|-----|
-| pip | Gestion de paquetes Python |
-| PowerShell | Terminal de comandos en Windows |
-| Python -m py_compile | Verificacion de sintaxis sin ejecutar |
-| AST (ast.parse) | Analisis estatico de codigo Python |
-| importlib | Importacion dinamica de modulos |
+| `pygame.draw.polygon/circle/rect/ellipse/lines()` | Formas geometricas |
+| `pygame.transform.rotate/scale/smoothscale()` | Rotacion y escalado de sprites y texto |
+| `pygame.mixer` | Musica y efectos (`modules/systems/audio.py`) |
+| `pygame.time.Clock().tick(FPS)` | Controla FPS |
+| `pygame.event.get()` | Eventos de entrada del sistema |
 
 ---
 
 ## Optimizaciones
 
-1. **detect_for_video() con timestamps:** En lugar de procesar cada frame como imagen estatica, MediaPipe usa el timestamp para tracking temporal entre frames, reduciendo latencia perceptible.
-
-2. **Off-screen rendering:** Se renderiza en una superficie `game_surface` de tamaño `GAME_WIDTH x GAME_HEIGHT` y luego se blit a la pantalla principal. Esto permite agregar el preview de camara sin afectar el area de juego.
-
-3. **List cleanup pattern:** Se itera sobre copias de listas (`for b in bullets[:]`) y se remueven elementos inactivos dentro del bucle, evitando modificar la lista durante la iteracion.
-
-4. **Early exit en colisiones:** Al detectar la primera colision de una bala con un asteroide, se rompe el bucle interno (`break`), evitando comprobar colisiones ya resueltas.
-
-5. **Particulas efimeras:** Se remueven particles con `life <= 0` cada frame para mantener la lista limpia y evitar renders innecesarios.
-
-6. **thrust particles limit:** Se limita a 30/40 particulas de motor para evitar acumulacion excesiva.
-
-7. **Buff timer cleanup:** Se iteran y eliminan buffs expirados al inicio de cada update, limpiando automaticamente el diccionario.
----
-
-# Sistema de Sprites y Personalizacion
-
-> Capitulo agregado junto con los graficos del juego. Las rutas indicadas aqui
-> son las vigentes (los modulos viven en `modules/entities/`, `modules/systems/`
-> y `modules/core/`).
-
-## 1. Por que sprites por capas
-
-El objetivo era doble: que las naves, asteroides y enemigos tuvieran graficos
-propios, y que el color elegido por el jugador se aplicara a la nave sin
-multiplicar los archivos. La solucion fue separar cada nave en tres capas PNG:
-
-| Archivo              | Contenido                          | Tintado en runtime |
-|----------------------|------------------------------------|--------------------|
-| `<clase>_body.png`   | Casco, en escala de grises         | Si (color de casco)|
-| `<clase>_wing.png`   | Alas y aletas, en escala de grises | Si (color de alas) |
-| `<clase>_detail.png` | Cabina, toberas, luces, contorno   | No                 |
-
-El tintado se hace multiplicando la capa gris por el color:
-
-```python
-superficie.fill((r, g, b, 255), special_flags=pygame.BLEND_RGBA_MULT)
-```
-
-Un pixel gris 255 devuelve el color puro y los grises mas oscuros producen el
-sombreado. Con 3 archivos por nave se cubren infinitas combinaciones de color.
-
-## 2. Generacion de los graficos (`tools/generate_sprites.py`)
-
-Los PNG no se dibujaron a mano: se generan de forma procedural con Pillow y
-NumPy. El proceso por sprite es:
-
-1. **Silueta**: se dibujan los poligonos de la pieza a 4x de resolucion
-   (supersampling) y se reducen con LANCZOS para obtener bordes suaves.
-2. **Mapa de luz**: un campo NumPy con un brillo especular, caida cilindrica
-   hacia los costados y oscurecimiento hacia los motores.
-3. **Detalles restados/sumados**: lineas de panel, crateres, grietas y motas se
-   aplican como deltas de luminancia sobre ese mapa.
-4. **Composicion**: `RGBA = (luz, luz, luz, silueta)` para las capas tintables;
-   la capa de detalle se dibuja aparte a color.
-5. **Contorno**: se obtiene por dilatacion/erosion de la silueta (`ImageFilter`)
-   y se le suma una luz de borde superior izquierda.
-
-Se generan 38 archivos: 4 naves x 3 capas, 14 asteroides (un PNG cada uno, con
-"familias" de forma distintas: redonda/alargada/irregular/fragmento/afilada),
-3 enemigos x 3 capas y el jefe final (`boss/mothership_*.png`) x 3 capas
-(casco, anillo de nodos y detalle). Pillow solo hace falta para regenerarlos;
-el juego en si solo necesita pygame.
-
-## 3. Carga y cache (`modules/systems/sprites.py`)
-
-| Funcion                     | Que hace                                            |
-|-----------------------------|-----------------------------------------------------|
-| `load_raw(*partes)`         | Carga un PNG con cache; devuelve `None` si falta    |
-| `tint(surface, color)`      | Copia la superficie multiplicada por un color       |
-| `get_ship_surface(...)`     | Compone alas + casco + detalle, tinta y escala      |
-| `get_enemy_surface(...)`    | Igual para las naves enemigas                       |
-| `get_asteroid_surface(...)` | Tinta y escala una de las 14 rocas                  |
-| `get_boss_surface(...)`     | Compone anillo + casco + detalle del jefe final     |
-| `get_rotated(...)`          | Rotacion cacheada en pasos de 6 grados              |
-| `blit_centered(...)`        | Dibuja centrado; devuelve `False` si no habia sprite|
-
-Tres decisiones de rendimiento:
-
-- **Cuantizacion de color**: las claves de cache redondean el color a multiplos
-  de 8 para que arrastrar el selector no genere cientos de superficies.
-- **Rotaciones en pasos de 6 grados**: 60 rotaciones posibles por sprite en vez
-  de una por frame.
-- **Caches con tope** (`_MAX_COMPOSED`, `_MAX_ROTATIONS`) con desalojo FIFO, para
-  que la memoria no crezca sin limite durante partidas largas.
-
-Si falta `assets/sprites/`, todas las funciones devuelven `None` y cada entidad
-dibuja su version vectorial de respaldo: el juego nunca se cae por un PNG.
-
-## 4. Aspectos y color personalizado (`modules/skins.py`)
-
-Un aspecto es un diccionario con cuatro colores: `body_color`, `wing_color`,
-`glow_color` y `flame_color`. Hay 4 aspectos predefinidos por clase mas el
-aspecto `custom`, cuyo color lo elige el jugador.
-
-- `set_custom_color(tipo, rgb, persist=False)`: fija el color. Mientras se
-  arrastra el selector se llama sin persistir (solo memoria); al confirmar se
-  llama con `persist=True` y se escribe `custom_skins.json`.
-- `get_skin_colors(tipo, aspecto)`: devuelve la tupla de 4 colores que consumen
-  tanto el menu como la nave, garantizando que se vea igual en ambos lados.
-- `apply_skin_to_ship(nave, aspecto)`: aplica los colores y llama a
-  `nave.invalidate_sprite()` para que el sprite cacheado se recomponga.
-- `normalize_skin(...)`: completa los colores que falten derivandolos del casco.
-
-## 5. Selector de color (`modules/systems/menu.py`)
-
-`ColorPicker` mantiene el color en HSV y expone tres barras arrastrables mas 12
-colores rapidos. Detalles de implementacion:
-
-- `_layout()` calcula un `pygame.Rect` por barra y por preset; `handle_event()`
-  prueba primero los presets y luego cada barra, y guarda cual se esta
-  arrastrando en `self.dragging`.
-- `_exact_rgb` guarda el color exacto cuando viene de un preset, porque el viaje
-  RGB -> HSV -> RGB introduce una diferencia de una unidad por redondeo.
-- `consume_changed()` es una bandera de un solo uso: la escena la lee cada frame
-  para saber si debe repintar las tarjetas y la vista previa.
-
-La escena de seleccion muestra, ademas, un panel con la nave en grande, sus
-estadisticas y la ventaja de su clase, dibujada con el mismo sprite tintado que
-se usara en la partida.
-
-## 6. Como se traslada el diseno a la partida
-
-1. El menu devuelve `START_GAME:<clase>:<aspecto>`.
-2. `main.py` construye `Ship(x, y, clase, aspecto)`.
-3. `Ship._apply_type_stats()` fija estadisticas y `apply_skin_to_ship()` los colores.
-4. `Ship._get_sprite()` compone y cachea el sprite con esos colores.
-5. La llama del motor usa `flame_color` y las balas se crean con `glow_color`,
-   de modo que el color elegido tambien se ve en el disparo.
-
-## 7. Correcciones incluidas
-
-- `asteroid.py`: al rotar los crateres se usaba una variable (`vy`) de otro
-  bucle, lo que los dibujaba fuera de lugar. El dibujado ahora es por sprite.
-- `ship.py`: el buff de velocidad permanente sumaba a `permanent_speed_bonus`
-  pero `update()` nunca lo usaba, asi que no tenia efecto.
-- `menu.py`: en el selector de color solo respondia la barra de tono y los
-  colores rapidos no eran clicables.
-- `menu.py` / `ui.py`: se creaban fuentes con `SysFont` dentro de los bucles de
-  dibujo; ahora se cachean en `_FONT_CACHE`.
+1. **`detect_for_video()` con timestamps**: tracking temporal entre
+   frames en vez de tratar cada uno como imagen suelta.
+2. **Una sola lectura de camara por frame**: se reutiliza tanto para la
+   deteccion de mano como para el preview.
+3. **Off-screen rendering**: se dibuja en una superficie `game_surface` de
+   `GAME_WIDTH x GAME_HEIGHT` y se hace `blit` a la pantalla principal,
+   asi el preview de camara y el HUD no interfieren con el area de juego.
+4. **Iterar copias de listas** (`for b in bullets[:]`) para poder remover
+   elementos inactivos dentro del mismo bucle.
+5. **`break` en colisiones**: al resolver el primer impacto de una bala se
+   corta el bucle interno.
+6. **Cache de sprites compuestos y de rotaciones** (`modules/systems/sprites.py`),
+   con tope y desalojo FIFO para no crecer sin limite en partidas largas.
+7. **Cache de texto renderizado** (`modules/systems/fonts.py`): la mascara
+   y el contorno de cada combinacion texto/color/tamaño se calculan una
+   sola vez.
 
 ---
 
-# Sistema de Audio
+## Historial de correcciones
 
-> Capitulo agregado junto con la musica y los efectos de sonido. Igual que los
-> graficos, el audio es 100% procedural (no hay archivos de sonido de terceros
-> ni descargados de internet).
+Bugs reales encontrados y arreglados durante el desarrollo de las
+funciones descritas arriba (no son solo mejoras, cambiaban el
+comportamiento del juego):
 
-## 1. Generacion (`tools/generate_audio.py`)
-
-Los WAV se sintetizan con NumPy (ondas seno/cuadrada/sierra + ruido blanco) y
-se guardan con el modulo estandar `wave`, sin ninguna libreria de audio
-externa. El generador produce:
-
-- **8 efectos** (`assets/audio/sfx/*.wav`): disparo, explosion, impacto,
-  powerup, boton, alerta_jefe, victoria y game_over.
-- **2 pistas de musica en loop** (`assets/audio/music/*.wav`): `musica_menu`
-  (calma, con pads) y `musica_juego` (bajo + arpegio + percusion simple).
-
-Las pistas de musica se arman pegando notas de duracion fija (nunca un
-oscilador continuo de principio a fin) y se les aplica un fundido de 25ms al
-inicio y al final (`fundido_de_bucle`) para que el loop no suene con un
-"clic" al reiniciar.
-
-## 2. Reproduccion (`modules/systems/audio.py`)
-
-Sigue la misma filosofia que `sprites.py`: si `pygame.mixer` no puede
-inicializarse (sin tarjeta de sonido) o faltan los WAV, todas las funciones
-fallan en silencio y el juego sigue funcionando sin sonido.
-
-| Funcion                        | Que hace                                        |
-|---------------------------------|--------------------------------------------------|
-| `inicializar()`                 | Inicia el mixer y precarga los efectos          |
-| `sonido_*()`                    | Reproduce un efecto (disparo, explosion, etc.)  |
-| `reproducir_musica("menu"/"juego")` | Cambia de pista solo si no es ya la actual  |
-| `pausar_musica()` / `reanudar_musica()` | Usadas por la tecla de pausa (P)        |
-| `alternar_silencio()`           | Tecla M: silencia musica y efectos              |
-
-## 3. Progreso guardado (`modules/progress.py`)
-
-Mismo patron que `modules/skins.py`: un JSON en la raiz (`progreso.json`) con
-el puntaje maximo y la oleada mas alta alcanzada, tolerante a archivo
-ausente/corrupto. `registrar_partida(puntaje, oleada)` se llama una sola vez,
-al terminar la partida (`terminar_partida()` en `main.py`), y devuelve si se
-establecio un record nuevo para mostrarlo en la pantalla final.
-
-## 4. Controles agregados
-
-| Tecla | Accion |
-|-------|--------|
-| P     | Pausa / reanuda la partida (congela movimiento, disparo y musica) |
-| F11   | Alterna pantalla completa / ventana |
-| M     | Silencia / reactiva musica y efectos |
-
-## 5. El jefe final ya esta conectado
-
-`FinalBoss` (`modules/entities/boss.py`) tiene sprites propios, 3 fases y 5
-patrones de ataque, pero no se usaba en ninguna partida: los 4 jefes de
-oleada (5/10/15/20) pasaban siempre por `WaveBoss` (`modules/core/boss_system.py`),
-dibujado con vectores. Se conecto especificamente para la oleada 20 (coincide
-en nombre con `BossDefinition(boss_id="anomalia", name="La Anomalía Final", ...)`,
-asi que claramente era la intencion original). Al crearlo se le asigna
-`jefe_final.definition = boss_def` (la definicion real de la oleada 20), asi
-el codigo de recompensas y de victoria de `main.py` funciona igual para
-`WaveBoss` y `FinalBoss` sin necesitar casos especiales.
-
-## 6. Otras correcciones de esta sesion (en `main.py`)
-
-- `reset_game()` reasignaba `start_time`/`start_countdown` sin declararlos
-  `nonlocal`: creaba variables locales que se descartaban, asi que la cuenta
-  regresiva no volvia a arrancar bien al reintentar partida.
-- La camara se leia dos veces por frame (`cap.read()` una vez para la mano y
-  otra para el preview); ahora se lee una sola vez y se reutiliza.
-- `process_camera_frame()` puede devolver `None` cuando el frame-skip
-  descarta un frame; `main.py` accedia a `result.hand_landmarks` sin
-  comprobar `None` primero, lo que podia tronar el juego de forma
-  intermitente.
-- Los clics del menu principal nunca pasaban por `MenuButton.handle_event()`
-  (se comprobaba `.hovered` directo), asi que el efecto de "ripple" al hacer
-  clic nunca se veia.
-
+- **Morir de un solo golpe con varias vidas de sobra**: en `main.py`, las
+  tres colisiones que dañan a la nave (bala de jefe, nave alien, asteroide)
+  disparaban la secuencia completa de "fin de partida" apenas
+  `ship.take_damage()` devolvia `True`, sin fijarse si de verdad se habian
+  agotado las vidas. Ahora solo terminan la partida cuando
+  `not ship.alive`.
+- **"Volver al Menu" y volver a jugar no reiniciaba la partida**: el flujo
+  de `JUGAR` desde el menu no llamaba a `reset_game()`, asi que puntaje,
+  oleada y la nave (potencialmente ya destruida) quedaban de la partida
+  anterior. Ahora `START_GAME` siempre pasa por `reset_game()`, que ademas
+  aplica la dificultad elegida.
+- **Crash de color fuera de rango en jefes**: durante la transicion de
+  fase, el brillo animado de la cupula (`180 + 120 * sin(...)`) podia
+  superar 255 o bajar de 0, y pygame no acepta esos valores como color.
+  Pasaba tanto en `WaveBoss` (`boss_system.py`) como en `FinalBoss`
+  (`boss.py`); se acoto con `max(0, min(255, ...))` en ambos.
+- **Botones de Game Over desalineados del click**: al agregar las
+  estadisticas de partida se corrio la posicion visual de los botones,
+  pero el rectangulo usado para detectar el click en `main.py` quedo en
+  la posicion vieja.
+- **Codigo muerto con comentarios en ingles**: `BossShip`/`BossBullet` en
+  `modules/entities/enemy.py` (jefe viejo, ~300 lineas, reemplazado hace
+  tiempo por `boss_system.py`/`boss.py` pero nunca borrado) no se
+  importaban desde ningun lado. Se eliminaron junto con el import sin usar
+  de `draw_rounded_rect`/`draw_glow_circle`. De paso, era la unica fuente
+  de comentarios en ingles que quedaba en el proyecto.
+- **Selector de color en el menu**: en una version anterior solo
+  respondia la barra de tono y los colores rapidos no eran clicables; el
+  selector completo (`ColorPicker`) se termino removiendo junto con toda
+  la pantalla de personalizar nave.

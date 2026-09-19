@@ -3,8 +3,8 @@ Carga, tintado y cacheo de los sprites PNG de assets/sprites.
 
 Los PNG de cuerpo y alas estan en escala de grises: al multiplicarlos por un
 color (BLEND_RGBA_MULT) se obtiene esa pieza pintada de ese color conservando
-el sombreado. Gracias a eso el color personalizado del menu se aplica a la
-nave sin necesidad de tener un PNG por cada combinacion posible.
+el sombreado. Gracias a eso el aspecto (skin) de cada nave, jefe o power-up
+se pinta sin necesidad de tener un PNG por cada combinacion de color posible.
 
 Si falta la carpeta assets/sprites el juego sigue funcionando: todas las
 funciones devuelven None y las entidades dibujan su version vectorial de
