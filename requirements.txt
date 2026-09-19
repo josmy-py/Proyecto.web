@@ -1,0 +1,8 @@
+mediapipe>=0.10.0
+opencv-python>=5.0.0
+pygame-ce>=2.5.0
+numpy>=1.20.0
+
+# Solo para regenerar los graficos con tools/generate_sprites.py
+# (el juego no lo necesita para ejecutarse)
+pillow>=10.0.0

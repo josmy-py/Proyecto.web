@@ -1,0 +1,616 @@
+"""
+Menu principal: fondo de estrellas, botones (JUGAR/AJUSTES/SALIR) y las
+pantallas de "AJUSTES" (volumen, sensibilidad, camara) y "ELEGI LA
+DIFICULTAD" que se abren desde ahi. MenuScene.state guarda cual de las tres
+esta activa; ver su docstring para el detalle de cada una."""
+
+import pygame
+import random
+import math
+from modules.constants import WHITE, AZUL, MENTA
+from modules.systems import audio
+from modules.systems.fonts import render_texto_pixelado
+from modules import settings
+
+
+class Star:
+    """Punto de fondo que titila; puramente decorativo."""
+    def __init__(self, w, h):
+        self.x = random.uniform(0, w)
+        self.y = random.uniform(0, h)
+        self.size = random.uniform(0.5, 2.5)
+        self.twinkle_speed = random.uniform(0.02, 0.05)
+        self.phase = random.uniform(0, math.pi * 2)
+        self.base_alpha = random.uniform(0.3, 0.8)
+
+    def update(self):
+        self.phase += self.twinkle_speed
+
+    def draw(self, surface):
+        alpha = self.base_alpha + 0.3 * math.sin(self.phase)
+        alpha = max(0.1, min(1.0, alpha))
+        color = (int(255 * alpha), int(255 * alpha), int(255 * alpha))
+        pygame.draw.circle(surface, color, (int(self.x), int(self.y)), int(self.size))
+
+
+from modules.systems.fonts import get_font
+
+
+class SettingsSlider:
+    """Barra horizontal arrastrable para un valor entre minimo y maximo
+    (volumen 0.0-1.0, sensibilidad 0.5-2.0, etc). get_value/on_change
+    desacoplan la barra de donde se guarda el valor real (modules/settings.py
+    + modules/systems/audio.py). formato personaliza como se muestra el
+    valor (por defecto, porcentaje)."""
+
+    def __init__(self, x, y, width, height, label, get_value, on_change,
+                 minimo=0.0, maximo=1.0, formato=None):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.label = label
+        self.get_value = get_value
+        self.on_change = on_change
+        self.minimo = minimo
+        self.maximo = maximo
+        self.formato = formato or (lambda v: f"{int(round((v - minimo) / (maximo - minimo) * 100))}%")
+        self.dragging = False
+
+    def handle_event(self, event, mouse_pos):
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.rect.inflate(0, 16).collidepoint(mouse_pos):
+                self.dragging = True
+                self._update_from_mouse(mouse_pos)
+                return True
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            self.dragging = False
+        return False
+
+    def update(self, mouse_pos, mouse_pressed):
+        if self.dragging and mouse_pressed[0]:
+            self._update_from_mouse(mouse_pos)
+        elif self.dragging and not mouse_pressed[0]:
+            self.dragging = False
+
+    def _update_from_mouse(self, mouse_pos):
+        t = (mouse_pos[0] - self.rect.x) / max(1, self.rect.width)
+        t = max(0.0, min(1.0, t))
+        self.on_change(self.minimo + t * (self.maximo - self.minimo))
+
+    def draw(self, surface, color):
+        r = self.rect
+        rango = self.maximo - self.minimo
+        valor = self.get_value()
+        t = (valor - self.minimo) / rango if rango else 0.0
+        t = max(0.0, min(1.0, t))
+
+        label_surf = render_texto_pixelado(get_font(14, bold=True), f"{self.label}  {self.formato(valor)}",
+                                           (215, 215, 235))
+        surface.blit(label_surf, (r.x, r.y - 24))
+
+        pygame.draw.rect(surface, (26, 26, 42), r, border_radius=r.height // 2)
+        fill_w = int(r.width * t)
+        if fill_w > 0:
+            pygame.draw.rect(surface, color, (r.x, r.y, fill_w, r.height), border_radius=r.height // 2)
+        pygame.draw.rect(surface, WHITE, r, width=1, border_radius=r.height // 2)
+
+        knob_x = r.x + fill_w
+        pygame.draw.circle(surface, (10, 10, 25), (knob_x, r.centery), r.height // 2 + 5)
+        pygame.draw.circle(surface, WHITE, (knob_x, r.centery), r.height // 2 + 5, 2)
+
+
+class MenuButton:
+    """Boton con hover/press animado, particulas orbitando y ondas de clic
+    (OrbitParticle/Ripple). Se reutiliza tanto en el menu principal como en
+    las pantallas de ajustes y dificultad."""
+
+    def __init__(self, x, y, width, height, text, font, color=None):
+        self.rect = pygame.Rect(x - width // 2, y - height // 2, width, height)
+        self.text = text
+        self.font = font
+        self.color = color
+        self.hovered = False
+        self.pressed = False
+        self.press_scale = 1.0
+        self.target_scale = 1.0
+        self.glow_phase = 0
+        self.gradient_offset = 0
+        self.particles = []
+        self.ripples = []
+        self.enabled = True
+        self.pulse_phase = 0
+
+        for _ in range(10):
+            self.particles.append(OrbitParticle(
+                self.rect.centerx,
+                self.rect.centery,
+                max(width, height) * 0.75
+            ))
+
+    def update(self, mouse_pos, mouse_pressed):
+        if not self.enabled:
+            self.target_scale = 1.0
+            self.hovered = False
+            self.pressed = False
+        else:
+            self.hovered = self.rect.collidepoint(mouse_pos)
+            self.pressed = self.hovered and mouse_pressed[0]
+            self.target_scale = 0.95 if self.pressed else (1.05 if self.hovered else 1.0)
+
+        self.press_scale += (self.target_scale - self.press_scale) * 0.2
+        self.glow_phase += 0.08
+        self.gradient_offset = (self.gradient_offset + 0.5) % 400
+        self.pulse_phase += 0.04
+
+        for p in self.particles:
+            p.update(self.hovered and self.enabled, self.rect.centerx, self.rect.centery)
+
+        self.ripples = [r for r in self.ripples if r.active]
+        for r in self.ripples:
+            r.update()
+
+    def handle_event(self, event):
+        if not self.enabled:
+            return False
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.hovered:
+                self._spawn_ripple(event.pos)
+                audio.sonido_boton()
+                return True
+        return False
+
+    def _spawn_ripple(self, pos):
+        max_radius = max(self.rect.width, self.rect.height) * 1.5
+        self.ripples.append(Ripple(pos[0], pos[1], max_radius, AZUL))
+
+    def draw(self, surface, extra_offset=0):
+        if not self.enabled:
+            alpha_factor = 0.4
+        else:
+            alpha_factor = 1.0
+
+        cx, cy = self.rect.center
+        w, h = self.rect.width, self.rect.height
+        scale = self.press_scale
+        draw_w = int(w * scale)
+        draw_h = int(h * scale)
+        draw_x = cx - draw_w // 2 + extra_offset
+        draw_y = cy - draw_h // 2
+
+        shadow_rect = (draw_x + 4, draw_y + 4, draw_w, draw_h)
+        shadow_surf = pygame.Surface((draw_w + 8, draw_h + 8), pygame.SRCALPHA)
+        pygame.draw.rect(shadow_surf, (0, 0, 0, 60), (4, 4, draw_w, draw_h), border_radius=draw_h // 2)
+        surface.blit(shadow_surf, (draw_x, draw_y))
+
+        btn_surf = pygame.Surface((draw_w, draw_h), pygame.SRCALPHA)
+
+        bg_grad = pygame.Surface((draw_w, draw_h), pygame.SRCALPHA)
+        offset = int(self.gradient_offset) % draw_w
+        base_c = self.color or AZUL
+        for x_pos in range(draw_w):
+            t = (x_pos + offset) / draw_w
+            r = int(base_c[0] * (0.08 + 0.07 * math.sin(t * math.pi * 2)))
+            g = int(base_c[1] * (0.08 + 0.07 * math.sin(t * math.pi * 2)))
+            b = int(base_c[2] * (0.08 + 0.07 * math.sin(t * math.pi * 2)))
+            pygame.draw.line(bg_grad, (r, g, b, int(alpha_factor * 255)), (x_pos, 0), (x_pos, draw_h))
+        pygame.draw.rect(bg_grad, (0, 0, 0, 0), (0, 0, draw_w, draw_h), border_radius=draw_h // 2)
+        btn_surf.blit(bg_grad, (0, 0))
+
+        pulse = 0.5 + 0.5 * math.sin(self.pulse_phase)
+        glow_intensity = int(20 + 15 * pulse) if not self.hovered else int(40 + 20 * pulse)
+        glow_surf = pygame.Surface((draw_w + 20, draw_h + 20), pygame.SRCALPHA)
+        for i in range(4):
+            gr = max(1, draw_w // 2 + i * 5)
+            ga = max(0, glow_intensity - i * 8)
+            pygame.draw.rect(
+                glow_surf,
+                (*base_c[:3], int(ga * alpha_factor)),
+                (10 - i * 5, 10 - i * 5, draw_w + i * 10, draw_h + i * 10),
+                border_radius=draw_h // 2 + i * 2
+            )
+        surface.blit(glow_surf, (draw_x - 10, draw_y - 10))
+
+        border_color = (
+            int(255 * alpha_factor),
+            int(255 * alpha_factor),
+            int(255 * alpha_factor),
+            int(200 * alpha_factor)
+        )
+        pygame.draw.rect(btn_surf, border_color, (0, 0, draw_w, draw_h), width=2, border_radius=draw_h // 2)
+
+        highlight_h = max(1, draw_h // 3)
+        hl_surf = pygame.Surface((draw_w, highlight_h), pygame.SRCALPHA)
+        for row in range(highlight_h):
+            a = int(40 * (1 - row / highlight_h) * alpha_factor)
+            pygame.draw.line(hl_surf, (255, 255, 255, a), (0, row), (draw_w - 1, row))
+        btn_surf.blit(hl_surf, (0, 0))
+
+        max_texto_w = draw_w - 20  # margen para que el texto no toque los bordes redondeados
+        text_surf = render_texto_pixelado(self.font, self.text, WHITE, ancho_maximo=max_texto_w)
+        text_rect = text_surf.get_rect(center=(draw_w // 2, draw_h // 2))
+        btn_surf.blit(text_surf, text_rect)
+
+        surface.blit(btn_surf, (draw_x, draw_y))
+
+        for r in self.ripples:
+            r.draw(surface)
+
+        for p in self.particles:
+            p.draw(surface)
+
+
+class OrbitParticle:
+    """Punto que orbita alrededor de un MenuButton; gira mas rapido y brilla
+    mas fuerte mientras el boton esta en hover."""
+
+    def __init__(self, center_x, center_y, base_radius):
+        self.center_x = center_x
+        self.center_y = center_y
+        self.angle = random.uniform(0, math.pi * 2)
+        self.base_radius = base_radius
+        self.radius = base_radius + random.uniform(-10, 10)
+        self.speed = random.uniform(0.015, 0.035)
+        self.size = random.uniform(1.5, 3.5)
+        self.base_alpha = random.uniform(0.4, 0.9)
+        self.alpha = self.base_alpha
+
+    def update(self, is_hovering, center_x, center_y):
+        self.center_x = center_x
+        self.center_y = center_y
+        self.angle += self.speed * (2.5 if is_hovering else 1.0)
+        self.alpha = self.base_alpha * (1.5 if is_hovering else 1.0)
+
+    def draw(self, surface):
+        x = self.center_x + math.cos(self.angle) * self.radius
+        y = self.center_y + math.sin(self.angle) * self.radius
+        alpha = max(0, min(255, int(self.alpha * 255)))
+        color = (*AZUL[:3], alpha)
+        particle_surf = pygame.Surface((self.size * 2, self.size * 2), pygame.SRCALPHA)
+        pygame.draw.circle(particle_surf, color, (self.size, self.size), self.size)
+        surface.blit(particle_surf, (x - self.size, y - self.size))
+
+
+class Ripple:
+    """Onda expansiva que se dispara al hacer clic en un MenuButton; crece
+    hasta max_radius y se desvanece, luego active pasa a False."""
+
+    def __init__(self, x, y, max_radius, color=AZUL):
+        self.x = x
+        self.y = y
+        self.radius = 0
+        self.max_radius = max_radius
+        self.color = color
+        self.alpha = 180
+        self.active = True
+        self.speed = 8
+
+    def update(self):
+        self.radius += self.speed
+        self.alpha = max(0, 180 * (1 - self.radius / self.max_radius))
+        if self.radius >= self.max_radius:
+            self.active = False
+
+    def draw(self, surface):
+        if not self.active:
+            return
+        ripple_surf = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
+        pygame.draw.circle(
+            ripple_surf,
+            (*self.color[:3], int(self.alpha)),
+            (self.radius, self.radius),
+            self.radius,
+            width=3
+        )
+        surface.blit(ripple_surf, (self.x - self.radius, self.y - self.radius))
+
+
+class MenuScene:
+    """Pantalla de menu completa. self.state controla que se dibuja/procesa:
+
+    - "main": los 3 botones (JUGAR, AJUSTES, SALIR).
+    - "dificultad": se entra al elegir JUGAR; FACIL/NORMAL/DIFICIL devuelven
+      "START_GAME:<nave>:<skin>:<dificultad>" que main.py interpreta para
+      arrancar la partida.
+    - "settings": volumen de musica/efectos, sensibilidad de mano y camara
+      (modules/settings.py los persiste en ajustes.json); pantalla completa
+      y cambio de camara se resuelven en main.py via los resultados
+      "TOGGLE_FULLSCREEN"/"CHANGE_CAMERA" que devuelve handle_event().
+
+    handle_event() devuelve None salvo que haya que avisarle algo a main.py
+    (arrancar partida, salir, o esas dos señales de ajustes)."""
+
+    def __init__(self, screen_width, screen_height):
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+        self.surface = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
+        self.active = True
+        self.transition_alpha = 255
+        self.transitioning_out = False
+        self.title_phase = 0
+
+        self.title_font = get_font(52, bold=True)
+        self.subtitle_font = get_font(18)
+        self.button_font = get_font(24, bold=True)
+
+        self.stars = [Star(screen_width, screen_height) for _ in range(120)]
+
+        btn_w, btn_h = 240, 56
+        gap = 24
+        total_h = 3 * btn_h + 2 * gap
+        start_y = screen_height // 2 - total_h // 2
+        cx = screen_width // 2
+        self.buttons = [
+            MenuButton(cx, start_y, btn_w, btn_h, "JUGAR", self.button_font, (30, 200, 120)),
+            MenuButton(cx, start_y + btn_h + gap, btn_w, btn_h, "AJUSTES", self.button_font, (200, 180, 60)),
+            MenuButton(cx, start_y + 2 * (btn_h + gap), btn_w, btn_h, "SALIR", self.button_font, (220, 80, 80)),
+        ]
+        self.selected = 0
+        self.hover_amp = 0
+        self.state = "main"
+
+        slider_w = 380
+        slider_h = 18
+        self.slider_musica = SettingsSlider(
+            cx - slider_w // 2, 190, slider_w, slider_h, "MUSICA",
+            lambda: settings.get("volumen_musica"), self._cambiar_volumen_musica,
+        )
+        self.slider_sfx = SettingsSlider(
+            cx - slider_w // 2, 260, slider_w, slider_h, "EFECTOS",
+            lambda: settings.get("volumen_sfx"), self._cambiar_volumen_sfx,
+        )
+        self.slider_sensibilidad = SettingsSlider(
+            cx - slider_w // 2, 330, slider_w, slider_h, "SENSIBILIDAD",
+            lambda: settings.get("sensibilidad_mano"), self._cambiar_sensibilidad,
+            minimo=0.5, maximo=2.0, formato=lambda v: f"{v:.1f}x",
+        )
+        toggle_font = get_font(16, bold=True)
+        self.btn_silencio = MenuButton(cx, 410, 300, 48, "SILENCIO: NO", toggle_font, (150, 150, 175))
+        self.btn_pantalla = MenuButton(cx, 470, 300, 48, "PANTALLA COMPLETA: SI", toggle_font, (150, 150, 175))
+        self.btn_camara = MenuButton(cx, 530, 300, 48, "CAMARA: 0", toggle_font, (150, 150, 175))
+        self.btn_volver = MenuButton(cx, 595, 200, 48, "VOLVER", toggle_font, (90, 90, 115))
+        self.settings_widgets = [self.slider_musica, self.slider_sfx, self.slider_sensibilidad,
+                                 self.btn_silencio, self.btn_pantalla, self.btn_camara, self.btn_volver]
+
+        dif_btn_w, dif_btn_h, dif_gap = 240, 56, 24
+        dif_total_h = 3 * dif_btn_h + 2 * dif_gap
+        dif_start_y = screen_height // 2 - dif_total_h // 2
+        self.dificultad_ids = ["facil", "normal", "dificil"]
+        self.dificultad_botones = [
+            MenuButton(cx, dif_start_y, dif_btn_w, dif_btn_h, "FACIL", self.button_font, (60, 200, 120)),
+            MenuButton(cx, dif_start_y + dif_btn_h + dif_gap, dif_btn_w, dif_btn_h, "NORMAL", self.button_font, (200, 180, 60)),
+            MenuButton(cx, dif_start_y + 2 * (dif_btn_h + dif_gap), dif_btn_w, dif_btn_h, "DIFICIL", self.button_font, (220, 80, 80)),
+        ]
+        self.dificultad_seleccionada = 1
+
+    def _cambiar_volumen_musica(self, valor):
+        audio.set_volumen_musica(valor)
+        settings.set_valor("volumen_musica", valor)
+
+    def _cambiar_volumen_sfx(self, valor):
+        audio.set_volumen_sfx(valor)
+        settings.set_valor("volumen_sfx", valor)
+
+    def _cambiar_sensibilidad(self, valor):
+        settings.set_valor("sensibilidad_mano", valor)
+
+    def update(self, mouse_pos, mouse_pressed):
+        if self.transitioning_out:
+            self.transition_alpha = max(0, self.transition_alpha - 8)
+            if self.transition_alpha <= 0:
+                self.active = False
+
+        for star in self.stars:
+            star.update()
+
+        if self.transitioning_out:
+            return
+
+        if self.state == "settings":
+            self.slider_musica.update(mouse_pos, mouse_pressed)
+            self.slider_sfx.update(mouse_pos, mouse_pressed)
+            self.slider_sensibilidad.update(mouse_pos, mouse_pressed)
+            self.btn_silencio.update(mouse_pos, mouse_pressed)
+            self.btn_pantalla.update(mouse_pos, mouse_pressed)
+            self.btn_camara.update(mouse_pos, mouse_pressed)
+            self.btn_volver.update(mouse_pos, mouse_pressed)
+            self.title_phase += 0.025
+            return
+
+        if self.state == "dificultad":
+            for btn in self.dificultad_botones:
+                btn.update(mouse_pos, mouse_pressed)
+            self.hover_amp += 0.12
+            self.title_phase += 0.025
+            return
+
+        prev = self.selected
+        for i, btn in enumerate(self.buttons):
+            btn.update(mouse_pos, mouse_pressed)
+            if btn.hovered:
+                self.selected = i
+        if self.selected != prev:
+            self.hover_amp = 0.0
+        self.hover_amp += 0.12
+        self.title_phase += 0.025
+
+    def handle_event(self, event):
+        if not self.active or self.transitioning_out:
+            return None
+
+        if self.state == "settings":
+            return self._handle_settings_event(event)
+        if self.state == "dificultad":
+            return self._handle_dificultad_event(event)
+
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_UP:
+                self.selected = max(0, self.selected - 1)
+                self.hover_amp = 0.0
+                return None
+            if event.key == pygame.K_DOWN:
+                self.selected = min(len(self.buttons) - 1, self.selected + 1)
+                self.hover_amp = 0.0
+                return None
+            if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+                audio.sonido_boton()
+                return self._trigger_selected()
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for i, btn in enumerate(self.buttons):
+                if btn.handle_event(event):  # ya reproduce el sonido y el ripple
+                    self.selected = i
+                    return self._trigger_selected()
+        return None
+
+    def _handle_settings_event(self, event):
+        mouse_pos = event.pos if hasattr(event, 'pos') else pygame.mouse.get_pos()
+        if event.type == pygame.KEYDOWN and event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
+            self.exit_settings()
+            audio.sonido_boton()
+            return None
+        if self.slider_musica.handle_event(event, mouse_pos):
+            return None
+        if self.slider_sfx.handle_event(event, mouse_pos):
+            return None
+        if self.slider_sensibilidad.handle_event(event, mouse_pos):
+            return None
+        if self.btn_silencio.handle_event(event):
+            silenciado = audio.alternar_silencio()
+            settings.set_valor("silenciado", silenciado)
+            return None
+        if self.btn_pantalla.handle_event(event):
+            nueva = not settings.get("pantalla_completa")
+            settings.set_valor("pantalla_completa", nueva)
+            return "TOGGLE_FULLSCREEN"
+        if self.btn_camara.handle_event(event):
+            nuevo_indice = (settings.get("camera_index") + 1) % 4
+            settings.set_valor("camera_index", nuevo_indice)
+            return "CHANGE_CAMERA"
+        if self.btn_volver.handle_event(event):
+            self.exit_settings()
+            return None
+        return None
+
+    def _handle_dificultad_event(self, event):
+        if event.type == pygame.KEYDOWN:
+            if event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
+                self.state = "main"
+                audio.sonido_boton()
+                return None
+            if event.key == pygame.K_UP:
+                self.dificultad_seleccionada = max(0, self.dificultad_seleccionada - 1)
+                return None
+            if event.key == pygame.K_DOWN:
+                self.dificultad_seleccionada = min(len(self.dificultad_botones) - 1, self.dificultad_seleccionada + 1)
+                return None
+            if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+                return self._iniciar_partida(self.dificultad_ids[self.dificultad_seleccionada])
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for i, btn in enumerate(self.dificultad_botones):
+                if btn.handle_event(event):
+                    self.dificultad_seleccionada = i
+                    return self._iniciar_partida(self.dificultad_ids[i])
+        return None
+
+    def _iniciar_partida(self, dificultad_id):
+        self.transitioning_out = True
+        audio.sonido_boton()
+        return f"START_GAME:scout:default:{dificultad_id}"
+
+    def _trigger_selected(self):
+        label = self.buttons[self.selected].text
+        if label == "JUGAR":
+            self.state = "dificultad"
+            self.dificultad_seleccionada = 1
+            return None
+        if label == "AJUSTES":
+            self.state = "settings"
+            return None
+        if label == "SALIR":
+            return "QUIT"
+        return None
+
+    def exit_settings(self):
+        self.state = "main"
+        self.selected = 0
+
+    def draw(self, surface):
+        self.surface.fill((0, 0, 0, 0))
+
+        for star in self.stars:
+            star.draw(self.surface)
+
+        title_surf = render_texto_pixelado(self.title_font, "NAVE VS ASTEROIDES", WHITE)
+        title_rect = title_surf.get_rect(center=(self.screen_width // 2, 56))
+        float_y = math.sin(self.title_phase) * 6
+        glow_alpha = int(80 + 40 * math.sin(self.title_phase * 0.7))
+        glow_surf = pygame.Surface(
+            (title_rect.width + 48, title_rect.height + 48), pygame.SRCALPHA
+        )
+        for i in range(6):
+            offset = i * 4
+            pygame.draw.rect(
+                glow_surf,
+                (*AZUL[:3], max(0, glow_alpha - i * 12)),
+                (24 - offset, 24 - offset,
+                 title_rect.width + offset * 2,
+                 title_rect.height + offset * 2),
+                border_radius=10,
+            )
+        self.surface.blit(
+            glow_surf,
+            (title_rect.x - 24, title_rect.y - 24 + int(float_y)),
+        )
+        self.surface.blit(title_surf, (title_rect.x, title_rect.y + int(float_y)))
+
+        if self.state == "settings":
+            sub = render_texto_pixelado(self.subtitle_font, "AJUSTES", (200, 200, 220))
+            self.surface.blit(sub, sub.get_rect(center=(self.screen_width // 2, 106)))
+            self._draw_settings()
+            surface.blit(self.surface, (0, 0))
+            return
+
+        if self.state == "dificultad":
+            sub = render_texto_pixelado(self.subtitle_font, "ELEGI LA DIFICULTAD", (200, 200, 220))
+            self.surface.blit(sub, sub.get_rect(center=(self.screen_width // 2, 106)))
+            for i, btn in enumerate(self.dificultad_botones):
+                extra = int(math.sin(self.hover_amp * 1.0) * 8) if i == self.dificultad_seleccionada else 0
+                btn.draw(self.surface, extra_offset=extra)
+            hint = render_texto_pixelado(get_font(13), "ESC para volver", (160, 160, 185))
+            self.surface.blit(hint, hint.get_rect(center=(self.screen_width // 2, self.screen_height - 50)))
+            surface.blit(self.surface, (0, 0))
+            return
+
+        sub = render_texto_pixelado(self.subtitle_font, "CONTROL POR GESTOS DE MANO", (200, 200, 220))
+        self.surface.blit(
+            sub, sub.get_rect(center=(self.screen_width // 2, 106))
+        )
+
+        for i, btn in enumerate(self.buttons):
+            extra = 0
+            if i == self.selected:
+                extra = int(math.sin(self.hover_amp * 1.0) * 8)
+            btn.draw(self.surface, extra_offset=extra)
+
+        if self.transitioning_out or self.transition_alpha < 255:
+            overlay = pygame.Surface(
+                (self.screen_width, self.screen_height), pygame.SRCALPHA
+            )
+            overlay.fill((0, 0, 0, max(0, 255 - self.transition_alpha)))
+            self.surface.blit(overlay, (0, 0))
+
+        surface.blit(self.surface, (0, 0))
+
+    def _draw_settings(self):
+        self.slider_musica.draw(self.surface, AZUL)
+        self.slider_sfx.draw(self.surface, MENTA)
+        self.slider_sensibilidad.draw(self.surface, (255, 200, 100))
+
+        self.btn_silencio.text = f"SILENCIO: {'SI' if audio.esta_silenciado() else 'NO'}"
+        self.btn_pantalla.text = f"PANTALLA COMPLETA: {'SI' if settings.get('pantalla_completa') else 'NO'}"
+        self.btn_camara.text = f"CAMARA: {settings.get('camera_index')}"
+        self.btn_silencio.draw(self.surface)
+        self.btn_pantalla.draw(self.surface)
+        self.btn_camara.draw(self.surface)
+        self.btn_volver.draw(self.surface)
+
+        hint = render_texto_pixelado(get_font(13), "ESC para volver", (160, 160, 185))
+        self.surface.blit(hint, hint.get_rect(center=(self.screen_width // 2, self.screen_height - 50)))
+

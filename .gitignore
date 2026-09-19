@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.env
+.DS_Store
+Thumbs.db
+*.taskcustom_skins.json
+tools/_preview_sheet.png
+tools/_enemies.png
