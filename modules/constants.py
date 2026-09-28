@@ -43,27 +43,55 @@ RING_PIP_IDX = 14
 PINKY_TIP_IDX = 20
 PINKY_PIP_IDX = 18
 
+FIST_BURST_SHOTS = 1
+FIST_CONFIRM_FRAMES = 2
+
+GAMEPAD_MOVE_SPEED = 10.0
+GAMEPAD_DEADZONE = 0.2
+
 POWERUP_SPAWN_EVERY = 5
+
+# Nave bonus (ver modules/entities/enemy.py: tank/interceptor/bomber
+# reciclan los sprites de assets/sprites/ships que dejo libres quitar la
+# seleccion de clase de nave del jugador). Aparece rara vez a partir de
+# BONUS_SHIP_MIN_WAVE, ya no muere de un solo golpe (ver "hp" en
+# BONUS_SHIP_VARIANTS) y suelta varios power-ups de golpe al ser
+# destruida -menos que antes, para que no se sienta gratuita.
+BONUS_SHIP_MIN_WAVE = 3
+BONUS_SHIP_SPAWN_CHANCE = 0.16
+BONUS_SHIP_POWERUP_COUNT = 3
+BONUS_SHIP_SCORE = 300
+
+# De vez en cuando (BONUS_SHIP_MINIBOSS_CHANCE, se sortea aparte de la
+# chance de aparicion normal de arriba) la nave bonus que le toca aparecer
+# se activa como mini-jefe: mas grande, mucho mas resistente y con
+# ataques de nave de combate real (salvas de misiles con homing suave,
+# ver AlienShip.is_miniboss/AlienMissile en modules/entities/enemy.py),
+# a cambio de una recompensa proporcionalmente mayor.
+BONUS_SHIP_MINIBOSS_CHANCE = 0.14
+BONUS_SHIP_MINIBOSS_POWERUP_MULT = 2.5
+BONUS_SHIP_MINIBOSS_SCORE_MULT = 3.0
 
 DIFICULTADES = {
     "facil": 0.75,
     "normal": 1.0,
-    "dificil": 1.4,
+    "dificil": 1.8,
 }
 DIFICULTAD_DEFECTO = "normal"
 
-BOSS_SPAWN_WAVE = 5
-BOSS_MAX_HP = 120
-BOSS_SPEED = 1.2
-BOSS_SHOOT_RATE = 28
-BOSS_WIDTH = 100
-BOSS_HEIGHT = 50
-BOSS_X_SPAWN_MIN = 40
-BOSS_X_SPAWN_MAX_OFFSET = 40
-FINAL_BOSS_SPAWN_WAVE = 20
-FINAL_BOSS_MAX_HP = 600
-FINAL_BOSS_SHOOT_RATE = 20
-WAVE_BOSS_INTERVAL = 5
+FINAL_BOSS_SPAWN_WAVE = 40
+
+# Cuota de objetivos (asteroides + naves alienigenas) para que una oleada
+# pase a la siguiente: oleada N exige WAVE_OBJETIVOS_BASE + WAVE_OBJETIVOS_STEP
+# * (N - 1), con un techo en WAVE_OBJETIVOS_MAX (a partir de ahi la cuota no
+# sigue subiendo). Reemplaza el avance por tiempo de antes, para que el
+# juego no "salte" oleadas sin que el jugador haya hecho nada.
+WAVE_OBJETIVOS_BASE = 15
+WAVE_OBJETIVOS_STEP = 5
+WAVE_OBJETIVOS_MAX = 20
+
+# Oleada del mega-jefe final unico (dos fases: crucero -> esfera de combate).
+MEGA_BOSS_SPAWN_WAVE = 50
 
 BUFF_TYPE_EXTRA_LIFE = "extra_life"
 BUFF_TYPE_FAST_SHOOT = "fast_shoot"
@@ -77,16 +105,29 @@ BUFF_TYPE_MAX_LIFE_UP = "max_life_up"
 BUFF_TYPE_RAPID_FIRE = "rapid_fire"
 BUFF_TYPE_LIGHTNING = "lightning_field"
 BUFF_DURATION = 900
-BUFF_DURATION_FAST = 700
-BUFF_DURATION_TRIPLE = 800
-BUFF_DURATION_SHIELD = 800
-BUFF_DURATION_PIERCING = 700
-BUFF_DURATION_ATTRACT = 900
+# Duracion base de los buffs con tiempo: 20 segundos para todos (antes
+# variaba entre ~10 y 15s segun el buff). Ver Ship._extender_buff para la
+# curva de apilado al agarrar el mismo power-up de nuevo mientras sigue
+# activo: 1ra vez dura esto; 2da vez se duplica lo que quedaba; de la 3ra
+# en adelante cada agarrada solo suma BUFF_STACK_BONUS mas.
+BUFF_DURATION_FAST = 20 * FPS
+BUFF_DURATION_TRIPLE = 20 * FPS
+
+# Tres balas por disparo ya es 3x el daño de un tiro normal (cada bala
+# pega igual); esta penalidad de cadencia (Ship.apply_buff, se revierte al
+# expirar) baja un poco ese total sin tocar el daño por bala -+18% de
+# tiempo entre disparos, ~15% menos daño por segundo neto- para que siga
+# siendo fuerte pero no rompa el ritmo contra los jefes.
+TRIPLE_SHOT_CADENCIA_PENALIDAD = 1.18
+BUFF_DURATION_SHIELD = 20 * FPS
+BUFF_DURATION_PIERCING = 20 * FPS
+BUFF_DURATION_ATTRACT = 20 * FPS
 BUFF_DURATION_DAMAGE_UP = 99999
 BUFF_DURATION_SPEED_UP = 99999
 BUFF_DURATION_MAX_LIFE_UP = 99999
 BUFF_DURATION_RAPID_FIRE = 99999
-BUFF_DURATION_LIGHTNING = 600
+BUFF_DURATION_LIGHTNING = 20 * FPS
+BUFF_STACK_BONUS = 10 * FPS
 LIGHTNING_ZAP_INTERVAL = 12
 LIGHTNING_RADIUS = 130
 

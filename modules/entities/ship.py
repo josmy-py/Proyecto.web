@@ -10,14 +10,16 @@ import math
 from modules.constants import (
     AZUL, WHITE, AZUL_CIELO, DARK_BG, GAME_WIDTH, GAME_HEIGHT, SHIP_WIDTH, SHIP_HEIGHT,
     BUFF_TYPE_EXTRA_LIFE, BUFF_TYPE_FAST_SHOOT, BUFF_TYPE_TRIPLE_SHOT, LAVANDA,
-    BUFF_DURATION, BUFF_DURATION_FAST, BUFF_DURATION_TRIPLE, ROSA, AMARILLO,
+    BUFF_DURATION, BUFF_DURATION_FAST, BUFF_DURATION_TRIPLE, TRIPLE_SHOT_CADENCIA_PENALIDAD, ROSA, AMARILLO,
     GLASS_WHITE, GLASS_BLACK, SHADOW,
     BUFF_TYPE_SHIELD, BUFF_TYPE_PIERCING, BUFF_TYPE_ATTRACT,
     BUFF_DURATION_SHIELD, BUFF_DURATION_PIERCING, BUFF_DURATION_ATTRACT, MENTA, MELON,
-    ROSA_CHICLE, ELECTRICO,
+    ELECTRICO,
     BUFF_TYPE_DAMAGE_UP, BUFF_TYPE_SPEED_UP, BUFF_TYPE_MAX_LIFE_UP, BUFF_TYPE_RAPID_FIRE,
     BUFF_DURATION_DAMAGE_UP, BUFF_DURATION_SPEED_UP, BUFF_DURATION_MAX_LIFE_UP, BUFF_DURATION_RAPID_FIRE,
     BUFF_TYPE_LIGHTNING, BUFF_DURATION_LIGHTNING, LIGHTNING_ZAP_INTERVAL, LIGHTNING_RADIUS,
+    BUFF_STACK_BONUS,
+    FIST_BURST_SHOTS, FIST_CONFIRM_FRAMES,
 )
 from modules.entities.bullet import Bullet
 from modules.skins import apply_skin_to_ship
@@ -25,10 +27,12 @@ from modules.systems import sprites
 
 
 class Ship:
-    """La nave del jugador. `ship_type` (scout/tank/interceptor/bomber) fija
-    las estadisticas base y el buff de clase; `skin_id` fija los colores
-    (ver modules/skins.py). target_x/target_y son la posicion de la mano
-    detectada por MediaPipe; update() interpola la nave hacia ahi."""
+    """La nave del jugador (siempre clase Scout: la seleccion de clase de
+    nave del jugador se elimino y sus sprites/colores de tank/interceptor/
+    bomber se reciclaron como la nave bonus de modules/entities/enemy.py).
+    `skin_id` fija los colores (ver modules/skins.py). target_x/target_y son
+    la posicion de la mano detectada por MediaPipe; update() interpola la
+    nave hacia ahi."""
 
     def __init__(self, x, y, ship_type="scout", skin_id="default"):
         self.ship_type = ship_type
@@ -42,6 +46,10 @@ class Ship:
         self.height = SHIP_HEIGHT
         self.shoot_cooldown = 0
         self.base_shoot_delay = 20
+        self.hand_was_fist = False
+        self._fist_pending_state = False
+        self._fist_pending_count = 0
+        self.burst_shots_pending = 0
         self.alive = True
         self.max_lives = 3
         self.lives = self.max_lives
@@ -78,53 +86,17 @@ class Ship:
         apply_skin_to_ship(self, skin_id)
 
     def _apply_type_stats(self):
-        stats = {
-            "scout": {
-                "speed": 0.18,
-                "shoot_delay": 20,
-                "max_lives": 3,
-                "body_color": AZUL,
-                "wing_color": AZUL_CIELO,
-                "glow_color": (140, 210, 255),
-                "flame_color": AZUL,
-                "name": "Scout",
-                "description": "Nave equilibrada con buena maniobrabilidad",
-            },
-            "tank": {
-                "speed": 0.13,
-                "shoot_delay": 24,
-                "max_lives": 3,
-                "body_color": MELON,
-                "wing_color": (200, 140, 100),
-                "glow_color": (255, 190, 140),
-                "flame_color": MELON,
-                "name": "Tanque",
-                "description": "Lenta pero resistente, con escudo adicional",
-            },
-            "interceptor": {
-                "speed": 0.24,
-                "shoot_delay": 16,
-                "max_lives": 3,
-                "body_color": LAVANDA,
-                "wing_color": ROSA_CHICLE,
-                "glow_color": (200, 150, 255),
-                "flame_color": LAVANDA,
-                "name": "Interceptor",
-                "description": "Rapida y letal, pero muy fragil",
-            },
-            "bomber": {
-                "speed": 0.11,
-                "shoot_delay": 30,
-                "max_lives": 3,
-                "body_color": ROSA,
-                "wing_color": (200, 100, 120),
-                "glow_color": (255, 130, 150),
-                "flame_color": ROSA,
-                "name": "Bombardero",
-                "description": "Lenta pero con gran potencia de fuego",
-            },
+        data = {
+            "speed": 0.18,
+            "shoot_delay": 20,
+            "max_lives": 3,
+            "body_color": AZUL,
+            "wing_color": AZUL_CIELO,
+            "glow_color": (140, 210, 255),
+            "flame_color": AZUL,
+            "name": "Scout",
+            "description": "Nave equilibrada con buena maniobrabilidad",
         }
-        data = stats.get(self.ship_type, stats["scout"])
         self.speed = data["speed"]
         self.base_shoot_delay = data["shoot_delay"]
         self.shoot_delay = self.base_shoot_delay
@@ -136,17 +108,7 @@ class Ship:
         self.flame_color = data["flame_color"]
         self.name = data["name"]
         self.description = data["description"]
-
         self.class_buffs.clear()
-        if self.ship_type == "tank":
-            self.shield_hits = 3
-            self.class_buffs.add(BUFF_TYPE_SHIELD)
-        elif self.ship_type == "interceptor":
-            self.shoot_delay = max(5, int(self.base_shoot_delay * 0.4))
-            self.class_buffs.add(BUFF_TYPE_FAST_SHOOT)
-        elif self.ship_type == "bomber":
-            self.piercing_active = True
-            self.class_buffs.add(BUFF_TYPE_PIERCING)
 
     def invalidate_sprite(self):
         """Fuerza a recomponer el sprite (se llama al cambiar de skin/color)."""
@@ -201,6 +163,7 @@ class Ship:
                     self.shoot_delay = self.base_shoot_delay
             if buff_type == BUFF_TYPE_TRIPLE_SHOT:
                 self.triple_shot_active = False
+                self.shoot_delay = max(5, int(self.shoot_delay / TRIPLE_SHOT_CADENCIA_PENALIDAD))
             if buff_type == BUFF_TYPE_SHIELD:
                 self.shield_hits = 0
             if buff_type == BUFF_TYPE_PIERCING:
@@ -274,30 +237,10 @@ class Ship:
             sprites.blit_centered(screen, drawn, cx, cy)
             flame_anchor = cy + sh // 2 - 6
         else:
-            # respaldo vectorial si faltan los PNG de assets/sprites
-            shadow_surf = pygame.Surface((w + 8, h + 8), pygame.SRCALPHA)
-            pygame.draw.ellipse(shadow_surf, SHADOW, (4, 4, w, h))
-            screen.blit(shadow_surf, (cx - w // 2 - 4, cy - h // 2 - 4))
-
-            body_points = [
-                (cx, cy - h // 2),
-                (cx - w // 2 + 6, cy + h // 3),
-                (cx - w // 5, cy + h // 4),
-                (cx, cy + h // 3),
-                (cx + w // 5, cy + h // 4),
-                (cx + w // 2 - 6, cy + h // 3),
-            ]
-            pygame.draw.polygon(screen, self.body_color, body_points)
-            wing_l = [(cx - w // 2 + 6, cy + h // 3), (cx - w // 3, cy + h // 4 + 5), (cx - w // 4, cy + h // 3)]
-            wing_r = [(cx + w // 2 - 6, cy + h // 3), (cx + w // 3, cy + h // 4 + 5), (cx + w // 4, cy + h // 3)]
-            pygame.draw.polygon(screen, self.wing_color, wing_l)
-            pygame.draw.polygon(screen, self.wing_color, wing_r)
-            pygame.draw.circle(
-                screen,
-                (min(255, self.body_color[0] + 90), min(255, self.body_color[1] + 90), min(255, self.body_color[2] + 90)),
-                (cx, cy - h // 4 + 2),
-                3,
-            )
+            # Sin PNG en assets/sprites no se dibuja un casco de respaldo por
+            # codigo: la nave queda sin cuerpo visible (solo los "detalles"
+            # de mas abajo, como la llama, siguen animandose con un ancla
+            # por defecto) hasta que se regeneren los sprites.
             flame_anchor = cy + h // 3
 
         flame_phase = self.engine_flame_phase
@@ -427,6 +370,58 @@ class Ship:
 
         pygame.draw.rect(surface, WHITE, (draw_x, draw_y, bar_w, bar_h), width=1, border_radius=2)
 
+    def queue_shot(self, count=None):
+        """Encola disparos para que update_burst_fire() los vaya soltando a
+        ritmo de shoot_cooldown. Usado tanto por el flanco de cierre de
+        puño (camara) como por el boton de disparo del mando."""
+        self.burst_shots_pending = FIST_BURST_SHOTS if count is None else count
+
+    def trigger_fist_burst(self, fist_now):
+        """Se llama una vez por frame con el estado crudo de is_fist().
+        El landmark de MediaPipe tiembla un poco cuadro a cuadro, y justo en
+        el instante de abrir/cerrar la mano la punta de un dedo puede
+        quedar oscilando alrededor de su PIP; sin filtro eso se leeria como
+        varios cierres sueltos en vez de uno solo. Por eso un cambio de
+        estado (abierta<->cerrada) solo se confirma tras FIST_CONFIRM_FRAMES
+        cuadros seguidos con el mismo valor, y solo ahi, si el estado
+        confirmado pasa de abierta a cerrada, se dispara un unico tiro.
+        Mientras el puño siga cerrado no se vuelve a disparar; hace falta
+        que el estado confirmado pase por "abierta" antes del proximo
+        "cerrada" para habilitar otro disparo."""
+        if fist_now == self._fist_pending_state:
+            self._fist_pending_count += 1
+        else:
+            self._fist_pending_state = fist_now
+            self._fist_pending_count = 1
+
+        if self._fist_pending_count < FIST_CONFIRM_FRAMES:
+            return
+        if self._fist_pending_state == self.hand_was_fist:
+            return
+
+        if self._fist_pending_state:
+            self.queue_shot()
+        self.hand_was_fist = self._fist_pending_state
+
+    def reset_fist_tracking(self):
+        """Cuando se pierde la deteccion de la mano no sabemos si se abrio o
+        se sigue cerrada; se limpia todo el estado (confirmado y pendiente)
+        para que la proxima deteccion de puño cuente como un cierre nuevo."""
+        self.hand_was_fist = False
+        self._fist_pending_state = False
+        self._fist_pending_count = 0
+
+    def update_burst_fire(self):
+        """Dispara un disparo de la rafaga pendiente si el cooldown ya se
+        cumplio. Debe llamarse una vez por frame para ir vaciando la rafaga
+        a ritmo de shoot_delay. Devuelve las balas creadas (puede ser vacia)."""
+        if self.burst_shots_pending <= 0 or self.shoot_cooldown > 0:
+            return []
+        bullets = self.shoot()
+        if bullets:
+            self.burst_shots_pending -= 1
+        return bullets
+
     def shoot(self):
         if self.shoot_cooldown <= 0:
             self.shoot_cooldown = self.shoot_delay
@@ -438,69 +433,84 @@ class Ship:
                     Bullet(self.x + 8, self.y - self.height // 2 + 2, piercing=self.piercing_active, color=shot_color),
                 ]
             bullet = Bullet(self.x, self.y - self.height // 2, piercing=self.piercing_active, color=shot_color)
-            if self.ship_type == "bomber":
-                bullet.speed = 12
-                bullet.radius = 5
             return [bullet]
         return []
+
+    def _extender_buff(self, buff_type, duracion):
+        """Curva de apilado al agarrar el mismo power-up mientras sigue
+        activo: la 1ra vez dura `duracion` (20s); la 2da vez se DUPLICA lo
+        que quedaba; de la 3ra en adelante cada agarrada solo suma
+        BUFF_STACK_BONUS (10s) mas, para que no se dispare al infinito
+        duplicando siempre. max_timer se guarda junto al timer para que el
+        HUD pueda calcular que fraccion de tiempo queda con timer/max_timer
+        sin conocer la duracion base ni el conteo de stacks."""
+        actual = self.buffs.get(buff_type)
+        if actual is None:
+            total = duracion
+            stacks = 1
+        else:
+            stacks = actual.get("stacks", 1) + 1
+            if stacks == 2:
+                total = actual["timer"] * 2
+            else:
+                total = actual["timer"] + BUFF_STACK_BONUS
+        self.buffs[buff_type] = {"timer": total, "max_timer": total, "stacks": stacks}
 
     def apply_buff(self, buff_type):
         if buff_type == BUFF_TYPE_EXTRA_LIFE:
             self.lives = min(self.lives + 1, self.max_lives)
             return "+1 vida"
         elif buff_type == BUFF_TYPE_FAST_SHOOT:
-            if buff_type in self.class_buffs:
-                self.buffs[buff_type] = {"timer": BUFF_DURATION_FAST}
-                return "Disparo rapido"
-            self.shoot_delay = max(5, int(self.base_shoot_delay * 0.4))
-            self.buffs[buff_type] = {"timer": BUFF_DURATION_FAST}
+            if buff_type not in self.class_buffs:
+                self.shoot_delay = max(5, int(self.base_shoot_delay * 0.4))
+            self._extender_buff(buff_type, BUFF_DURATION_FAST)
             return "Disparo rapido"
         elif buff_type == BUFF_TYPE_TRIPLE_SHOT:
+            # tres balas por disparo ya es mucho mas daño por si solo (cada
+            # bala pega igual que una sola); una pequeña penalidad de
+            # cadencia (aplicada una unica vez, no cada vez que se vuelve a
+            # agarrar el mismo bonus mientras sigue activo) lo deja fuerte
+            # pero no roto contra jefes. Se revierte al expirar (ver el
+            # bucle de expiracion mas abajo).
+            if not self.triple_shot_active:
+                self.shoot_delay = int(self.shoot_delay * TRIPLE_SHOT_CADENCIA_PENALIDAD)
             self.triple_shot_active = True
-            self.buffs[buff_type] = {"timer": BUFF_DURATION_TRIPLE}
+            self._extender_buff(buff_type, BUFF_DURATION_TRIPLE)
             return "Rafaga triple"
         elif buff_type == BUFF_TYPE_SHIELD:
-            if buff_type in self.class_buffs:
-                self.shield_hits = 3
-                self.buffs[buff_type] = {"timer": BUFF_DURATION_SHIELD}
-                return "Escudo activo"
             self.shield_hits = 3
-            self.buffs[buff_type] = {"timer": BUFF_DURATION_SHIELD}
+            self._extender_buff(buff_type, BUFF_DURATION_SHIELD)
             return "Escudo activo"
         elif buff_type == BUFF_TYPE_PIERCING:
-            if buff_type in self.class_buffs:
-                self.piercing_active = True
-                self.buffs[buff_type] = {"timer": BUFF_DURATION_PIERCING}
-                return "Penetracion"
             self.piercing_active = True
-            self.buffs[buff_type] = {"timer": BUFF_DURATION_PIERCING}
+            self._extender_buff(buff_type, BUFF_DURATION_PIERCING)
             return "Penetracion"
         elif buff_type == BUFF_TYPE_ATTRACT:
             self.attract_active = True
-            self.buffs[buff_type] = {"timer": BUFF_DURATION_ATTRACT}
+            self._extender_buff(buff_type, BUFF_DURATION_ATTRACT)
             return "Imantado"
         elif buff_type == BUFF_TYPE_DAMAGE_UP:
             self.damage_multiplier += 0.25
-            self.buffs[buff_type] = {"timer": BUFF_DURATION_DAMAGE_UP, "permanent": True}
+            self.buffs[buff_type] = {"timer": BUFF_DURATION_DAMAGE_UP, "max_timer": BUFF_DURATION_DAMAGE_UP, "permanent": True}
             return "Daño +25%"
         elif buff_type == BUFF_TYPE_SPEED_UP:
             self.permanent_speed_bonus += 0.04
-            self.buffs[buff_type] = {"timer": BUFF_DURATION_SPEED_UP, "permanent": True}
+            self.buffs[buff_type] = {"timer": BUFF_DURATION_SPEED_UP, "max_timer": BUFF_DURATION_SPEED_UP, "permanent": True}
             return "Velocidad +"
         elif buff_type == BUFF_TYPE_MAX_LIFE_UP:
             self.max_lives += 1
             self.lives = min(self.lives + 1, self.max_lives)
-            self.buffs[buff_type] = {"timer": BUFF_DURATION_MAX_LIFE_UP, "permanent": True}
+            self.buffs[buff_type] = {"timer": BUFF_DURATION_MAX_LIFE_UP, "max_timer": BUFF_DURATION_MAX_LIFE_UP, "permanent": True}
             return "Vida Max +1"
         elif buff_type == BUFF_TYPE_RAPID_FIRE:
             self.permanent_rapid_fire = True
             self.shoot_delay = max(5, int(self.shoot_delay * 0.6))
-            self.buffs[buff_type] = {"timer": BUFF_DURATION_RAPID_FIRE, "permanent": True}
+            self.buffs[buff_type] = {"timer": BUFF_DURATION_RAPID_FIRE, "max_timer": BUFF_DURATION_RAPID_FIRE, "permanent": True}
             return "Fuego Rápido"
         elif buff_type == BUFF_TYPE_LIGHTNING:
             self.lightning_active = True
             self.lightning_zap_cooldown = 0
-            self.buffs[buff_type] = {"timer": BUFF_DURATION_LIGHTNING}
+            self._extender_buff(buff_type, BUFF_DURATION_LIGHTNING)
             return "Campo electrico"
         return ""
 

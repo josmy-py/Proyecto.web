@@ -1,8 +1,9 @@
 """
-Bonus recogibles: capsulas estilo caja de recreativa (ver
-tools/generate_sprites.py) que sueltan un buff temporal o permanente al
-tocarlas. random_buff_type()/buff_duration() los usan tambien main.py y
-modules/entities/ship.py para sortear y aplicar el efecto."""
+Bonus recogibles: insignias pixel-art (marco biselado caqui/negro + una
+letra dorada por habilidad, ver tools/generate_sprites.py) que sueltan un
+buff temporal o permanente al tocarlas. random_buff_type()/buff_duration()
+los usan tambien main.py y modules/entities/ship.py para sortear y aplicar
+el efecto."""
 
 import pygame
 import random
@@ -38,7 +39,6 @@ class PowerUp:
         self.color = self._get_color()
         self.label = self._get_label()
         self.pulse = 0
-        self.rotation = 0
 
     def _get_color(self):
         return {
@@ -73,7 +73,6 @@ class PowerUp:
     def update(self):
         self.y += self.speed
         self.pulse += 0.08
-        self.rotation += 0.02
         self.lifetime -= 1
         if self.y > GAME_HEIGHT + 20 or self.lifetime <= 0:
             self.active = False
@@ -94,38 +93,29 @@ class PowerUp:
             pygame.draw.circle(glow_surf, (*self.color[:3], ga), (r * 2, r * 2), int(gr))
         screen.blit(glow_surf, (cx - r * 2, cy - r * 2))
 
-        # Capsula tipo caja de bonus (estilo recreativa de los 90, con su
-        # icono propio grabado encima). Si faltan los PNG se cae al circulo
-        # vectorial con etiqueta de siempre.
+        # Insignia pixel-art (marco biselado + letra, ver
+        # tools/generate_sprites.py). Sin PNG en assets/sprites/powerups
+        # no se dibuja una de respaldo por codigo: solo queda la etiqueta
+        # de texto (siempre visible, ver mas abajo). Nada de rotacion aca
+        # a proposito: pygame.transform.rotate suaviza/difumina los bordes
+        # al girar, y eso arruina el pixelado en bloque del estilo retro -
+        # solo el pulso de tamaño (ya pixelado el mismo, ver
+        # _scaled_pixelado) la hace sentir "viva".
         sprite = sprites.get_powerup_surface(self.buff_type, self.color, r * 2 + 6)
         if sprite is not None:
-            wobble = math.sin(self.rotation) * 10
-            rotated = pygame.transform.rotate(sprite, wobble)
-            rect = rotated.get_rect(center=(cx, cy))
-            screen.blit(rotated, rect)
+            rect = sprite.get_rect(center=(cx, cy))
+            screen.blit(sprite, rect)
 
-            # Etiqueta corta debajo del icono: el dibujo ya sugiere el
-            # efecto (corazon, rayo, iman...) pero el texto deja clarisimo
-            # que hace cada bonus de un vistazo.
-            label_surf = render_text(self.label, 12, WHITE)
-            label_x = cx - label_surf.get_width() // 2
-            label_y = cy + r + 3
-            chip_surf = pygame.Surface((label_surf.get_width() + 6, label_surf.get_height() + 2), pygame.SRCALPHA)
-            pygame.draw.rect(chip_surf, (10, 10, 20, 170), chip_surf.get_rect(), border_radius=4)
-            screen.blit(chip_surf, (label_x - 3, label_y - 1))
-            screen.blit(label_surf, (label_x, label_y))
-        else:
-            body_surf = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
-            pygame.draw.circle(body_surf, self.color, (r, r), r)
-            pygame.draw.circle(body_surf, WHITE, (r, r), r, 2)
-            highlight_r = max(1, r // 3)
-            highlight_surf = pygame.Surface((highlight_r * 2, highlight_r * 2), pygame.SRCALPHA)
-            pygame.draw.circle(highlight_surf, (255, 255, 255, 80), (highlight_r, highlight_r), highlight_r)
-            body_surf.blit(highlight_surf, (r - highlight_r, r - highlight_r))
-            screen.blit(body_surf, (cx - r, cy - r))
-
-            label_surf = render_text(self.label, 11, WHITE)
-            screen.blit(label_surf, (cx - label_surf.get_width() // 2, cy - label_surf.get_height() // 2))
+        # Etiqueta corta debajo del icono: el dibujo ya sugiere el efecto
+        # (corazon, rayo, iman...) pero el texto deja clarisimo que hace
+        # cada bonus de un vistazo.
+        label_surf = render_text(self.label, 12, WHITE)
+        label_x = cx - label_surf.get_width() // 2
+        label_y = cy + r + 3
+        chip_surf = pygame.Surface((label_surf.get_width() + 6, label_surf.get_height() + 2), pygame.SRCALPHA)
+        pygame.draw.rect(chip_surf, (10, 10, 20, 170), chip_surf.get_rect(), border_radius=4)
+        screen.blit(chip_surf, (label_x - 3, label_y - 1))
+        screen.blit(label_surf, (label_x, label_y))
 
 
 def random_buff_type():

@@ -342,6 +342,181 @@ def generar_musica_muerte():
     return normalizar(pista, 0.9)
 
 
+# ------------------------------------------------------- musica de jefes
+#
+# Un tema propio por jefe (ver modules/systems/audio.py reproducir_musica,
+# llamado con "jefe_<boss_id>" desde main.py al aparecer cada uno) en vez
+# de que siga sonando la musica generica del juego durante toda la pelea.
+# Las cinco comparten el mismo esqueleto ritmico que generar_musica_juego
+# (bajo de 8 notas x 4 slots + capa melodica de 32 notas x 1 slot +
+# percusion de 32 pasos x 1 slot, los tres largos iguales -> loop limpio
+# sin cortar a mitad de compas) pero varian tempo, timbre, acordes y patron
+# de percusion segun el caracter de cada jefe.
+
+def generar_musica_jefe_sentinel():
+    """Centinela Corrupto (oleada 10): mecanico pero con corrupcion
+    digital -bajo y percusion firmes, el lead se corta a silencio al azar
+    como una señal con interferencia, mas una capa de estatica de fondo
+    muy tenue- insinuando que algo anda mal en su sistema antes de pelear
+    con el."""
+    slot = 0.22
+    grados_bajo = [0, 0, 3, 0, 5, 5, 3, 2]
+    bajo = construir_patron(grados_bajo, slot * 4, onda_cuadrada, base_freq=98.0,
+                             ataque=0.008, caida=slot * 3.6, volumen=0.55)
+
+    rng = np.random.default_rng(42)
+    grados_lead = []
+    for grado in grados_bajo:
+        for gn in (grado + 7, grado + 10, grado + 7, grado + 12):
+            grados_lead.append(None if rng.random() < 0.15 else gn)
+    lead = construir_patron(grados_lead, slot, onda_cuadrada, base_freq=392.0,
+                             ataque=0.003, caida=slot * 0.7, volumen=0.3)
+
+    patron_percusion = ["kick" if i % 4 == 0 else "hat" if i % 2 == 0 else None
+                         for i in range(32)]
+    percusion = construir_percusion(patron_percusion, slot) * 0.38
+
+    n = min(len(bajo), len(lead), len(percusion))
+    estatica = suavizar(ruido_blanco(n / SR, semilla=9), 3)[:n] * 0.05
+    mezcla = bajo[:n] + lead[:n] + percusion[:n] + estatica
+    mezcla = fundido_de_bucle(mezcla)
+    return normalizar(mezcla, 0.8)
+
+
+def generar_musica_jefe_dragon():
+    """Vanguardia Autonoma / crucero-calavera (oleada 20): tema militar y
+    contundente -bajo pesado en sierra, acordes en bloque tipo "stab"
+    marcando el compas como una fanfarria de guerra, percusion de marcha
+    mas densa que el resto de jefes tempranos."""
+    slot = 0.2
+    grados_bajo = [0, 0, 0, 3, 5, 5, 3, 0]
+    bajo = construir_patron(grados_bajo, slot * 4, onda_sierra, base_freq=82.41,
+                             ataque=0.005, caida=slot * 3.5, volumen=0.6)
+
+    def acorde_stab(freq, dur):
+        return (onda_cuadrada(freq, dur) * 0.5 +
+                onda_cuadrada(freq * 1.5, dur) * 0.3 +
+                onda_cuadrada(freq * 2.0, dur) * 0.2)
+
+    grados_stab = []
+    for grado in grados_bajo:
+        grados_stab.extend([grado + 12, grado + 15, grado + 12, None])
+    stabs = construir_patron(grados_stab, slot, acorde_stab, base_freq=164.81,
+                              ataque=0.002, caida=slot * 0.55, volumen=0.28)
+
+    patron_percusion = ["kick", "hat", "kick", "hat"] * 8
+    percusion = construir_percusion(patron_percusion, slot) * 0.45
+
+    n = min(len(bajo), len(stabs), len(percusion))
+    mezcla = bajo[:n] + stabs[:n] + percusion[:n]
+    mezcla = fundido_de_bucle(mezcla)
+    return normalizar(mezcla, 0.85)
+
+
+def generar_musica_jefe_titan():
+    """Titan del Vacio (oleada 30): tema lento y pesadisimo para un pulpo
+    mecanico gigante -drone grave sostenido, golpes de percusion muy
+    espaciados (como pisadas o latigazos de tentaculo, no un ritmo rapido)
+    y un lamento agudo disonante muy de fondo (el ojo que te sigue);
+    tempo bastante mas lento que el resto de los jefes."""
+    slot = 0.5
+
+    def drone(freq, dur):
+        return (onda_seno(freq, dur) * 0.6 + onda_seno(freq * 1.01, dur) * 0.25 +
+                onda_seno(freq * 2.0, dur) * 0.15)
+
+    grados_bajo = [0, 0, 0, 0, -3, -3, 0, 0]
+    bajo = construir_patron(grados_bajo, slot * 4, drone, base_freq=55.0,
+                             ataque=0.3, caida=slot * 3.6, volumen=0.7)
+
+    grados_lamento = []
+    for i, grado in enumerate(grados_bajo):
+        grados_lamento.extend([grado + 7 if i % 2 == 0 else grado + 5, None, None, None])
+    lamento = construir_patron(grados_lamento, slot, onda_seno, base_freq=220.0,
+                                ataque=0.15, caida=slot * 0.9, volumen=0.18)
+
+    patron_percusion = [None] * 32
+    patron_percusion[0] = "kick"
+    patron_percusion[16] = "kick"
+    percusion = construir_percusion(patron_percusion, slot) * 0.55
+
+    n = min(len(bajo), len(lamento), len(percusion))
+    mezcla = bajo[:n] + lamento[:n] + percusion[:n]
+    mezcla = fundido_de_bucle(mezcla, ms=40)
+    return normalizar(mezcla, 0.8)
+
+
+def generar_musica_jefe_anomalia():
+    """La Anomalia Final (oleada 40): tema disonante e inestable para una
+    calavera glicheada -voces desafinadas entre si con una leve deriva de
+    tono (tiemblan, no suenan limpias), notas que se cortan a silencio al
+    azar en el lead, y bloques cortos de silencio al azar en la mezcla
+    entera que imitan el glitch visual del propio jefe."""
+    slot = 0.18
+    rng = np.random.default_rng(404)
+
+    def voz_glitch(freq, dur):
+        n = int(SR * dur)
+        t = np.linspace(0, dur, n, endpoint=False)
+        deriva = 1.0 + 0.02 * np.sin(2 * np.pi * 3.0 * t)
+        base = np.sin(2 * np.pi * freq * deriva * t)
+        detune = np.sin(2 * np.pi * freq * 1.03 * t)
+        return base * 0.65 + detune * 0.35
+
+    grados_bajo = [0, 0, 1, 0, -2, -2, 0, 1]
+    bajo = construir_patron(grados_bajo, slot * 4, voz_glitch, base_freq=87.31,
+                             ataque=0.01, caida=slot * 3.5, volumen=0.55)
+
+    grados_lead = []
+    for grado in grados_bajo:
+        for gn in (grado + 12, grado + 11, grado + 12, grado + 15):
+            grados_lead.append(None if rng.random() < 0.22 else gn)
+    lead = construir_patron(grados_lead, slot, voz_glitch, base_freq=349.23,
+                             ataque=0.002, caida=slot * 0.6, volumen=0.3)
+
+    patron_percusion = ["hat" if rng.random() < 0.6 else None for _ in range(32)]
+    patron_percusion[0] = "kick"
+    patron_percusion[16] = "kick"
+    percusion = construir_percusion(patron_percusion, slot) * 0.32
+
+    n = min(len(bajo), len(lead), len(percusion))
+    mezcla = bajo[:n] + lead[:n] + percusion[:n]
+    bloque = int(SR * 0.04)
+    for i in range(0, n, bloque):
+        if rng.random() < 0.05:
+            mezcla[i:i + bloque] *= 0.05
+    mezcla = fundido_de_bucle(mezcla)
+    return normalizar(mezcla, 0.85)
+
+
+def generar_musica_jefe_mega():
+    """Mega-jefe final (oleada 50): el tema mas grande e intenso de
+    todos -bajo pesado en sierra, acordes en bloque de cuatro voces y la
+    percusion mas densa del juego- para la batalla final."""
+    slot = 0.16
+    grados_bajo = [0, 0, 3, 3, 5, 5, 4, 3]
+    bajo = construir_patron(grados_bajo, slot * 4, onda_sierra, base_freq=73.42,
+                             ataque=0.004, caida=slot * 3.4, volumen=0.62)
+
+    def acorde_epico(freq, dur):
+        return (onda_cuadrada(freq, dur) * 0.4 + onda_cuadrada(freq * 1.5, dur) * 0.3 +
+                onda_seno(freq * 2.0, dur) * 0.3)
+
+    grados_stab = []
+    for grado in grados_bajo:
+        grados_stab.extend([grado + 12, grado + 15, grado + 12, grado + 19])
+    stabs = construir_patron(grados_stab, slot, acorde_epico, base_freq=146.83,
+                              ataque=0.002, caida=slot * 0.5, volumen=0.28)
+
+    patron_percusion = ["kick" if i % 3 == 0 else "hat" for i in range(32)]
+    percusion = construir_percusion(patron_percusion, slot) * 0.48
+
+    n = min(len(bajo), len(stabs), len(percusion))
+    mezcla = bajo[:n] + stabs[:n] + percusion[:n]
+    mezcla = fundido_de_bucle(mezcla)
+    return normalizar(mezcla, 0.9)
+
+
 # ----------------------------------------------------------------- ejecucion
 
 SFX = {
@@ -358,6 +533,11 @@ MUSICA = {
     "musica_juego": generar_musica_juego,
     "musica_menu": generar_musica_menu,
     "musica_muerte": generar_musica_muerte,
+    "musica_jefe_sentinel": generar_musica_jefe_sentinel,
+    "musica_jefe_dragon": generar_musica_jefe_dragon,
+    "musica_jefe_titan": generar_musica_jefe_titan,
+    "musica_jefe_anomalia": generar_musica_jefe_anomalia,
+    "musica_jefe_mega": generar_musica_jefe_mega,
 }
 
 

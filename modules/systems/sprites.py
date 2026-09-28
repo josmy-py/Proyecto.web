@@ -6,9 +6,11 @@ color (BLEND_RGBA_MULT) se obtiene esa pieza pintada de ese color conservando
 el sombreado. Gracias a eso el aspecto (skin) de cada nave, jefe o power-up
 se pinta sin necesidad de tener un PNG por cada combinacion de color posible.
 
-Si falta la carpeta assets/sprites el juego sigue funcionando: todas las
-funciones devuelven None y las entidades dibujan su version vectorial de
-respaldo.
+Si falta la carpeta assets/sprites el juego no se cae: todas las funciones
+devuelven None y las entidades simplemente no dibujan su cuerpo (las
+naves/rocas/jefes ya no generan una silueta de respaldo por codigo, ver
+sus draw()); los "detalles" en tiempo real (cupula, luces, barra de vida,
+particulas...) siguen animandose igual.
 
 Regenerar los PNG:  python tools/generate_sprites.py
 """
@@ -34,12 +36,13 @@ ASTEROID_VARIANTS = 14
 ENEMY_KINDS = ("fighter", "drone", "gunner")
 
 # body_type del jefe (ver modules/core/boss_system.py) -> prefijo de archivo
-# en assets/sprites/boss/. "saucer" y "anomaly" comparten el sprite
-# "mothership" (el platillo clasico); "dragon" y "titan" tienen su propia
+# en assets/sprites/boss/. "saucer" (Centinela) se guarda como "mothership"
+# por compatibilidad de nombre; "dragon", "titan" y "anomaly" (La Anomalia
+# Final, casco fracturado con nucleo de vacio) tienen cada uno su propia
 # silueta generada por tools/generate_sprites.py.
 BOSS_SPRITE_PREFIX = {
     "saucer": "mothership",
-    "anomaly": "mothership",
+    "anomaly": "anomaly",
     "dragon": "dragon",
     "titan": "titan",
 }
@@ -56,6 +59,33 @@ BOSS_PLATFORM_RX_FRAC = 0.1375
 BOSS_PLATFORM_RY_FRAC = 0.0882
 BOSS_RING_RX_FRAC = 0.3969       # radio del anillo de nodos (para las luces animadas)
 BOSS_RING_RY_FRAC = 0.2147
+
+# Titan (pulpo mecanico) no usa el anillo/cupula de arriba: es mas grande
+# (ver TITAN_DISPLAY_SCALE, aplicado sobre BOSS_DISPLAY_W/H solo para el) y
+# titan_boss.py dibuja la pupila -que sigue a la nave- centrada en
+# TITAN_OJO_*_FRAC, encima del aro/iris ya horneado en el sprite (debe
+# coincidir con TITAN_OJO_* en tools/generate_sprites.py). Una unica
+# fraccion de radio alcanza para x e y porque el sprite se escala siempre
+# de forma uniforme (mismo factor en ambos ejes).
+TITAN_DISPLAY_SCALE = 1.55
+TITAN_OJO_CX_FRAC = 0.5
+TITAN_OJO_CY_FRAC = 0.4437
+TITAN_OJO_R_FRAC = 0.08125
+
+# Segmento de tentaculo de Titan (ver TENTACULO_* en
+# tools/generate_sprites.py): aspecto nativo 96x40, apunta a lo largo de
+# +X con la base ancha en x=0 y la garra en el extremo derecho.
+TITAN_TENTACULO_W, TITAN_TENTACULO_H = 96, 40
+
+# La Anomalia (calavera glicheada) se dibuja "un poco" mas grande que el
+# resto de jefes normales, y boss.py dibuja DOS pupilas dinamicas (una por
+# cuenca) centradas en +-ANOMALY_OJO_DX_FRAC/ANOMALY_OJO_CY_FRAC, encima de
+# las cuencas vacias ya horneadas en el sprite (debe coincidir con
+# ANOMALY_OJO_* en tools/generate_sprites.py).
+ANOMALY_DISPLAY_SCALE = 1.18
+ANOMALY_OJO_DX_FRAC = 0.1144
+ANOMALY_OJO_CY_FRAC = 0.4824
+ANOMALY_OJO_R_FRAC = 0.06
 
 _MAX_COMPOSED = 160
 _MAX_ROTATIONS = 600
@@ -95,7 +125,7 @@ def load_raw(*path_parts):
             surface = None
     elif path not in _missing_reported:
         _missing_reported.add(path)
-        print(f"[sprites] no encontrado: {path} (se usara el dibujo vectorial)")
+        print(f"[sprites] no encontrado: {path} (no se dibujara esa pieza)")
 
     _raw_cache[key] = surface
     return surface
@@ -124,7 +154,21 @@ def _scaled(surface, width, height):
         return pygame.transform.scale(surface, (width, height))
 
 
-def _compose_layers(folder, kind, body_color, wing_color, width, height, con_ala=True):
+def _scaled_pixelado(surface, width, height):
+    """Como _scaled() pero SIN suavizar (pygame.transform.scale, no
+    smoothscale): usado solo por las insignias de power-up, que se
+    generan a proposito a resolucion nativa baja y sin antialiasing (ver
+    build_powerup_body/_detail en tools/generate_sprites.py) para que se
+    vean en pixeles grandes de verdad. Con smoothscale se perderia el
+    borde en bloque del estilo pixel-art."""
+    width = max(1, int(width))
+    height = max(1, int(height))
+    if surface.get_width() == width and surface.get_height() == height:
+        return surface
+    return pygame.transform.scale(surface, (width, height))
+
+
+def _compose_layers(folder, kind, body_color, wing_color, width, height, con_ala=True, pixelado=False):
     body = load_raw(folder, f"{kind}_body.png")
     wing = load_raw(folder, f"{kind}_wing.png") if con_ala else None
     detail = load_raw(folder, f"{kind}_detail.png")
@@ -139,6 +183,13 @@ def _compose_layers(folder, kind, body_color, wing_color, width, height, con_ala
         canvas.blit(tint(body, body_color), (0, 0))
     if detail is not None:
         canvas.blit(detail, (0, 0))
+    if pixelado:
+        # sin suavizar (pygame.transform.scale, no smoothscale): el PNG
+        # YA es la grilla nativa chica de un sprite pixel-art (ver
+        # build_dragon_robot en tools/generate_sprites.py) -con
+        # smoothscale se perderia el borde en bloque de los "pixeles"
+        # grandes, mismo criterio que las insignias de power-up.
+        return _scaled_pixelado(canvas, width, height)
     return _scaled(canvas, width, height)
 
 
@@ -211,6 +262,136 @@ def get_boss_surface(body_color, wing_color, width=BOSS_DISPLAY_W, height=BOSS_D
     return surface
 
 
+def get_titan_tentaculo_surface(color, width, height):
+    """Segmento de tentaculo de Titan ya tintado y escalado (sin "wing":
+    con_ala=False, mismo truco que los power-ups). titan_boss.py encadena
+    varias copias rotadas y escaladas para armar cada tentaculo curvo en
+    tiempo real -no puede ser un unico PNG fijo porque el largo/curva
+    cambian segun a donde ataca."""
+    key = ("titan_tentaculo", _quantize(color), int(width), int(height))
+    if key in _composed_cache:
+        return _composed_cache[key]
+
+    surface = _compose_layers("boss", "titan_tentaculo", color, color, width, height, con_ala=False)
+    _composed_cache[key] = surface
+    _cap(_composed_cache, _MAX_COMPOSED)
+    return surface
+
+
+# Geometria del mega-jefe (oleada 50, ver modules/entities/mega_boss.py).
+# A diferencia de los demas jefes no es tintable (colores finales ya
+# horneados en el PNG por tools/generate_sprites.py): es un jefe unico, no
+# una nave de skin variable. Estas fracciones deben coincidir con las
+# MEGA_* de ese script.
+MEGA_SPRITE_W, MEGA_SPRITE_H = 380, 210
+MEGA_BOSS_DISPLAY_W = 300
+MEGA_BOSS_DISPLAY_H = round(MEGA_BOSS_DISPLAY_W * MEGA_SPRITE_H / MEGA_SPRITE_W)
+MEGA_SPHERE_DISH_X_FRAC = 0.419
+MEGA_SPHERE_DISH_Y_FRAC = 0.335
+MEGA_SPHERE_DISH_R_FRAC = 0.076
+
+# Puntos fijos del crucero (fase 1): luces de navegacion que parpadean y
+# centro de la bahia de hangar, para la animacion de largada de cazas (ver
+# mega_boss.py). Deben coincidir con las MEGA_CRUISER_* de
+# tools/generate_sprites.py.
+MEGA_CRUISER_PROA_X_FRAC = 0.968
+MEGA_CRUISER_PROA_Y_FRAC = 0.580
+MEGA_CRUISER_BABOR_X_FRAC = 0.047
+MEGA_CRUISER_BABOR_Y_FRAC = 0.523
+MEGA_CRUISER_ESTRIBOR_X_FRAC = 0.047
+MEGA_CRUISER_ESTRIBOR_Y_FRAC = 0.637
+MEGA_CRUISER_BALIZA_X_FRAC = 0.463
+MEGA_CRUISER_BALIZA_Y_FRAC = 0.047
+MEGA_CRUISER_HANGAR_X_FRAC = 0.447
+MEGA_CRUISER_HANGAR_Y_FRAC = 0.780
+
+_MEGA_BOSS_FILE = {"cruiser": "mega_cruiser.png", "sphere": "mega_sphere.png"}
+
+
+def get_mega_boss_surface(phase, width=MEGA_BOSS_DISPLAY_W, height=MEGA_BOSS_DISPLAY_H):
+    """Sprite del mega-jefe para la fase pedida ("cruiser" o "sphere"), ya
+    escalado. A diferencia de get_boss_surface no tiñe nada: son colores
+    finales horneados en el PNG. None si falta el archivo (dibujo
+    vectorial de respaldo en mega_boss.py)."""
+    filename = _MEGA_BOSS_FILE.get(phase)
+    if filename is None:
+        return None
+    key = ("mega_boss", phase, int(width), int(height))
+    if key in _composed_cache:
+        return _composed_cache[key]
+
+    raw = load_raw("boss", filename)
+    surface = _scaled(raw, width, height) if raw is not None else None
+    _composed_cache[key] = surface
+    _cap(_composed_cache, _MAX_COMPOSED)
+    return surface
+
+
+# Dragon del jefe de la oleada 20 (ver modules/entities/dragon_boss.py y
+# build_dragon_robot()/DRAGON_ROBOT_* en tools/generate_sprites.py): los
+# nombres DRAGON_ROBOT_*/get_dragon_robot_surface se mantienen por
+# compatibilidad con el resto del codigo, aunque ya no hay nada robotico
+# en el diseño (mismo criterio que BOSS_SPRITE_PREFIX guardando "saucer"
+# como "mothership"). Tintable pero con 11 cuadros fijos (apertura 0.0 a
+# 1.0) en vez de una unica silueta - "intacto a hecho pedazos":
+# dragon_boss.py elige el cuadro mas cercano a su "apertura" (= daño)
+# actual, tanto para sus 3 formas fijas por fase como para reproducir el
+# deterioro cuadro a cuadro durante la transformacion entre fases.
+#
+# El PNG en si es pixel art de verdad -una grilla nativa CHICA (ver
+# DRAGON_PIXEL_W/H en tools/generate_sprites.py), no una silueta suave
+# reducida- asi que se escala siempre sin suavizar (ver
+# get_dragon_robot_surface, pixelado=True) para que los "pixeles" grandes
+# se vean como bloques solidos y no como un degrade continuo encogido.
+DRAGON_ROBOT_SPRITE_W, DRAGON_ROBOT_SPRITE_H = 80, 75
+DRAGON_ROBOT_FRAMES = 11
+DRAGON_ROBOT_DISPLAY_W = 250
+DRAGON_ROBOT_DISPLAY_H = round(DRAGON_ROBOT_DISPLAY_W * DRAGON_ROBOT_SPRITE_H / DRAGON_ROBOT_SPRITE_W)
+
+# Dos ojos (cuencas vacias horneadas, ver DRAGON_OJO_* en
+# tools/generate_sprites.py): dragon_boss.py dibuja las dos pupilas -que
+# siguen a la nave- centradas en estas fracciones, encima del aro ya
+# horneado de cada una (mismo criterio que ANOMALY_OJO_*).
+DRAGON_OJO_IZQ_X_FRAC = 0.41875
+DRAGON_OJO_DER_X_FRAC = 0.58125
+DRAGON_OJO_CY_FRAC = 0.2
+DRAGON_OJO_R_FRAC = 0.0375
+
+# Garganta: de aca sale telegrafiado el aliento de fuego (el resplandor en
+# si es 100% en tiempo real, ver dragon_boss.py _dibujar_garganta).
+DRAGON_GARGANTA_X_FRAC = 0.5
+DRAGON_GARGANTA_Y_FRAC = 0.34
+
+# Puntos de herida (fx, fy, inicio, fin) - deben coincidir con
+# _DRAGON_DAÑOS en tools/generate_sprites.py: dragon_boss.py los usa para
+# saber DONDE spawnear chispas/brasas animadas en tiempo real segun la
+# severidad actual (`apertura`), ademas de la grieta ya horneada en el
+# sprite.
+DRAGON_DAÑOS_FRAC = [
+    (0.96875, 0.28, 0.08, 0.42),
+    (0.35625, 0.75333, 0.18, 0.52),
+    (0.5, 0.62, 0.32, 0.68),
+    (0.03125, 0.28, 0.42, 0.78),
+    (0.65625, 0.26667, 0.62, 1.00),
+]
+
+
+def get_dragon_robot_surface(apertura, color, width=DRAGON_ROBOT_DISPLAY_W, height=DRAGON_ROBOT_DISPLAY_H):
+    """Cuadro del flipbook de daño mas cercano a `apertura` (0.0=Modo
+    Explorador casi intacto, 1.0=Modo Destructor hecho pedazos), tintado y
+    escalado. None si faltan los PNG."""
+    idx = max(0, min(DRAGON_ROBOT_FRAMES - 1, round(apertura * (DRAGON_ROBOT_FRAMES - 1))))
+    prefix = f"dragon_robot_{idx:02d}"
+    key = ("dragon_robot", idx, _quantize(color), int(width), int(height))
+    if key in _composed_cache:
+        return _composed_cache[key]
+
+    surface = _compose_layers("boss", prefix, color, color, width, height, con_ala=False, pixelado=True)
+    _composed_cache[key] = surface
+    _cap(_composed_cache, _MAX_COMPOSED)
+    return surface
+
+
 POWERUP_KINDS = (
     "extra_life", "fast_shoot", "triple_shot", "shield", "piercing", "attract",
     "damage_up", "speed_up", "max_life_up", "rapid_fire", "lightning_field",
@@ -218,16 +399,28 @@ POWERUP_KINDS = (
 
 
 def get_powerup_surface(buff_type, color, size):
-    """Capsula tipo 'caja de bonus' (estilo recreativa de los 90) tintada
-    con el color del bonus y escalada a un cuadrado de "size" px. El icono
-    grabado (corazon, rayo, iman...) cambia segun buff_type; ver
-    tools/generate_sprites.py. None si faltan los PNG (el llamador cae al
-    dibujo vectorial de circulo con etiqueta)."""
+    """Insignia pixel-art (marco biselado caqui/negro + letra dorada,
+    tinte propio del bonus solo en el relleno interior; ver
+    tools/generate_sprites.py) escalada a un cuadrado de "size" px con
+    pixelado real (_scaled_pixelado, sin suavizar) en vez del smoothscale
+    que usa el resto de sprites - asi no se pierden los bordes en bloque
+    del estilo retro. None si faltan los PNG (el llamador solo dibuja la
+    etiqueta de texto, sin insignia de respaldo)."""
     key = ("powerup", buff_type, _quantize(color), int(size))
     if key in _composed_cache:
         return _composed_cache[key]
 
-    surface = _compose_layers("powerups", buff_type, color, color, size, size, con_ala=False)
+    body = load_raw("powerups", f"{buff_type}_body.png")
+    detail = load_raw("powerups", f"{buff_type}_detail.png")
+    surface = None
+    if body is not None or detail is not None:
+        ref = body if body is not None else detail
+        canvas = pygame.Surface(ref.get_size(), pygame.SRCALPHA)
+        if body is not None:
+            canvas.blit(tint(body, color), (0, 0))
+        if detail is not None:
+            canvas.blit(detail, (0, 0))
+        surface = _scaled_pixelado(canvas, size, size)
     _composed_cache[key] = surface
     _cap(_composed_cache, _MAX_COMPOSED)
     return surface

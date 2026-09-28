@@ -1,8 +1,9 @@
 """
-Jefes de oleada (5, 10 y 15; la oleada 20 usa FinalBoss en
-modules/entities/boss.py en su lugar). BossDefinition describe cada jefe
-por datos (vida, velocidad, patrones, colores, recompensas) y WaveBoss es
-la instancia jugable que lee esos datos, asi que agregar un jefe nuevo es
+Jefes de oleada: uno cada 10 oleadas si o si (10, 20, 30, 40) y el
+mega-jefe final en la oleada 50 (constants.MEGA_BOSS_SPAWN_WAVE, ver
+modules/entities/mega_boss.py). BossDefinition describe cada jefe por
+datos (vida, velocidad, patrones, colores, recompensas) y WaveBoss es la
+instancia jugable que lee esos datos, asi que agregar un jefe nuevo es
 sumar una BossDefinition a BOSS_DEFINITIONS sin tocar la logica de WaveBoss."""
 
 import pygame
@@ -15,6 +16,7 @@ from modules.constants import (
     BUFF_DURATION_DAMAGE_UP, BUFF_DURATION_SPEED_UP, BUFF_DURATION_MAX_LIFE_UP, BUFF_DURATION_RAPID_FIRE,
     BUFF_TYPE_EXTRA_LIFE, BUFF_TYPE_FAST_SHOOT, BUFF_TYPE_TRIPLE_SHOT, BUFF_TYPE_SHIELD, BUFF_TYPE_PIERCING, BUFF_TYPE_ATTRACT,
     BUFF_DURATION, BUFF_DURATION_FAST, BUFF_DURATION_TRIPLE, BUFF_DURATION_SHIELD, BUFF_DURATION_PIERCING, BUFF_DURATION_ATTRACT,
+    FINAL_BOSS_SPAWN_WAVE,
 )
 from modules.systems.fonts import render_text
 from modules.systems import sprites
@@ -58,8 +60,8 @@ BOSS_DEFINITIONS = [
     BossDefinition(
         boss_id="sentinel",
         name="Centinela Corrupto",
-        spawn_wave=5,
-        max_hp=120,
+        spawn_wave=10,
+        max_hp=160,
         speed=1.2,
         shoot_rate=28,
         attack_patterns=["SPREAD", "AIMED", "CIRCULAR"],
@@ -75,8 +77,8 @@ BOSS_DEFINITIONS = [
     BossDefinition(
         boss_id="dragon",
         name="Dragon Espacial",
-        spawn_wave=10,
-        max_hp=220,
+        spawn_wave=20,
+        max_hp=420,  # informativo: DragonBoss trae su propio max_hp, ver dragon_boss.py
         speed=1.6,
         shoot_rate=22,
         attack_patterns=["SPREAD", "AIMED", "CIRCULAR", "SPIRAL"],
@@ -92,8 +94,8 @@ BOSS_DEFINITIONS = [
     BossDefinition(
         boss_id="titan",
         name="Titan del Vacío",
-        spawn_wave=15,
-        max_hp=380,
+        spawn_wave=30,
+        max_hp=550,  # informativo: TitanBoss trae su propio max_hp, ver titan_boss.py
         speed=1.0,
         shoot_rate=18,
         attack_patterns=["SPREAD", "AIMED", "CIRCULAR", "SPIRAL", "RAIN", "LASER"],
@@ -109,8 +111,8 @@ BOSS_DEFINITIONS = [
     BossDefinition(
         boss_id="anomalia",
         name="La Anomalía Final",
-        spawn_wave=20,
-        max_hp=600,
+        spawn_wave=FINAL_BOSS_SPAWN_WAVE,
+        max_hp=800,  # informativo: FinalBoss trae su propio max_hp, ver boss.py
         speed=1.4,
         shoot_rate=14,
         attack_patterns=["SPREAD", "AIMED", "CIRCULAR", "SPIRAL", "RAIN", "LASER", "MINE"],
@@ -182,20 +184,24 @@ class WaveBoss:
     usa el sprite que corresponda a definition.body_type (saucer/dragon/
     titan) si esta disponible en assets/sprites/boss."""
 
-    def __init__(self, definition):
+    def __init__(self, definition, dificultad=1.0):
         self.definition = definition
         self.x = GAME_WIDTH // 2
         self.y = 80
         self.target_x = self.x
         self.target_y = self.y
         self.active = True
-        self.max_hp = definition.max_hp
+        # La dificultad elegida en el menu escala tambien a los jefes (antes
+        # solo afectaba asteroides/alienigenas comunes): en dificil pegan
+        # mas rapido y aguantan mas; en facil, menos.
+        self.max_hp = max(1, int(definition.max_hp * (1.0 + (dificultad - 1.0) * 0.5)))
         self.hp = self.max_hp
         self.display_hp = float(self.max_hp)
         self.rotation = 0
         self.rot_speed = 0.5
+        self.speed = definition.speed * dificultad
         self.shoot_timer = 20
-        self.shoot_rate = definition.shoot_rate
+        self.shoot_rate = max(6, int(definition.shoot_rate / dificultad))
         self.phase = 1
         self.damaged_timer = 0
         self.particles = []
@@ -309,8 +315,8 @@ class WaveBoss:
                 self.target_x = random.randint(padding, GAME_WIDTH - padding)
                 self.target_y = random.randint(40, GAME_HEIGHT // 2 - 30)
         else:
-            self.x += (dx / dist) * self.definition.speed
-            self.y += (dy / dist) * self.definition.speed
+            self.x += (dx / dist) * self.speed
+            self.y += (dy / dist) * self.speed
         self.x = max(60, min(GAME_WIDTH - 60, self.x))
         self.y = max(30, min(GAME_HEIGHT // 2 - 10, self.y))
 
@@ -439,17 +445,14 @@ class WaveBoss:
             dome_h = int(alto_sprite * sprites.BOSS_PLATFORM_RY_FRAC * 2.6)
             dome_y = int(plataforma_cy - dome_h * 0.62)
         else:
-            # ---- respaldo vectorial (sin assets/sprites) ----
+            # Sin PNG en assets/sprites/boss no se dibuja un casco de
+            # respaldo por codigo: se mantienen las mismas coordenadas
+            # relativas para que la cupula/anillo de luces/piloto y el
+            # destello de cambio de fase (los "detalles" animados de mas
+            # abajo) sigan ubicados en su lugar aunque no haya casco visible.
             body_w = 140
             body_h = 30
             body_y = cy + 15
-            body_surf = pygame.Surface((body_w, body_h), pygame.SRCALPHA)
-            pygame.draw.ellipse(body_surf, self.body_color, (0, 0, body_w, body_h))
-            pygame.draw.ellipse(body_surf, self.secondary_color, (0, 0, body_w, body_h), 2)
-            highlight_surf = pygame.Surface((body_w, body_h // 2), pygame.SRCALPHA)
-            pygame.draw.ellipse(highlight_surf, (*self.body_color[:3], 100), (0, 0, body_w, body_h // 2))
-            body_surf.blit(highlight_surf, (0, 0))
-            screen.blit(body_surf, (cx - body_w // 2, body_y - body_h // 2))
             dome_cx = cx
             ring_cx, ring_cy = cx, body_y
             ring_rx, ring_ry = body_w // 2 - 12, body_h // 2 - 4

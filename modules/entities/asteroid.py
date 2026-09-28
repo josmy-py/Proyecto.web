@@ -6,10 +6,7 @@ los asteroides)."""
 import pygame
 import random
 import math
-from modules.constants import (
-    MELON, WHITE, DARK_BG, GAME_WIDTH, GAME_HEIGHT,
-    DARKER_BG, ROSA, LAVANDA, AZUL,
-)
+from modules.constants import MELON, GAME_WIDTH, GAME_HEIGHT
 from modules.systems import sprites
 
 
@@ -25,8 +22,7 @@ ROCK_TINTS = [
 
 class Asteroid:
     """Roca que cae desde arriba del area de juego. Usa uno de los 14
-    sprites generados por tools/generate_sprites.py (tintado y rotado); si
-    faltan los PNG cae al poligono aleatorio de _generate_shape()."""
+    sprites generados por tools/generate_sprites.py (tintado y rotado)."""
 
     def __init__(self, x, y, size=25):
         self.x = x
@@ -40,20 +36,9 @@ class Asteroid:
         self.color = random.choice(ROCK_TINTS)
         self.dark_color = tuple(max(0, c - 35) for c in self.color)
         self.light_color = tuple(min(255, c + 35) for c in self.color)
-        self.vertices = self._generate_shape()
         self.flash_timer = 0
         self.glow_phase = random.uniform(0, math.pi * 2)
         self._sprite_key = ("rock", self.variant, self.size, self.color)
-
-    def _generate_shape(self):
-        """Solo se usa como respaldo si faltan los PNG."""
-        vertices = []
-        num_pts = random.randint(7, 12)
-        for i in range(num_pts):
-            angle = 2 * math.pi * i / num_pts
-            r = self.size * random.uniform(0.6, 1.3)
-            vertices.append((r * math.cos(angle), r * math.sin(angle)))
-        return vertices
 
     def update(self):
         self.y += self.speed
@@ -76,18 +61,9 @@ class Asteroid:
             key = self._sprite_key + (hit,)
             rotated = sprites.get_rotated(sprite, self.rotation, key)
             sprites.blit_centered(screen, rotated, cx, cy)
-            return
-
-        # ---- respaldo vectorial (sin assets/sprites)
-        rad = math.radians(self.rotation)
-        cos_r = math.cos(rad)
-        sin_r = math.sin(rad)
-        rotated_pts = []
-        for vx, vy in self.vertices:
-            rotated_pts.append((cx + vx * cos_r - vy * sin_r, cy + vx * sin_r + vy * cos_r))
-        if len(rotated_pts) >= 3:
-            pygame.draw.polygon(screen, WHITE if hit else self.color, rotated_pts)
-            pygame.draw.polygon(screen, self.dark_color, rotated_pts, 2)
+        # Sin PNG en assets/sprites/asteroids no se dibuja una roca de
+        # respaldo por codigo: simplemente no se ve hasta que se regeneren
+        # los sprites.
 
 
 class Particle:

@@ -1,71 +1,14 @@
 """
-Aspectos (colores) de cada clase de nave: 4 predefinidos por clase mas un
-aspecto "custom" con el color que elija el jugador, persistido en
-custom_skins.json. La nave siempre arranca con el aspecto "default" (ya no
-hay pantalla de menu para elegir otro), pero el sistema sigue funcionando
-si algo lo pide con otro skin_id."""
-
-import json
-import os
+Aspectos (colores) de cada tipo de nave: 4 predefinidos por tipo. "scout" es
+la nave del jugador, que siempre arranca con el aspecto "default" (ya no hay
+pantalla de menu para elegir otro). "tank"/"interceptor"/"bomber" ya no son
+clases jugables: sus 4 aspectos cada una se usan para variar el color de la
+nave bonus reciclada (ver BONUS_SHIP_VARIANTS en modules/entities/enemy.py),
+que sortea uno al azar cada vez que aparece."""
 
 from modules.constants import (
     AZUL, AZUL_CIELO, MELON, ROSA, ROSA_CHICLE, LAVANDA,
 )
-
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CUSTOM_COLORS_FILE = os.path.join(_PROJECT_ROOT, "custom_skins.json")
-
-DEFAULT_CUSTOM_COLOR = {
-    "scout": AZUL,
-    "tank": MELON,
-    "interceptor": LAVANDA,
-    "bomber": ROSA,
-}
-
-CUSTOM_COLORS = {}
-
-
-def load_custom_colors():
-    """Recupera los colores personalizados guardados en la partida anterior."""
-    CUSTOM_COLORS.clear()
-    try:
-        with open(CUSTOM_COLORS_FILE, "r", encoding="utf-8") as fh:
-            data = json.load(fh)
-        for ship_type, rgb in data.items():
-            if isinstance(rgb, (list, tuple)) and len(rgb) >= 3:
-                CUSTOM_COLORS[ship_type] = tuple(
-                    max(0, min(255, int(c))) for c in rgb[:3]
-                )
-    except (OSError, ValueError, TypeError):
-        pass
-    return CUSTOM_COLORS
-
-
-def save_custom_colors():
-    """Guarda los colores personalizados en disco (silencioso si falla)."""
-    try:
-        with open(CUSTOM_COLORS_FILE, "w", encoding="utf-8") as fh:
-            json.dump({k: list(v) for k, v in CUSTOM_COLORS.items()}, fh, indent=2)
-        return True
-    except OSError:
-        return False
-
-
-def set_custom_color(ship_type, rgb, persist=False):
-    """Fija el color personalizado de una clase de nave.
-
-    persist=False mientras se arrastra el selector (barato, solo memoria),
-    persist=True al confirmar para que sobreviva al cierre del juego.
-    """
-    CUSTOM_COLORS[ship_type] = tuple(max(0, min(255, int(c))) for c in rgb[:3])
-    if persist:
-        save_custom_colors()
-    return CUSTOM_COLORS[ship_type]
-
-
-def get_custom_color(ship_type):
-    return CUSTOM_COLORS.get(ship_type, DEFAULT_CUSTOM_COLOR.get(ship_type, AZUL))
-
 
 SHIP_SKINS = {
     "scout": {
@@ -209,23 +152,14 @@ def normalize_skin(skin, fallback_body=AZUL):
 
 
 def get_available_skins(ship_type):
-    """Todos los aspectos de esa clase (los predefinidos de SHIP_SKINS mas
-    "custom")."""
-    skins = dict(SHIP_SKINS.get(ship_type, SHIP_SKINS["scout"]))
-    if "custom" not in skins:
-        skins["custom"] = {"name": "Personalizado"}
-    return skins
+    """Todos los aspectos predefinidos de ese tipo de nave (SHIP_SKINS)."""
+    return dict(SHIP_SKINS.get(ship_type, SHIP_SKINS["scout"]))
 
 
 def get_skin_data(ship_type, skin_id):
-    """Datos completos (name + 4 colores) del aspecto pedido, resolviendo
-    "custom" con el ultimo color guardado en custom_skins.json."""
-    if skin_id == "custom":
-        return create_custom_skin(ship_type, get_custom_color(ship_type))
+    """Datos completos (name + 4 colores) del aspecto pedido."""
     skins = get_available_skins(ship_type)
     data = skins.get(skin_id) or skins["default"]
-    if "body_color" not in data:
-        return create_custom_skin(ship_type, get_custom_color(ship_type))
     return normalize_skin(data)
 
 
@@ -254,18 +188,3 @@ def apply_skin_to_ship(ship, skin_id):
     invalidate = getattr(ship, "invalidate_sprite", None)
     if callable(invalidate):
         invalidate()
-
-
-def create_custom_skin(ship_type, body_color):
-    """Deriva alas/glow/llama de un unico color de casco elegido a mano."""
-    body = tuple(max(0, min(255, int(c))) for c in body_color[:3])
-    return {
-        "name": "Personalizado",
-        "body_color": body,
-        "wing_color": tuple(int(c * 0.62) for c in body),
-        "glow_color": _shade(body, 55),
-        "flame_color": _shade(body, 20),
-    }
-
-
-load_custom_colors()

@@ -17,7 +17,6 @@ from modules.constants import (
     BUFF_TYPE_DAMAGE_UP, BUFF_TYPE_SPEED_UP, BUFF_TYPE_MAX_LIFE_UP, BUFF_TYPE_RAPID_FIRE,
     BUFF_TYPE_LIGHTNING,
     BUFF_DURATION_FAST, BUFF_DURATION_TRIPLE, BUFF_DURATION_SHIELD, BUFF_DURATION_PIERCING, BUFF_DURATION_ATTRACT,
-    BOSS_SPAWN_WAVE, FINAL_BOSS_SPAWN_WAVE,
 )
 from modules.systems.fonts import get_font, render_text, render_texto_pixelado
 
@@ -275,8 +274,11 @@ class ModernHUD:
         self.fade_in = 0.0
         self.score_flash = 0
         self.lives_pulse = 0
+        self.objetivos = 0
+        self.objetivos_meta = 1
+        self.jefe_activo = False
 
-    def update(self, score, wave, lives, buffs, hand_active):
+    def update(self, score, wave, lives, buffs, hand_active, objetivos=0, objetivos_meta=1, jefe_activo=False):
         self.score_value.set(score)
         self.score_value.update()
         self.wave_value = wave
@@ -286,6 +288,9 @@ class ModernHUD:
         self.health_bar.set_hp(lives)
         self.buffs = buffs
         self.hand_active = hand_active
+        self.objetivos = objetivos
+        self.objetivos_meta = max(1, objetivos_meta)
+        self.jefe_activo = jefe_activo
         self.pulse_phase += 0.06
         self.health_bar.update()
         self.fade_in = min(1.0, self.fade_in + 0.05)
@@ -297,7 +302,7 @@ class ModernHUD:
     def draw(self, surface):
         alpha = int(255 * ease_out_cubic(self.fade_in))
         panel_w = 200
-        panel_h = 90
+        panel_h = 116
         panel_x = 8
         panel_y = 8
 
@@ -324,25 +329,47 @@ class ModernHUD:
         wave_text = render_text(f"WAVE {self.wave_value}", 16, wave_color)
         surface.blit(wave_text, (panel_x + 16, panel_y + 60))
 
+        objetivos_y = panel_y + 82
+        if self.jefe_activo:
+            jefe_text = render_text("¡JEFE!", 13, ROSA)
+            surface.blit(jefe_text, (panel_x + 16, objetivos_y))
+        else:
+            objetivos_text = render_text(f"{self.objetivos}/{self.objetivos_meta}", 13, (200, 200, 220))
+            surface.blit(objetivos_text, (panel_x + 16, objetivos_y))
+            bar_w, bar_h = 168, 6
+            bar_x = panel_x + 16
+            bar_y = objetivos_y + 16
+            pygame.draw.rect(surface, (30, 30, 46), (bar_x, bar_y, bar_w, bar_h), border_radius=bar_h // 2)
+            frac = max(0.0, min(1.0, self.objetivos / self.objetivos_meta))
+            fill_w = int(bar_w * frac)
+            if fill_w > 0:
+                pygame.draw.rect(surface, MENTA, (bar_x, bar_y, fill_w, bar_h), border_radius=bar_h // 2)
+
         self.health_bar.x = panel_x + 16
-        self.health_bar.y = panel_y + 82
+        self.health_bar.y = panel_y + 108
         self.health_bar.draw(surface)
 
 
 class BuffChip:
-    """Tarjeta con icono, etiqueta y barra de tiempo restante para un buff
-    activo de la nave. _get_style()/_get_label() traducen el BUFF_TYPE_* a
-    color/icono/texto; agregar un buff nuevo implica sumarlo ahi."""
+    """Panel vertical estilo consola de nave para un buff activo: insignia
+    con el icono arriba y una barra de carga vertical que se vacia con el
+    tiempo restante debajo. _get_style()/_get_label() traducen el
+    BUFF_TYPE_* a color/icono/texto; agregar un buff nuevo implica sumarlo
+    ahi. Los buffs "eternos" (permanentes o de clase, ver `everlasting`) se
+    muestran siempre a full con un brillo lento en vez de vaciarse, porque
+    en la practica nunca vencen (ver Ship.apply_buff)."""
 
-    def __init__(self, buff_type, timer, max_timer, font):
+    WIDTH = 72
+    HEIGHT = 118
+
+    def __init__(self, buff_type, timer, max_timer, everlasting=False):
         self.buff_type = buff_type
         self.timer = timer
         self.max_timer = max_timer
-        self.font = font
-        self.label_font = get_font(9)
-        self.width = 62
-        self.height = 24
+        self.everlasting = everlasting
+        self.label_font = get_font(10, bold=True)
         self.pulse_phase = random.uniform(0, math.pi * 2)
+        self.fade_in = 0.0
         self.color, self.icon = self._get_style()
 
     def _get_style(self):
@@ -362,41 +389,72 @@ class BuffChip:
         return mapping.get(self.buff_type, (AMARILLO, "circle"))
 
     def update(self):
-        self.pulse_phase += 0.06
+        self.pulse_phase += 0.05
+        self.fade_in = min(1.0, self.fade_in + 0.08)
 
     def draw(self, surface, x, y):
-        w, h = self.width, self.height
-        radius = 8
-        chip_surf = pygame.Surface((w, h), pygame.SRCALPHA)
-        pygame.draw.rect(chip_surf, GLASS_BLACK, (0, 0, w, h), border_radius=radius)
-        pygame.draw.rect(chip_surf, GLASS_WHITE, (0, 0, w, h), border_radius=radius)
-        pygame.draw.rect(chip_surf, (*self.color[:3], 80), (2, 2, w - 4, h - 4), border_radius=radius)
+        w, h = self.WIDTH, self.HEIGHT
+        radius = 10
+        pulse = 0.5 + 0.5 * math.sin(self.pulse_phase)
 
-        icon_x = 10
-        icon_y = h // 2
-        self._draw_icon(chip_surf, icon_x, icon_y)
+        panel = pygame.Surface((w, h), pygame.SRCALPHA)
+
+        # marco metalico de la consola (mismo glass que el panel de score)
+        pygame.draw.rect(panel, GLASS_BLACK, (0, 0, w, h), border_radius=radius)
+        pygame.draw.rect(panel, GLASS_WHITE, (0, 0, w, h), border_radius=radius)
+        pygame.draw.rect(panel, (*self.color[:3], 45), (2, 2, w - 4, h - 4), border_radius=radius - 1)
+        borde_alpha = int(180 + 60 * pulse) if self.everlasting else 170
+        pygame.draw.rect(panel, (*self.color[:3], min(255, borde_alpha)), (0, 0, w, h), width=2, border_radius=radius)
+
+        # remaches en las esquinas: detalle de panel de nave
+        for rx, ry in ((7, 7), (w - 7, 7), (7, h - 7), (w - 7, h - 7)):
+            pygame.draw.circle(panel, (255, 255, 255, 60), (rx, ry), 1.6)
+
+        # insignia con el icono del buff
+        badge_r = 15
+        badge_cx, badge_cy = w // 2, 20
+        glow_r = int(badge_r * 2.6)
+        glow = pygame.Surface((glow_r * 2, glow_r * 2), pygame.SRCALPHA)
+        glow_alpha = int(90 + 60 * pulse) if self.everlasting else 70
+        pygame.draw.circle(glow, (*self.color[:3], glow_alpha), (glow_r, glow_r), int(glow_r * 0.85))
+        panel.blit(glow, (badge_cx - glow_r, badge_cy - glow_r))
+        pygame.draw.circle(panel, (16, 16, 26), (badge_cx, badge_cy), badge_r)
+        pygame.draw.circle(panel, self.color, (badge_cx, badge_cy), badge_r, 2)
+        self._draw_icon(panel, badge_cx, badge_cy)
+
+        # barra vertical de carga: se vacia de arriba hacia abajo con el
+        # tiempo restante (o se queda a full, con brillo, si es "eterno")
+        bar_w, bar_h = 16, 54
+        bar_x = w // 2 - bar_w // 2
+        bar_y = badge_cy + badge_r + 10
+        pygame.draw.rect(panel, (16, 16, 24), (bar_x, bar_y, bar_w, bar_h), border_radius=4)
+
+        frac = 1.0 if self.everlasting else clamp(self.timer / self.max_timer, 0.0, 1.0) if self.max_timer else 0.0
+        fill_h = int(bar_h * frac)
+        if fill_h > 0:
+            fill_color = self.color
+            if self.everlasting:
+                fill_color = tuple(min(255, int(c * (0.85 + 0.3 * pulse))) for c in self.color[:3])
+            fill_rect = (bar_x, bar_y + (bar_h - fill_h), bar_w, fill_h)
+            pygame.draw.rect(panel, fill_color, fill_rect, border_radius=4)
+            hl_h = max(1, fill_h // 3)
+            hl = pygame.Surface((bar_w - 4, hl_h), pygame.SRCALPHA)
+            for row in range(hl_h):
+                a = int(70 * (1 - row / hl_h))
+                pygame.draw.line(hl, (255, 255, 255, a), (0, row), (bar_w - 5, row))
+            panel.blit(hl, (bar_x + 2, bar_y + (bar_h - fill_h)))
+
+        for marca in (0.25, 0.5, 0.75):
+            my = bar_y + int(bar_h * (1 - marca))
+            pygame.draw.line(panel, (0, 0, 0, 90), (bar_x, my), (bar_x + bar_w, my), 1)
+        pygame.draw.rect(panel, WHITE, (bar_x, bar_y, bar_w, bar_h), width=1, border_radius=4)
 
         label = self._get_label()
         label_surf = render_texto_pixelado(self.label_font, label, WHITE)
-        chip_surf.blit(label_surf, (22, h // 2 - label_surf.get_height() // 2))
+        panel.blit(label_surf, (w // 2 - label_surf.get_width() // 2, bar_y + bar_h + 8))
 
-        timer_ratio = clamp(self.timer / self.max_timer, 0.0, 1.0)
-        bar_w = w - 8
-        bar_h = 3
-        bar_x = 4
-        bar_y = h - 6
-        pygame.draw.rect(chip_surf, (20, 20, 30), (bar_x, bar_y, bar_w, bar_h), border_radius=1)
-        fill_w = int(bar_w * timer_ratio)
-        if fill_w > 0:
-            pygame.draw.rect(chip_surf, self.color, (bar_x, bar_y, fill_w, bar_h), border_radius=1)
-
-        pulse = 0.5 + 0.5 * math.sin(self.pulse_phase)
-        glow_alpha = int(15 + 10 * pulse)
-        glow_surf = pygame.Surface((w + 10, h + 10), pygame.SRCALPHA)
-        pygame.draw.rect(glow_surf, (*self.color[:3], glow_alpha), (5, 5, w, h), border_radius=radius)
-        surface.blit(glow_surf, (x - 5, y - 5))
-
-        surface.blit(chip_surf, (x, y))
+        panel.set_alpha(int(255 * ease_out_cubic(self.fade_in)))
+        surface.blit(panel, (x, y))
 
     def _draw_icon(self, surface, x, y):
         if self.icon == "heart":
@@ -460,21 +518,25 @@ class BuffChip:
 
 
 class BuffHUD:
-    """Columna de BuffChip a la derecha del area de juego, uno por buff
-    activo en ship.buffs. Crea/elimina chips segun aparecen o vencen."""
+    """Paneles de buff activos en los margenes laterales del area de juego
+    (fuera del viewport), alternando izquierda/derecha para leerse como los
+    paneles de instrumentos a los costados de la ventana principal de una
+    nave. Crea/elimina paneles segun los buffs aparecen o vencen."""
 
     def __init__(self):
         self.chips = {}
-        self.fade_in = 0.0
 
-    def update(self, buffs):
-        self.fade_in = min(1.0, self.fade_in + 0.05)
+    def update(self, buffs, class_buffs=None):
+        class_buffs = class_buffs or set()
         for buff_type, data in buffs.items():
+            everlasting = bool(data.get("permanent", False) or buff_type in class_buffs)
             if buff_type not in self.chips:
-                self.chips[buff_type] = BuffChip(buff_type, data.get("timer", 0), data.get("max_timer", 1), get_font(9))
-            self.chips[buff_type].timer = data.get("timer", 0)
-            self.chips[buff_type].max_timer = data.get("max_timer", 1)
-            self.chips[buff_type].update()
+                self.chips[buff_type] = BuffChip(buff_type, data.get("timer", 0), data.get("max_timer", 1), everlasting)
+            chip = self.chips[buff_type]
+            chip.timer = data.get("timer", 0)
+            chip.max_timer = data.get("max_timer", 1)
+            chip.everlasting = everlasting
+            chip.update()
 
         expired = [bt for bt in self.chips if bt not in buffs]
         for bt in expired:
@@ -483,32 +545,108 @@ class BuffHUD:
     def draw(self, surface, offset_x=0, offset_y=0):
         if not self.chips:
             return
-        alpha = int(255 * ease_out_cubic(self.fade_in))
-        chip_w = 62
-        chip_h = 24
-        gap = 6
-        start_x = offset_x + GAME_WIDTH + 10
-        start_y = offset_y + 10
+        slot_w, slot_h, gap = BuffChip.WIDTH, BuffChip.HEIGHT, 16
+        margin_w = offset_x
+        left_x = max(4, (margin_w - slot_w) // 2)
+        right_x = offset_x + GAME_WIDTH + max(4, (margin_w - slot_w) // 2)
+        start_y = offset_y + 12
 
         for idx, chip in enumerate(self.chips.values()):
-            chip.draw(surface, start_x, start_y + idx * (chip_h + gap))
+            columna_izq = idx % 2 == 0
+            fila = idx // 2
+            x = left_x if columna_izq else right_x
+            y = start_y + fila * (slot_h + gap)
+            chip.draw(surface, x, y)
 
 
-def draw_hud(surface, score, wave, lives, buffs, font, small_font, hand_active=False, max_hp=3):
+def draw_hud(surface, score, wave, lives, buffs, font, small_font, hand_active=False, max_hp=3,
+             objetivos=0, objetivos_meta=1, jefe_activo=False):
     if not hasattr(draw_hud, 'hud'):
         draw_hud.hud = ModernHUD(max_hp)
     hud = draw_hud.hud
     hud.health_bar.max_hp = max_hp
-    hud.update(score, wave, lives, buffs, hand_active)
+    hud.update(score, wave, lives, buffs, hand_active, objetivos, objetivos_meta, jefe_activo)
     hud.draw(surface)
 
 
-def draw_buff_hud(surface, buffs, offset_x=0, offset_y=0):
+def draw_buff_hud(surface, buffs, offset_x=0, offset_y=0, class_buffs=None):
     if not hasattr(draw_buff_hud, 'hud'):
         draw_buff_hud.hud = BuffHUD()
     hud = draw_buff_hud.hud
-    hud.update(buffs)
+    hud.update(buffs, class_buffs)
     hud.draw(surface, offset_x, offset_y)
+
+
+def draw_ship_status_bar(surface, lives, max_lives, offset_x, offset_y, ticks=0):
+    """Consola de vida de la nave en el margen inferior (fuera del
+    viewport): un segmento iluminado por vida restante, estilo panel de
+    nave, en vez de una barra continua (mas legible con pocas vidas). Se
+    dibuja aparte de la barrita chica del panel de score, mas visible."""
+    max_lives = max(1, int(max_lives))
+    cx = offset_x + GAME_WIDTH // 2
+    bar_y = offset_y + GAME_HEIGHT + 12
+
+    seg_w, seg_h, seg_gap = 34, 16, 6
+    total_w = max_lives * seg_w + (max_lives - 1) * seg_gap
+    start_x = cx - total_w // 2
+
+    label = render_texto_pixelado(get_font(12, bold=True), "CASCO", (205, 215, 235))
+    surface.blit(label, (start_x - label.get_width() - 12, bar_y + seg_h // 2 - label.get_height() // 2))
+
+    ratio = lives / max_lives if max_lives else 0
+    color = ROSA if ratio > 0.5 else (AMARILLO if ratio > 0.25 else MELON)
+    pulse = 0.5 + 0.5 * math.sin(ticks * 0.008)
+
+    for i in range(max_lives):
+        seg_x = start_x + i * (seg_w + seg_gap)
+        rect = (seg_x, bar_y, seg_w, seg_h)
+        if i < lives:
+            fill_color = color
+            if lives == 1 and max_lives > 1:
+                # ultima vida: parpadea como alarma de casco critico
+                fill_color = tuple(min(255, int(c * (0.6 + 0.5 * pulse))) for c in color[:3])
+            pygame.draw.rect(surface, fill_color, rect, border_radius=3)
+            hl_h = max(1, seg_h // 3)
+            hl = pygame.Surface((seg_w - 4, hl_h), pygame.SRCALPHA)
+            for row in range(hl_h):
+                a = int(80 * (1 - row / hl_h))
+                pygame.draw.line(hl, (255, 255, 255, a), (0, row), (seg_w - 5, row))
+            surface.blit(hl, (seg_x + 2, bar_y + 2))
+        else:
+            pygame.draw.rect(surface, (22, 22, 34), rect, border_radius=3)
+        pygame.draw.rect(surface, (*AZUL_CIELO[:3], 190), rect, width=1, border_radius=3)
+
+    ship_x = start_x + total_w + 18
+    ship_y = bar_y + seg_h // 2
+    pygame.draw.polygon(surface, AZUL_CIELO, [
+        (ship_x, ship_y - 8), (ship_x - 7, ship_y + 7), (ship_x, ship_y + 3), (ship_x + 7, ship_y + 7),
+    ])
+
+
+def draw_viewport_frame(surface, x, y, w, h, timestamp):
+    """Marco del area de juego con resplandor pulsante y acentos en las
+    esquinas, para que el borde se sienta parte del espacio de fondo (donde
+    ya se dibujaron estrellas) en vez de una linea plana y estatica."""
+    pulse = 0.5 + 0.5 * math.sin(timestamp * 0.0015)
+
+    glow_surf = pygame.Surface((w + 64, h + 64), pygame.SRCALPHA)
+    base_alpha = 22 + int(14 * pulse)
+    for i in range(5):
+        expand = i * 6
+        alpha = max(0, base_alpha - i * 4)
+        pygame.draw.rect(
+            glow_surf, (*AZUL_CIELO[:3], alpha),
+            (30 - expand, 30 - expand, w + 4 + expand * 2, h + 4 + expand * 2),
+            width=2, border_radius=8,
+        )
+    surface.blit(glow_surf, (x - 32, y - 32))
+
+    pygame.draw.rect(surface, AZUL, (x - 2, y - 2, w + 4, h + 4), width=2, border_radius=4)
+
+    corner = 18
+    for cx, cy, dx, dy in ((x, y, 1, 1), (x + w, y, -1, 1), (x, y + h, 1, -1), (x + w, y + h, -1, -1)):
+        pygame.draw.line(surface, WHITE, (cx, cy), (cx + dx * corner, cy), 2)
+        pygame.draw.line(surface, WHITE, (cx, cy), (cx, cy + dy * corner), 2)
 
 
 def draw_camera_preview(surface, preview_surf, preview_rect, timestamp):
@@ -529,31 +667,46 @@ def draw_camera_preview(surface, preview_surf, preview_rect, timestamp):
     surface.blit(label_surf, (preview_rect.x + 4, preview_rect.y + preview_rect.height + 3))
 
 
-def draw_countdown(surface, game_w, game_h, countdown_val, font, info_font, big_font):
-    for i in range(3):
-        y_off = (pygame.time.get_ticks() // (30 + i * 10)) % (game_h + 20) - 10
-        alpha = 40 + i * 10
-        pygame.draw.line(surface, (alpha, alpha, alpha), (0, y_off), (game_w, y_off), 1)
+def draw_countdown(surface, game_w, game_h, countdown_val, countdown_fraction, font, info_font, big_font, control_hint=""):
+    """Pantalla de preparacion minimalista antes de que arranque la partida:
+    un anillo que se va vaciando con el tiempo restante y el numero grande
+    en el centro, sobre el fondo de estrellas que ya dibujo el llamador.
+    countdown_fraction va de 1.0 (recien empezo) a 0.0 (arranca la partida)."""
+    ticks = pygame.time.get_ticks()
+    cx, cy = game_w // 2, game_h // 2 - 20
+    radius = 74
 
-    title = render_texto_pixelado(big_font, "Nave vs Asteroides", WHITE)
-    surface.blit(title, (game_w // 2 - title.get_width() // 2, game_h // 2 - 180))
+    title = render_texto_pixelado(get_font(20, bold=True), "NAVE VS ASTEROIDES", (150, 165, 200))
+    surface.blit(title, (game_w // 2 - title.get_width() // 2, cy - radius - 64))
 
-    cd_text = render_texto_pixelado(font, f"Comienza en: {countdown_val}", WHITE)
-    surface.blit(cd_text, (game_w // 2 - cd_text.get_width() // 2, game_h // 2 - 50))
+    pulse = 0.5 + 0.5 * math.sin(ticks * 0.004)
+    glow_size = (radius + 34) * 2
+    glow_surf = pygame.Surface((glow_size, glow_size), pygame.SRCALPHA)
+    gc = glow_size // 2
+    for i in range(5):
+        r = radius + 8 + i * 6
+        alpha = max(0, int(24 + 16 * pulse) - i * 4)
+        pygame.draw.circle(glow_surf, (*AZUL_CIELO[:3], alpha), (gc, gc), r, width=2)
+    surface.blit(glow_surf, (cx - gc, cy - gc))
 
-    instructions = [
-        "Mueve tu mano para controlar la nave",
-        "Cierra el puno para disparar (rafaga de 3)",
-        "Destruye objetos para recibir power-ups",
-        f"Oleada {BOSS_SPAWN_WAVE}: JEFE",
-        f"Oleada {FINAL_BOSS_SPAWN_WAVE}: JEFE FINAL",
-        "ESC para salir | R para reiniciar",
-    ]
-    colors = [WHITE, WHITE, WHITE, ROSA, AZUL, AMARILLO]
+    pygame.draw.circle(surface, (55, 58, 86), (cx, cy), radius, width=4)
 
-    for i, (text, color) in enumerate(zip(instructions, colors)):
-        inst = render_texto_pixelado(info_font, text, color)
-        surface.blit(inst, (game_w // 2 - inst.get_width() // 2, game_h // 2 + 30 + i * 25))
+    frac = max(0.0, min(1.0, countdown_fraction))
+    if frac > 0.004:
+        start_angle = -math.pi / 2
+        end_angle = start_angle + frac * 2 * math.pi
+        arc_rect = (cx - radius, cy - radius, radius * 2, radius * 2)
+        pygame.draw.arc(surface, AZUL, arc_rect, start_angle, end_angle, 4)
+
+    numero = render_texto_pixelado(big_font, str(countdown_val), WHITE)
+    surface.blit(numero, (cx - numero.get_width() // 2, cy - numero.get_height() // 2))
+
+    prep = render_texto_pixelado(info_font, "PREPARATE", (195, 200, 225))
+    surface.blit(prep, (game_w // 2 - prep.get_width() // 2, cy + radius + 26))
+
+    if control_hint:
+        hint = render_texto_pixelado(get_font(14), control_hint, (140, 150, 180))
+        surface.blit(hint, (game_w // 2 - hint.get_width() // 2, cy + radius + 52))
 
 
 def formatear_tiempo(segundos):

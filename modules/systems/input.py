@@ -72,7 +72,10 @@ def process_camera_frame(detector, frame, timestamp_ms):
 
 def is_fist(hand_lm):
     """True si las puntas de los 4 dedos (indice/medio/anular/meñique)
-    estan por encima de su propia articulacion PIP: mano cerrada = disparo."""
+    estan por debajo de su propia articulacion PIP: mano cerrada = puño.
+    En coordenadas de imagen "y" crece hacia abajo, asi que un dedo
+    extendido tiene la punta por encima del PIP (tip.y < pip.y) y un dedo
+    curvado hacia la palma la tiene por debajo (tip.y > pip.y)."""
     checks = [
         (INDEX_TIP_IDX, INDEX_PIP_IDX),
         (MIDDLE_TIP_IDX, MIDDLE_PIP_IDX),
@@ -80,7 +83,7 @@ def is_fist(hand_lm):
         (PINKY_TIP_IDX, PINKY_PIP_IDX),
     ]
     for tip_idx, pip_idx in checks:
-        if hand_lm[tip_idx].y >= hand_lm[pip_idx].y:
+        if hand_lm[tip_idx].y <= hand_lm[pip_idx].y:
             return False
     return True
 

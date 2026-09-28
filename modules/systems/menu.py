@@ -306,9 +306,12 @@ class MenuScene:
     """Pantalla de menu completa. self.state controla que se dibuja/procesa:
 
     - "main": los 3 botones (JUGAR, AJUSTES, SALIR).
-    - "dificultad": se entra al elegir JUGAR; FACIL/NORMAL/DIFICIL devuelven
-      "START_GAME:<nave>:<skin>:<dificultad>" que main.py interpreta para
-      arrancar la partida.
+    - "control_mode": se entra al elegir JUGAR; CAMARA (gestos de mano) o
+      MANDO (joystick). MANDO se deshabilita si no hay ningun mando
+      conectado. La eleccion queda en self.modo_control ("camara"/"mando").
+    - "dificultad": se entra tras elegir el modo de control; FACIL/NORMAL/
+      DIFICIL devuelven "START_GAME:<nave>:<skin>:<dificultad>:<modo_control>"
+      que main.py interpreta para arrancar la partida.
     - "settings": volumen de musica/efectos, sensibilidad de mano y camara
       (modules/settings.py los persiste en ajustes.json); pantalla completa
       y cambio de camara se resuelven en main.py via los resultados
@@ -380,6 +383,17 @@ class MenuScene:
         ]
         self.dificultad_seleccionada = 1
 
+        cm_btn_w, cm_btn_h, cm_gap = 260, 56, 24
+        cm_total_h = 2 * cm_btn_h + cm_gap
+        cm_start_y = screen_height // 2 - cm_total_h // 2
+        self.control_mode_ids = ["camara", "mando"]
+        self.control_mode_botones = [
+            MenuButton(cx, cm_start_y, cm_btn_w, cm_btn_h, "CAMARA (MANO)", self.button_font, (60, 200, 120)),
+            MenuButton(cx, cm_start_y + cm_btn_h + cm_gap, cm_btn_w, cm_btn_h, "MANDO (JOYSTICK)", self.button_font, (80, 140, 220)),
+        ]
+        self.control_mode_seleccionada = 0
+        self.modo_control = "camara"
+
     def _cambiar_volumen_musica(self, valor):
         audio.set_volumen_musica(valor)
         settings.set_valor("volumen_musica", valor)
@@ -414,6 +428,14 @@ class MenuScene:
             self.title_phase += 0.025
             return
 
+        if self.state == "control_mode":
+            self.control_mode_botones[1].enabled = pygame.joystick.get_count() > 0
+            for btn in self.control_mode_botones:
+                btn.update(mouse_pos, mouse_pressed)
+            self.hover_amp += 0.12
+            self.title_phase += 0.025
+            return
+
         if self.state == "dificultad":
             for btn in self.dificultad_botones:
                 btn.update(mouse_pos, mouse_pressed)
@@ -437,6 +459,8 @@ class MenuScene:
 
         if self.state == "settings":
             return self._handle_settings_event(event)
+        if self.state == "control_mode":
+            return self._handle_control_mode_event(event)
         if self.state == "dificultad":
             return self._handle_dificultad_event(event)
 
@@ -488,10 +512,40 @@ class MenuScene:
             return None
         return None
 
-    def _handle_dificultad_event(self, event):
+    def _handle_control_mode_event(self, event):
         if event.type == pygame.KEYDOWN:
             if event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
                 self.state = "main"
+                audio.sonido_boton()
+                return None
+            if event.key == pygame.K_UP:
+                self.control_mode_seleccionada = max(0, self.control_mode_seleccionada - 1)
+                return None
+            if event.key == pygame.K_DOWN:
+                self.control_mode_seleccionada = min(len(self.control_mode_botones) - 1, self.control_mode_seleccionada + 1)
+                return None
+            if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+                return self._elegir_modo_control(self.control_mode_seleccionada)
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for i, btn in enumerate(self.control_mode_botones):
+                if btn.handle_event(event):
+                    self.control_mode_seleccionada = i
+                    return self._elegir_modo_control(i)
+        return None
+
+    def _elegir_modo_control(self, indice):
+        if not self.control_mode_botones[indice].enabled:
+            return None
+        self.modo_control = self.control_mode_ids[indice]
+        self.state = "dificultad"
+        self.dificultad_seleccionada = 1
+        audio.sonido_boton()
+        return None
+
+    def _handle_dificultad_event(self, event):
+        if event.type == pygame.KEYDOWN:
+            if event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
+                self.state = "control_mode"
                 audio.sonido_boton()
                 return None
             if event.key == pygame.K_UP:
@@ -512,13 +566,13 @@ class MenuScene:
     def _iniciar_partida(self, dificultad_id):
         self.transitioning_out = True
         audio.sonido_boton()
-        return f"START_GAME:scout:default:{dificultad_id}"
+        return f"START_GAME:scout:default:{dificultad_id}:{self.modo_control}"
 
     def _trigger_selected(self):
         label = self.buttons[self.selected].text
         if label == "JUGAR":
-            self.state = "dificultad"
-            self.dificultad_seleccionada = 1
+            self.state = "control_mode"
+            self.control_mode_seleccionada = 0
             return None
         if label == "AJUSTES":
             self.state = "settings"
@@ -564,6 +618,20 @@ class MenuScene:
             sub = render_texto_pixelado(self.subtitle_font, "AJUSTES", (200, 200, 220))
             self.surface.blit(sub, sub.get_rect(center=(self.screen_width // 2, 106)))
             self._draw_settings()
+            surface.blit(self.surface, (0, 0))
+            return
+
+        if self.state == "control_mode":
+            sub = render_texto_pixelado(self.subtitle_font, "ELEGI COMO JUGAR", (200, 200, 220))
+            self.surface.blit(sub, sub.get_rect(center=(self.screen_width // 2, 106)))
+            for i, btn in enumerate(self.control_mode_botones):
+                extra = int(math.sin(self.hover_amp * 1.0) * 8) if i == self.control_mode_seleccionada else 0
+                btn.draw(self.surface, extra_offset=extra)
+            if not self.control_mode_botones[1].enabled:
+                aviso = render_texto_pixelado(get_font(13), "Conecta un mando para habilitar esta opcion", (220, 140, 140))
+                self.surface.blit(aviso, aviso.get_rect(center=(self.screen_width // 2, self.screen_height - 80)))
+            hint = render_texto_pixelado(get_font(13), "ESC para volver", (160, 160, 185))
+            self.surface.blit(hint, hint.get_rect(center=(self.screen_width // 2, self.screen_height - 50)))
             surface.blit(self.surface, (0, 0))
             return
 
