@@ -454,6 +454,3 @@ def blit_centered(target, surface, cx, cy, offset_x=0, offset_y=0):
     return True
 
 
-def clear_cache():
-    _composed_cache.clear()
-    _rotation_cache.clear()

@@ -175,7 +175,6 @@ class MenuButton:
         draw_x = cx - draw_w // 2 + extra_offset
         draw_y = cy - draw_h // 2
 
-        shadow_rect = (draw_x + 4, draw_y + 4, draw_w, draw_h)
         shadow_surf = pygame.Surface((draw_w + 8, draw_h + 8), pygame.SRCALPHA)
         pygame.draw.rect(shadow_surf, (0, 0, 0, 60), (4, 4, draw_w, draw_h), border_radius=draw_h // 2)
         surface.blit(shadow_surf, (draw_x, draw_y))
@@ -198,7 +197,6 @@ class MenuButton:
         glow_intensity = int(20 + 15 * pulse) if not self.hovered else int(40 + 20 * pulse)
         glow_surf = pygame.Surface((draw_w + 20, draw_h + 20), pygame.SRCALPHA)
         for i in range(4):
-            gr = max(1, draw_w // 2 + i * 5)
             ga = max(0, glow_intensity - i * 8)
             pygame.draw.rect(
                 glow_surf,

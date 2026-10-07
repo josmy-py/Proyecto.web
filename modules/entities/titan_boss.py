@@ -610,7 +610,6 @@ class TitanBoss:
             screen.blit(sprite, rect_sprite)
             manto_cx = rect_sprite.centerx
             manto_top = rect_sprite.top
-            manto_bottom = rect_sprite.bottom
             ojo_x = rect_sprite.left + ancho_sprite * sprites.TITAN_OJO_CX_FRAC
             ojo_y = rect_sprite.top + alto_sprite * sprites.TITAN_OJO_CY_FRAC
             ojo_r = ancho_sprite * sprites.TITAN_OJO_R_FRAC
@@ -621,7 +620,6 @@ class TitanBoss:
             # su lugar.
             manto_cx = cx
             manto_top = cy - 60
-            manto_bottom = cy + 60
             ojo_x, ojo_y, ojo_r = cx, cy - 10, 22
 
         self._dibujar_tentaculos_idle(screen, offset_x, offset_y)

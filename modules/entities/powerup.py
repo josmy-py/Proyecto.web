@@ -1,7 +1,7 @@
 """
 Bonus recogibles: insignias pixel-art (marco biselado caqui/negro + una
 letra dorada por habilidad, ver tools/generate_sprites.py) que sueltan un
-buff temporal o permanente al tocarlas. random_buff_type()/buff_duration()
+buff temporal o permanente al tocarlas. random_buff_type()
 los usan tambien main.py y modules/entities/ship.py para sortear y aplicar
 el efecto."""
 
@@ -9,14 +9,11 @@ import pygame
 import random
 import math
 from modules.constants import (
-    ROSA, ROSA_CHICLE, AZUL, MENTA, LAVANDA, AMARILLO, WHITE, MELON, ELECTRICO,
-    GAME_WIDTH, GAME_HEIGHT, BUFF_DURATION, BUFF_DURATION_FAST, BUFF_DURATION_TRIPLE,
-    BUFF_TYPE_EXTRA_LIFE, BUFF_TYPE_FAST_SHOOT, BUFF_TYPE_TRIPLE_SHOT,
-    BUFF_TYPE_SHIELD, BUFF_TYPE_PIERCING, BUFF_TYPE_ATTRACT,
-    BUFF_DURATION_SHIELD, BUFF_DURATION_PIERCING, BUFF_DURATION_ATTRACT,
-    BUFF_TYPE_DAMAGE_UP, BUFF_TYPE_SPEED_UP, BUFF_TYPE_MAX_LIFE_UP, BUFF_TYPE_RAPID_FIRE,
-    BUFF_TYPE_LIGHTNING, BUFF_DURATION_LIGHTNING,
-    SHADOW, GLASS_WHITE,
+    ROSA, AZUL, MENTA, LAVANDA, AMARILLO, WHITE, MELON, ELECTRICO, GAME_HEIGHT,
+    BUFF_TYPE_EXTRA_LIFE, BUFF_TYPE_FAST_SHOOT, BUFF_TYPE_TRIPLE_SHOT, BUFF_TYPE_SHIELD, BUFF_TYPE_PIERCING,
+    BUFF_TYPE_ATTRACT, BUFF_TYPE_DAMAGE_UP, BUFF_TYPE_SPEED_UP,
+    BUFF_TYPE_MAX_LIFE_UP, BUFF_TYPE_RAPID_FIRE, BUFF_TYPE_LIGHTNING,
+    SHADOW,
 )
 from modules.systems.fonts import render_text
 from modules.systems import sprites
@@ -133,14 +130,3 @@ def random_buff_type():
     ])
 
 
-def buff_duration(buff_type):
-    """Duracion en frames del buff (0 = instantaneo, como la vida extra)."""
-    return {
-        BUFF_TYPE_EXTRA_LIFE: 0,
-        BUFF_TYPE_FAST_SHOOT: BUFF_DURATION_FAST,
-        BUFF_TYPE_TRIPLE_SHOT: BUFF_DURATION_TRIPLE,
-        BUFF_TYPE_SHIELD: BUFF_DURATION_SHIELD,
-        BUFF_TYPE_PIERCING: BUFF_DURATION_PIERCING,
-        BUFF_TYPE_ATTRACT: BUFF_DURATION_ATTRACT,
-        BUFF_TYPE_LIGHTNING: BUFF_DURATION_LIGHTNING,
-    }.get(buff_type, 0)

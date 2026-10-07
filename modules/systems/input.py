@@ -6,7 +6,6 @@ posicion de la muñeca a coordenadas del area de juego."""
 import cv2
 import importlib
 import mediapipe as mp_module
-import numpy as np
 
 vis = importlib.import_module('mediapipe.tasks.python.vision')
 ImgFmt = importlib.import_module('mediapipe.tasks.python.vision.core.image').ImageFormat
@@ -61,7 +60,7 @@ def set_frame_skip(skip: int):
 def process_camera_frame(detector, frame, timestamp_ms):
     """Detecta la mano en el frame, salvo que el frame-skip diga que hay
     que descartarlo (devuelve None en ese caso)."""
-    global _LAST_FRAME_TS, _FRAME_SKIP
+    global _LAST_FRAME_TS
     if timestamp_ms - _LAST_FRAME_TS < max(1, _FRAME_SKIP):
         return None
     _LAST_FRAME_TS = timestamp_ms

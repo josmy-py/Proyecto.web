@@ -44,10 +44,6 @@ def puntaje_maximo():
     return _progreso.get("puntaje_maximo", 0)
 
 
-def oleada_maxima():
-    return _progreso.get("oleada_maxima", 1)
-
-
 def registrar_partida(puntaje, oleada):
     """Actualiza y guarda los records al terminar una partida. Devuelve True
     si el puntaje de esta partida establecio un nuevo record."""

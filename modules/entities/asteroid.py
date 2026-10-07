@@ -6,7 +6,7 @@ los asteroides)."""
 import pygame
 import random
 import math
-from modules.constants import MELON, GAME_WIDTH, GAME_HEIGHT
+from modules.constants import MELON, GAME_HEIGHT
 from modules.systems import sprites
 
 

@@ -57,10 +57,6 @@ def inicializar():
     return True
 
 
-def disponible():
-    return _habilitado
-
-
 def _reproducir(nombre):
     if not _habilitado or _silenciado:
         return

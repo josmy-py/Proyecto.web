@@ -9,38 +9,32 @@ modules/settings.py)."""
 
 import sys
 import os
-import importlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import cv2
-import numpy as np
 import pygame
 import random
 import math
 
-from modules.systems.input import init_hand_landmarker, process_camera_frame, set_frame_skip
-
 from modules.constants import (
     SCREEN_WIDTH, SCREEN_HEIGHT, GAME_WIDTH, GAME_HEIGHT,
     PREVIEW_WIDTH, PREVIEW_HEIGHT, FPS,
-    WHITE, RED, GREEN, YELLOW, CYAN, BLUE, ORANGE,
-    DARK_BG, DARKER_BG, PURPLE, PINK,
-    ROSA, AMARILLO, AZUL, AZUL_CIELO, MELON, LAVANDA, ROSA_CHICLE, MENTA, ELECTRICO,
-    BUFF_TYPE_EXTRA_LIFE, BUFF_TYPE_FAST_SHOOT, BUFF_TYPE_TRIPLE_SHOT, BUFF_TYPE_SHIELD,
+    WHITE, RED, GREEN, CYAN, ORANGE, DARK_BG, DARKER_BG,
+    PURPLE, PINK, ROSA, AMARILLO,
+    AZUL, AZUL_CIELO, ROSA_CHICLE, MENTA, ELECTRICO, BUFF_TYPE_EXTRA_LIFE, BUFF_TYPE_FAST_SHOOT, BUFF_TYPE_TRIPLE_SHOT, BUFF_TYPE_SHIELD,
     BUFF_TYPE_PIERCING, BUFF_TYPE_ATTRACT, BUFF_TYPE_DAMAGE_UP, BUFF_TYPE_SPEED_UP,
-    BUFF_TYPE_MAX_LIFE_UP, BUFF_TYPE_RAPID_FIRE, BUFF_TYPE_LIGHTNING,
-    POWERUP_SPAWN_EVERY, SHIP_WIDTH, SHIP_HEIGHT,
-    FINAL_BOSS_SPAWN_WAVE, MEGA_BOSS_SPAWN_WAVE,
-    cuota_de_oleada,
-    DIFICULTADES, DIFICULTAD_DEFECTO,
-    GAMEPAD_MOVE_SPEED, GAMEPAD_DEADZONE,
-    BONUS_SHIP_MIN_WAVE, BONUS_SHIP_SPAWN_CHANCE, BONUS_SHIP_POWERUP_COUNT, BONUS_SHIP_SCORE,
+    BUFF_TYPE_MAX_LIFE_UP, BUFF_TYPE_RAPID_FIRE, BUFF_TYPE_LIGHTNING, POWERUP_SPAWN_EVERY,
+    SHIP_WIDTH, SHIP_HEIGHT, FINAL_BOSS_SPAWN_WAVE,
+    MEGA_BOSS_SPAWN_WAVE, cuota_de_oleada, DIFICULTADES,
+    DIFICULTAD_DEFECTO, GAMEPAD_MOVE_SPEED,
+    GAMEPAD_DEADZONE,
+    BONUS_SHIP_MIN_WAVE, BONUS_SHIP_SPAWN_CHANCE,
+    BONUS_SHIP_POWERUP_COUNT, BONUS_SHIP_SCORE,
     BONUS_SHIP_MINIBOSS_CHANCE, BONUS_SHIP_MINIBOSS_POWERUP_MULT, BONUS_SHIP_MINIBOSS_SCORE_MULT,
 )
 from modules.entities.ship import Ship
-from modules.entities.bullet import Bullet
-from modules.entities.enemy import AlienShip, AlienBullet, BONUS_SHIP_KINDS
+from modules.entities.enemy import AlienShip, BONUS_SHIP_KINDS
 from modules.entities.asteroid import Asteroid, Particle, Explosion
 from modules.entities.powerup import PowerUp, random_buff_type
 from modules.systems.input import (
@@ -49,10 +43,9 @@ from modules.systems.input import (
     set_frame_skip,
     is_fist,
     find_hand_position,
-    WRIST_IDX,
 )
 from modules.systems.ui import draw_hud, draw_countdown, draw_camera_preview, draw_game_over, draw_buff_hud, draw_victory_screen, draw_boss_rewards, draw_viewport_frame, draw_ship_status_bar, draw_victory_final
-from modules.core.boss_system import get_boss_for_wave, WaveBoss, WaveBossBullet, BossReward
+from modules.core.boss_system import get_boss_for_wave, WaveBoss, BossReward
 from modules.entities.boss import FinalBoss
 from modules.entities.titan_boss import TitanBoss
 from modules.entities.dragon_boss import DragonBoss
@@ -1002,7 +995,7 @@ def main():
     running = True
     while running:
         frame_count += 1
-        dt = clock.tick(FPS)
+        clock.tick(FPS)
         timestamp_ms = int(pygame.time.get_ticks())
         mouse_pos = pygame.mouse.get_pos()
         mouse_pressed = pygame.mouse.get_pressed()
@@ -1580,7 +1573,7 @@ def main():
                 if dist < p.radius + SHIP_WIDTH // 2:
                     p.active = False
                     powerups.remove(p)
-                    msg = ship.apply_buff(p.buff_type)
+                    ship.apply_buff(p.buff_type)
                     explosions.append(Explosion(p.x, p.y, p.color, 12))
                     particles.extend([Particle(p.x, p.y, WHITE) for _ in range(6)])
                     audio.sonido_powerup()

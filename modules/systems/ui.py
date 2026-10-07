@@ -10,13 +10,11 @@ import math
 import random
 from modules.constants import (
     WHITE, ROSA, MENTA, AMARILLO, AZUL, AZUL_CIELO, MELON, LAVANDA, ROSA_CHICLE, ELECTRICO,
-    DARK_BG, DARKER_BG, GAME_WIDTH, GAME_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT,
-    GLASS_WHITE, GLASS_BLACK, SHADOW,
-    BUFF_TYPE_EXTRA_LIFE, BUFF_TYPE_FAST_SHOOT, BUFF_TYPE_TRIPLE_SHOT,
-    BUFF_TYPE_SHIELD, BUFF_TYPE_PIERCING, BUFF_TYPE_ATTRACT,
-    BUFF_TYPE_DAMAGE_UP, BUFF_TYPE_SPEED_UP, BUFF_TYPE_MAX_LIFE_UP, BUFF_TYPE_RAPID_FIRE,
+    GAME_WIDTH, GAME_HEIGHT, GLASS_WHITE, GLASS_BLACK, SHADOW, BUFF_TYPE_EXTRA_LIFE,
+    BUFF_TYPE_FAST_SHOOT, BUFF_TYPE_TRIPLE_SHOT, BUFF_TYPE_SHIELD,
+    BUFF_TYPE_PIERCING, BUFF_TYPE_ATTRACT, BUFF_TYPE_DAMAGE_UP,
+    BUFF_TYPE_SPEED_UP, BUFF_TYPE_MAX_LIFE_UP, BUFF_TYPE_RAPID_FIRE,
     BUFF_TYPE_LIGHTNING,
-    BUFF_DURATION_FAST, BUFF_DURATION_TRIPLE, BUFF_DURATION_SHIELD, BUFF_DURATION_PIERCING, BUFF_DURATION_ATTRACT,
 )
 from modules.systems.fonts import get_font, render_text, render_texto_pixelado
 
@@ -28,50 +26,8 @@ def _texto_ajustado(texto, fuente, color, ancho_maximo):
     return render_texto_pixelado(fuente, texto, color, ancho_maximo=ancho_maximo)
 
 
-def draw_rounded_rect(surface, rect, color, radius=4, border=0):
-    x, y, w, h = rect
-    r = min(radius, w // 2, h // 2)
-    pygame.draw.rect(surface, color, (x + r, y, w - 2 * r, h))
-    pygame.draw.rect(surface, color, (x, y + r, w, h - 2 * r))
-    pygame.draw.circle(surface, color, (x + r, y + r), r)
-    pygame.draw.circle(surface, color, (x + w - r, y + r), r)
-    pygame.draw.circle(surface, color, (x + r, y + h - r), r)
-    pygame.draw.circle(surface, color, (x + w - r, y + h - r), r)
-    if border > 0:
-        pygame.draw.rect(surface, WHITE, rect, border)
-
-
-def draw_glow_circle(surface, pos, radius, color, intensity=0.5):
-    x, y = pos
-    for i in range(3):
-        r = radius + i * 6
-        alpha = int(intensity * (1 - i * 0.3) * 255)
-        glow_surf = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
-        c = (*color[:3], alpha)
-        pygame.draw.circle(glow_surf, c, (r, r), r)
-        surface.blit(glow_surf, (int(x - r), int(y - r)))
-
-
 def ease_out_cubic(t):
     return 1 - (1 - t) ** 3
-
-
-def ease_in_out_cubic(t):
-    if t < 0.5:
-        return 4 * t * t * t
-    return 1 - (-2 * t + 2) ** 3 / 2
-
-
-def ease_out_elastic(t):
-    if t == 0 or t == 1:
-        return t
-    p = 0.3
-    s = p / 4
-    return math.pow(2, -10 * t) * math.sin((t - s) * (2 * math.pi) / p) + 1
-
-
-def lerp(a, b, t):
-    return a + (b - a) * t
 
 
 def clamp(val, min_val, max_val):
@@ -179,7 +135,6 @@ class HealthBar:
         draw_x = self.x + shake_x
         draw_y = self.y + shake_y
 
-        shadow_rect = (draw_x + 3, draw_y + 3, self.width, self.height)
         shadow_surf = pygame.Surface((self.width + 6, self.height + 6), pygame.SRCALPHA)
         pygame.draw.rect(shadow_surf, SHADOW, (3, 3, self.width, self.height), border_radius=self.height // 2)
         surface.blit(shadow_surf, (draw_x, draw_y))
@@ -198,18 +153,14 @@ class HealthBar:
         if ratio > 0.001:
             fill_w = int(inner_w * ratio)
             if fill_w > 0:
-                fill_rect = (inner_x, inner_y, fill_w, inner_h)
                 fill_surf = pygame.Surface((fill_w, inner_h), pygame.SRCALPHA)
 
                 if ratio > 0.6:
                     base_color = ROSA
-                    glow_color = (255, 150, 180, 40)
                 elif ratio > 0.3:
                     base_color = AMARILLO
-                    glow_color = (255, 235, 160, 40)
                 else:
                     base_color = MELON
-                    glow_color = (255, 120, 120, 50)
 
                 for row in range(inner_h):
                     t = row / inner_h
@@ -300,7 +251,6 @@ class ModernHUD:
             self.lives_pulse -= 1
 
     def draw(self, surface):
-        alpha = int(255 * ease_out_cubic(self.fade_in))
         panel_w = 200
         panel_h = 116
         panel_x = 8
@@ -650,7 +600,6 @@ def draw_viewport_frame(surface, x, y, w, h, timestamp):
 
 
 def draw_camera_preview(surface, preview_surf, preview_rect, timestamp):
-    shadow_rect = pygame.Rect(preview_rect.x - 2, preview_rect.y - 2, preview_rect.width + 4, preview_rect.height + 4)
     shadow_surf = pygame.Surface((preview_rect.width + 4, preview_rect.height + 4), pygame.SRCALPHA)
     pygame.draw.rect(shadow_surf, SHADOW, (2, 2, preview_rect.width, preview_rect.height), border_radius=8)
     surface.blit(shadow_surf, (preview_rect.x - 2, preview_rect.y - 2))
