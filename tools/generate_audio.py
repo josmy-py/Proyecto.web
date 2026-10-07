@@ -517,6 +517,508 @@ def generar_musica_jefe_mega():
     return normalizar(mezcla, 0.9)
 
 
+def generar_musica_jefe_nyan():
+    """Jefe bonus pixel art (Nyan Cat y su pandilla): chiptune alegre en
+    tonalidad MAYOR y rapido -melodia de pulso angosto arpegiando cada
+    acorde, bajo de onda cuadrada saltando de octava- para que el cambio a
+    "entorno pixel" se escuche tanto como se ve, en contraste con los
+    temas oscuros (escala menor) del resto de los jefes."""
+    slot = 0.13
+
+    def notas(semitonos, onda_fn, base_freq, caida, volumen):
+        n = int(SR * slot)
+        trozos = []
+        for semi in semitonos:
+            if semi is None:
+                trozos.append(np.zeros(n))
+                continue
+            freq = nota_a_frecuencia(semi, base_freq)
+            trozos.append(onda_fn(freq, slot) * envolvente(n, 0.004, caida) * volumen)
+        return np.concatenate(trozos)
+
+    # I I IV V vi IV V V, 8 corcheas por acorde
+    acordes = [(0, 4), (0, 4), (5, 4), (7, 4), (9, 3), (5, 4), (7, 4), (7, 4)]
+    semis_bajo = []
+    semis_lead = []
+    for raiz, tercera in acordes:
+        semis_bajo.extend([raiz, raiz + 12] * 4)
+        tonos = [raiz, raiz + tercera, raiz + 7, raiz + 12]
+        semis_lead.extend(tonos[i] if i is not None else None for i in (0, 1, 2, 3, 2, 1, None, 2))
+
+    bajo = notas(semis_bajo, onda_cuadrada, 110.0, slot * 0.8, 0.45)
+    lead = notas(semis_lead, lambda f, d: onda_cuadrada(f, d, ancho_pulso=0.25), 440.0, slot * 0.7, 0.3)
+    patron_percusion = ["kick" if i % 4 == 0 else "hat" if i % 2 == 0 else None
+                         for i in range(len(semis_bajo))]
+    percusion = construir_percusion(patron_percusion, slot) * 0.4
+
+    n = min(len(bajo), len(lead), len(percusion))
+    mezcla = bajo[:n] + lead[:n] + percusion[:n]
+    mezcla = fundido_de_bucle(mezcla)
+    return normalizar(mezcla, 0.8)
+
+
+def generar_musica_jefe_pan():
+    """Gato Pan (el gato que gira, ultimo jefe bonus): tema de respaldo si
+    no se agrego una cancion propia (musica_jefe_pan.mp3/.ogg). Cada golpe
+    del lead es un "oi-ia": un deslizamiento de tono que sube y vuelve a
+    bajar, como una voz cantando mientras el gato da vueltas, sobre un bajo
+    saltarin en tonalidad mayor."""
+    slot = 0.15
+    trozos = []
+    for i in range(32):
+        base = 330.0 if (i // 8) % 2 == 0 else 392.0
+        if i % 4 == 3:
+            trozos.append(np.zeros(int(SR * slot * 2)))
+            continue
+        # "oi" (sube) + "ia" (sube mas y cae)
+        oi = deslizar_frecuencia(base, base * 1.5, slot, forma="square")
+        ia = deslizar_frecuencia(base * 1.68, base * 1.12, slot, forma="square")
+        n = len(oi)
+        trozos.append(oi * envolvente(n, 0.004, slot * 0.9) * 0.3)
+        trozos.append(ia * envolvente(n, 0.004, slot * 0.9) * 0.3)
+    lead = np.concatenate(trozos)
+
+    n_slot = int(SR * slot)
+    bajo = []
+    for i in range(len(lead) // n_slot):
+        raiz = 0 if (i // 16) % 2 == 0 else 5
+        semi = raiz + (12 if i % 2 else 0)
+        bajo.append(onda_cuadrada(nota_a_frecuencia(semi, 110.0), slot) * envolvente(n_slot, 0.004, slot * 0.7) * 0.4)
+    bajo = np.concatenate(bajo)
+    patron = ["kick" if i % 4 == 0 else "hat" if i % 2 == 0 else None for i in range(len(lead) // n_slot)]
+    percusion = construir_percusion(patron, slot) * 0.4
+
+    n = min(len(bajo), len(lead), len(percusion))
+    mezcla = bajo[:n] + lead[:n] + percusion[:n]
+    mezcla = fundido_de_bucle(mezcla)
+    return normalizar(mezcla, 0.8)
+
+
+def generar_musica_cuna():
+    """Cinematica final (el gatito se duerme): la "Cancion de cuna" de
+    Brahms (Wiegenlied, 1868, dominio publico) como caja de musica -seno
+    con un armonico agudo y caida de campanita- sobre un colchon suave de
+    fundamentales."""
+    pulso = 0.42
+    # (semitonos desde Do4, duracion en pulsos)
+    melodia = [
+        (4, .5), (4, .5), (7, 2),
+        (4, .5), (4, .5), (7, 2),
+        (4, .5), (7, .5), (12, 1), (11, 1.5), (9, .5), (9, 1), (7, 1),
+        (2, .5), (4, .5), (5, 1), (2, 1), (2, .5), (4, .5), (5, 2),
+        (2, .5), (5, .5), (11, .5), (9, .5), (7, 1), (11, 1), (12, 3),
+    ]
+
+    def campanita(freq, dur):
+        return onda_seno(freq, dur) * 0.8 + onda_seno(freq * 2, dur) * 0.2
+
+    trozos = []
+    for semi, pulsos in melodia:
+        dur = pulso * pulsos
+        n = int(SR * dur)
+        trozos.append(campanita(nota_a_frecuencia(semi, 523.25), dur) * envolvente(n, 0.004, 0.45) * 0.5)
+    lead = np.concatenate(trozos)
+
+    # acompañamiento: Do / Sol alternados, muy suave
+    n_acorde = int(SR * pulso * 3)
+    acomp = []
+    for i in range(len(lead) // n_acorde + 1):
+        raiz = 0 if i % 2 == 0 else 7
+        dur = pulso * 3
+        acomp.append((onda_seno(nota_a_frecuencia(raiz, 130.81), dur) +
+                      onda_seno(nota_a_frecuencia(raiz + 7, 130.81), dur) * 0.5) * envolvente(n_acorde, 0.08, 1.4) * 0.25)
+    acomp = np.concatenate(acomp)[:len(lead)]
+
+    mezcla = fundido_de_bucle(lead + acomp, ms=80)
+    return normalizar(mezcla, 0.7)
+
+
+TECNO_BPM = 132
+
+
+def _filtro_pasabajos(señal, cortes):
+    """Pasabajos de un polo con frecuencia de corte variable muestra a
+    muestra (el "barrido" del bajo acid)."""
+    alfas = 1.0 - np.exp(-2 * np.pi * np.asarray(cortes) / SR)
+    salida = np.empty_like(señal)
+    y = 0.0
+    for i in range(len(señal)):
+        y += alfas[i] * (señal[i] - y)
+        salida[i] = y
+    return salida
+
+
+def _bombo_tecno(dur=0.28):
+    t = np.arange(int(SR * dur)) / SR
+    freq = 45 + 110 * np.exp(-t / 0.03)
+    return np.sin(2 * np.pi * np.cumsum(freq) / SR) * np.exp(-t / 0.12)
+
+
+def _hat_abierto(dur=0.12):
+    n = int(SR * dur)
+    ruido = np.diff(ruido_blanco(dur + 2 / SR, semilla=3))[:n]
+    return ruido * np.exp(-np.arange(n) / SR / 0.04) * 0.5
+
+
+def _palmas(dur=0.25):
+    n = int(SR * dur)
+    t = np.arange(n) / SR
+    ruido = suavizar(ruido_blanco(dur, semilla=5), 2)[:n]
+    env = sum(np.where(t >= d, np.exp(-(t - d) / 0.008), 0) for d in (0.0, 0.011, 0.022))
+    env = env + np.where(t >= 0.03, np.exp(-(t - 0.03) / 0.07) * 0.5, 0)
+    return ruido * env
+
+
+def _poner(mezcla, señal, t_seg, vol=1.0):
+    i = int(t_seg * SR)
+    if i >= len(mezcla):
+        return
+    fin = min(len(mezcla), i + len(señal))
+    mezcla[i:fin] += señal[:fin - i] * vol
+
+
+def _supersierra(freq, dur, voces=7, desafino=0.006, semilla=0):
+    """Varias sierras levemente desafinadas y con fase al azar (el sonido
+    "supersaw" de los himnos de trance/techno): gorda y ancha."""
+    rng = np.random.default_rng(semilla)
+    t = np.arange(int(SR * dur)) / SR
+    salida = np.zeros(len(t))
+    for k in range(voces):
+        f = freq * (1 + desafino * (k - (voces - 1) / 2))
+        salida += ((f * t + rng.random()) % 1.0) * 2 - 1
+    return salida / voces
+
+
+def _ganar_volumen(señal, empuje=1.8, pico=0.98):
+    """Saturacion suave (tanh) sobre la señal normalizada: sube el volumen
+    percibido (mas RMS) sin recortar de golpe los picos."""
+    señal = normalizar(señal, 1.0)
+    return np.tanh(señal * empuje) / np.tanh(empuje) * pico
+
+
+# progresion del techno epico: (semitonos del acorde respecto de La4,
+# desplazamiento de la raiz del bajo, arpegio del lead en corcheas)
+_PROGRESION_TECNO = (
+    ((-12, -9, -5), 0, (0, 3, 7, 12, 10, 7, 3, 7)),      # La menor
+    ((-16, -12, -9), -4, (-4, 0, 3, 8, 7, 3, 0, 3)),     # Fa
+    ((-9, -5, -2), 3, (-5, -2, 3, 7, 5, 3, -2, 3)),      # Do
+    ((-14, -10, -7), -2, (-7, -2, 2, 5, 10, 5, 2, -2)),  # Sol
+)
+
+
+def generar_musica_victoria_tecno():
+    """Pantalla de VICTORIA falsa (antes del jefe bonus): techno de rave a
+    132 BPM en el estilo de la escena de apertura de Blade, llevado a himno
+    epico -bombo en negras, hat abierto a contratiempo, palmas en 2 y 4,
+    bajo acid en semicorcheas que sigue los acordes, un colchon de
+    supersaw que "bombea" con el bombo (sidechain), melodia de lead que
+    arranca en el segundo compas, golpes de orquesta y subidas de ruido-
+    sobre La menor - Fa - Do - Sol. Saturado para que suene fuerte. Loop de
+    8 compases."""
+    pulso = 60.0 / TECNO_BPM
+    compas = pulso * 4
+    compases = 8
+    total = int(SR * compas * compases)
+    mezcla = np.zeros(total)
+    t_total = np.arange(total) / SR
+    bombo, hat, palmas = _bombo_tecno(), _hat_abierto(), _palmas()
+
+    for c in range(compases):
+        for b in range(4):
+            t = c * compas + b * pulso
+            _poner(mezcla, bombo, t, 1.0)
+            _poner(mezcla, hat, t + pulso / 2, 0.35)
+            if b in (1, 3):
+                _poner(mezcla, palmas, t, 0.5)
+
+    def acorde_de(c):
+        return _PROGRESION_TECNO[(c // 2) % len(_PROGRESION_TECNO)]
+
+    # bajo acid: el riff de siempre, transportado a la raiz de cada acorde
+    riff = [0, 0, 12, 0, 3, 0, 10, 0, 0, 0, 12, 7, 5, 0, 3, 0]
+    semicorchea = pulso / 4
+    n_nota = int(SR * semicorchea)
+    notas = []
+    for c in range(compases):
+        raiz = acorde_de(c)[1]
+        for k, semi in enumerate(riff):
+            freq = nota_a_frecuencia(semi + raiz, 55.0)
+            nota = onda_sierra(freq, semicorchea) * envolvente(n_nota, 0.002, semicorchea * 0.8)
+            notas.append(nota * (1.2 if k % 4 == 0 else 0.9))
+    bajo = np.concatenate(notas)
+    t = np.arange(len(bajo)) / SR
+    barrido = 350 + 1900 * (0.5 + 0.5 * np.sin(2 * np.pi * t / (compas * 4) - np.pi / 2))
+    acento = 1 + 0.8 * np.exp(-(t % semicorchea) / 0.03)
+    bajo = np.tanh(_filtro_pasabajos(bajo, barrido * acento) * 2.5) * 0.4
+    mezcla[:len(bajo)] += bajo[:len(mezcla)]
+
+    # colchon supersaw (2 compases por acorde) que se agacha con cada bombo
+    sidechain = 1 - 0.65 * np.exp(-(t_total % pulso) / 0.11)
+    colchon = np.zeros(total)
+    for c in range(0, compases, 2):
+        dur = compas * 2
+        n = int(SR * dur)
+        acorde = sum(_supersierra(nota_a_frecuencia(sem, 440.0), dur, semilla=c + i)
+                     for i, sem in enumerate(acorde_de(c)[0]))
+        acorde = suavizar(acorde, 5) * np.minimum(1, np.arange(n) / SR / 0.05)
+        _poner(colchon, acorde, c * compas)
+    mezcla += colchon * sidechain * 0.3
+
+    # melodia de himno en corcheas desde el compas 1 (el lead se abre en la
+    # segunda vuelta subiendo una octava las ultimas notas)
+    corchea = pulso / 2
+    n_corchea = int(SR * corchea)
+    for c in range(1, compases):
+        arpegio = acorde_de(c)[2]
+        for k, semi in enumerate(arpegio):
+            if c >= 4 and k >= 6:
+                semi += 12
+            lead = _supersierra(nota_a_frecuencia(semi, 440.0), corchea, voces=5, semilla=k)
+            lead = suavizar(lead, 3) * envolvente(n_corchea, 0.004, corchea * 1.4)
+            _poner(mezcla, lead, c * compas + k * corchea, 0.22)
+
+    # golpes de orquesta al empezar cada mitad (boom grave + acorde + crash)
+    for c in (0, 4):
+        dur = 1.6
+        n = int(SR * dur)
+        tt = np.arange(n) / SR
+        boom = np.sin(2 * np.pi * np.cumsum(40 + 60 * np.exp(-tt / 0.08)) / SR) * np.exp(-tt / 0.5)
+        crash = suavizar(ruido_blanco(dur, semilla=31 + c), 2)[:n] * np.exp(-tt / 0.4) * 0.35
+        acorde = sum(_supersierra(nota_a_frecuencia(sem, 440.0), dur, semilla=50 + i)
+                     for i, sem in enumerate((-24, -12, -9, -5, 0)))
+        golpe = boom * 0.9 + crash + suavizar(acorde, 4) * np.exp(-tt / 0.35) * 0.5
+        _poner(mezcla, golpe, c * compas)
+
+    # subidas de ruido hacia la mitad y hacia el final del loop
+    for c in (3, 7):
+        n = int(SR * compas)
+        subida = np.diff(ruido_blanco(compas + 2 / SR, semilla=60 + c))[:n] * np.linspace(0, 1, n) ** 2.5
+        _poner(mezcla, subida * 0.25, c * compas)
+
+    # stabs de acorde en el "y" del tiempo 3
+    for c in range(2, compases):
+        dur = 0.16
+        n = int(SR * dur)
+        stab = sum(onda_sierra(nota_a_frecuencia(sem + 12, 440.0), dur) for sem in acorde_de(c)[0])
+        stab = suavizar(stab, 4) * envolvente(n, 0.002, 0.07) * 0.12
+        _poner(mezcla, stab, c * compas + 2.5 * pulso)
+
+    return _ganar_volumen(fundido_de_bucle(mezcla))
+
+
+def generar_musica_glitch_epica():
+    """Cuando la VICTORIA falsa se rompe (5 s, suena una sola vez y dura lo
+    mismo que la fase "glitch" del juego): el techno sigue un compas y se
+    transforma en musica epica -golpe de orquesta, coro, timbales en
+    crescendo y una melodia de metales que sube- mientras el audio se
+    "rompe" con tartamudeos y bitcrush; termina con un golpe final justo
+    cuando aparece el jefe bonus."""
+    dur = 5.7
+    mezcla = np.zeros(int(SR * dur))
+
+    # 0 - 1.4 s: el techno que venia sonando, desvaneciendose
+    tecno = generar_musica_victoria_tecno()[:int(SR * 1.4)]
+    tecno = tecno * np.linspace(1.0, 0.0, len(tecno)) ** 0.7
+    mezcla[:len(tecno)] += tecno * 0.8
+
+    def acorde_sierra(semis, base, dur, caida):
+        n = int(SR * dur)
+        voces = sum(onda_sierra(nota_a_frecuencia(s, base) * d, dur)
+                    for s in semis for d in (0.997, 1.003))
+        return suavizar(voces, 6) * envolvente(n, 0.004, caida)
+
+    def golpe(t_seg, semis, vol=1.0):
+        n = int(SR * 1.3)
+        tt = np.arange(n) / SR
+        boom = np.sin(2 * np.pi * 50 * tt) * np.exp(-tt / 0.35)
+        crash = suavizar(ruido_blanco(1.3, semilla=11), 2)[:n] * np.exp(-tt / 0.25) * 0.4
+        _poner(mezcla, (acorde_sierra(semis, 110.0, 1.3, 0.5) * 0.25 + boom + crash) * vol, t_seg)
+
+    golpe(0.9, (0, 7, 12, 15, 19))
+
+    # coro: cada voz, tres senos desafinados con vibrato
+    progresion = [(0.9, 2.3, (0, 3, 7)), (2.3, 3.4, (-4, 0, 3)), (3.4, 4.4, (-2, 2, 5)), (4.4, 5.0, (-5, -1, 2))]
+    for ini, fin, semis in progresion:
+        d = fin - ini
+        n = int(SR * d)
+        tt = np.arange(n) / SR
+        vibrato = 1 + 0.004 * np.sin(2 * np.pi * 5.2 * tt)
+        voz = np.zeros(n)
+        for s in semis:
+            f = nota_a_frecuencia(s + 12, 220.0)
+            for det in (0.995, 1.0, 1.005):
+                voz += np.sin(2 * np.pi * np.cumsum(f * det * vibrato) / SR)
+        env = np.minimum(1, tt / 0.2) * np.minimum(1, (d - tt) / 0.08)
+        _poner(mezcla, voz * env * 0.06, ini)
+
+    # timbales: cada vez mas seguidos y mas fuertes
+    t_tom = 0.9
+    while t_tom < 5.0:
+        p = (t_tom - 0.9) / 4.1
+        n = int(SR * 0.3)
+        tt = np.arange(n) / SR
+        freq = 70 + 60 * np.exp(-tt / 0.05)
+        tom = np.sin(2 * np.pi * np.cumsum(freq) / SR) * np.exp(-tt / 0.12)
+        _poner(mezcla, tom, t_tom, 0.35 + 0.6 * p)
+        t_tom += 0.24 - 0.17 * p
+
+    # metales: melodia que sube sobre la progresion
+    melodia = [(0.9, 0, .45), (1.35, 3, .45), (1.8, 7, .5), (2.3, 8, .37), (2.67, 7, .37), (3.04, 5, .36),
+               (3.4, 10, .33), (3.73, 8, .33), (4.06, 7, .34), (4.4, 11, .6)]
+    for ini, semi, d in melodia:
+        n = int(SR * d)
+        f = nota_a_frecuencia(semi, 220.0)
+        metal = suavizar(onda_sierra(f, d) + onda_sierra(f * 1.004, d), 5)
+        _poner(mezcla, metal * envolvente(n, 0.03, d * 1.2) * 0.2, ini)
+
+    # platillo al reves que sube hacia el golpe final
+    n = int(SR * 0.6)
+    subida = suavizar(ruido_blanco(0.6, semilla=21), 2)[:n] * np.linspace(0, 1, n) ** 2 * 0.5
+    _poner(mezcla, subida, 4.4)
+    golpe(5.0, (0, 7, 12, 16, 19), vol=1.2)
+
+    # la musica "se rompe": tartamudeos (un pedacito repetido) y bitcrush
+    for ini, largo, veces in ((2.95, 0.07, 4), (3.6, 0.05, 6), (4.2, 0.09, 3), (4.62, 0.04, 8)):
+        i, n_largo = int(SR * ini), int(SR * largo)
+        pedazo = mezcla[i:i + n_largo].copy()
+        for k in range(1, veces):
+            _poner_sobre = i + k * n_largo
+            mezcla[_poner_sobre:_poner_sobre + n_largo] = pedazo[:len(mezcla[_poner_sobre:_poner_sobre + n_largo])]
+    i0, i1 = int(SR * 3.85), int(SR * 4.2)
+    crush = mezcla[i0:i1] / (np.max(np.abs(mezcla)) or 1)
+    crush = np.repeat(np.round(crush[::8] * 6) / 6, 8)[:i1 - i0]
+    mezcla[i0:i1] = crush * np.max(np.abs(mezcla))
+
+    fundido = int(SR * 0.05)
+    mezcla[:fundido] *= np.linspace(0, 1, fundido)
+    mezcla[-fundido:] *= np.linspace(1, 0, fundido)
+    return _ganar_volumen(mezcla, empuje=2.6)
+
+
+# ------------------------------------------------ musica de partida "metal"
+#
+# Despues de cada jefe de oleada la musica de la partida se pone mas
+# pesada: musica_juego (oleadas 1-10) y despues musica_juego_metal1..4
+# (11-20, 21-30, 31-40, 41-50). Mismo riff en Mi menor en todos los
+# niveles para que se sienta una evolucion y no temas sueltos.
+
+def _power_chord(freq, dur, ganancia, apagado):
+    """Quinta distorsionada (raiz + quinta + octava, dos sierras
+    desafinadas). apagado=True: "palm mute" corto y mas oscuro."""
+    n = int(SR * dur)
+    onda = (onda_sierra(freq * 0.998, dur) + onda_sierra(freq * 1.002, dur)
+            + 0.8 * onda_sierra(freq * 1.5, dur) + 0.5 * onda_sierra(freq * 2, dur))
+    onda = suavizar(onda, 3)
+    distorsion = np.tanh(onda * ganancia)
+    # "gabinete" del amplificador: le saca el filo de arriba
+    distorsion = suavizar(distorsion, 7 if apagado else 3)
+    return distorsion * envolvente(n, 0.002, 0.07 if apagado else dur * 0.9)
+
+
+def _redoble(dur=0.22):
+    n = int(SR * dur)
+    t = np.arange(n) / SR
+    ruido = ruido_blanco(dur, semilla=71)[:n] * np.exp(-t / 0.07)
+    tono = np.sin(2 * np.pi * 190 * t) * np.exp(-t / 0.05)
+    return ruido * 0.7 + tono * 0.6
+
+
+def _platillo(dur=1.2):
+    n = int(SR * dur)
+    t = np.arange(n) / SR
+    return np.diff(ruido_blanco(dur + 2 / SR, semilla=73))[:n] * np.exp(-t / 0.5) * 0.35
+
+
+def _lead_guitarra(freq, dur, ganancia):
+    n = int(SR * dur)
+    t = np.arange(n) / SR
+    vibrato = 1 + 0.006 * np.sin(2 * np.pi * 6 * t) * np.minimum(1, t / 0.15)
+    onda = 2 * ((np.cumsum(freq * vibrato) / SR) % 1.0) - 1
+    onda = suavizar(np.tanh(suavizar(onda, 2) * ganancia), 4)
+    return onda * envolvente(n, 0.005, dur * 1.1)
+
+
+def generar_musica_juego_metal(nivel):
+    """nivel 1..4 (el juego elige cual en main._musica_partida): con cada
+    nivel sube el tempo (130 -> 160 BPM) y la distorsion; el 2 suma un
+    acorde abierto a mitad de compas, bombo extra, platillo en cada compas
+    y guitarra lider en la segunda mitad; el 3 pasa a semicorcheas con
+    doble bombo y lead en todo el loop; el 4 baja la afinacion, mete blast
+    beat en la segunda mitad y armoniza el lead en quintas."""
+    bpm = 120 + 10 * nivel
+    pulso = 60.0 / bpm
+    corchea = pulso / 2
+    compas = pulso * 4
+    compases = 8
+    total = int(SR * compas * compases)
+    guitarra = np.zeros(total)
+    bajo = np.zeros(total)
+    bateria = np.zeros(total)
+    lead = np.zeros(total)
+
+    afinacion = -2 if nivel >= 4 else 0          # el ultimo nivel baja la afinacion
+    base_freq = 82.41 * (2.0 ** (afinacion / 12))  # Mi grave
+    raices = [0, 0, 3, -2, 5, 3, 0, -2]            # Mi Mi Sol Re | La Sol Mi Re
+    ganancia = (0, 3, 6, 10, 16)[nivel]
+    subdivision = 4 if nivel >= 3 else 2           # corcheas o semicorcheas
+
+    bombo, redoble, hat, platillo = _bombo_tecno(0.22), _redoble(), _hat_abierto(0.05), _platillo()
+
+    for c in range(compases):
+        raiz = raices[c]
+        f = base_freq * (2.0 ** (raiz / 12))
+        inicio = c * compas
+        # guitarra ritmica: acorde abierto al empezar el compas, el resto chugs
+        golpe = compas / (4 * subdivision)
+        for k in range(4 * subdivision):
+            abierto = k == 0 or (nivel >= 2 and k == 2 * subdivision)
+            dur = golpe * (3 if abierto else 1)
+            _poner(guitarra, _power_chord(f, dur, ganancia, not abierto), inicio + k * golpe, 0.9 if abierto else 0.7)
+            nota_bajo = onda_seno(f / 2, golpe) + 0.4 * onda_sierra(f / 2, golpe)
+            _poner(bajo, suavizar(nota_bajo, 8) * envolvente(int(SR * golpe), 0.003, golpe * 0.8), inicio + k * golpe, 0.6)
+
+        # bateria
+        blast = nivel >= 4 and c >= 4
+        for b in range(4):
+            t = inicio + b * pulso
+            if blast:
+                # blast beat: bombo y redoble alternados en semicorcheas
+                for s in range(4):
+                    _poner(bateria, bombo if s % 2 == 0 else redoble, t + s * pulso / 4, 0.8 if s % 2 == 0 else 0.55)
+                continue
+            if nivel >= 3:
+                for s in range(4):   # doble bombo
+                    _poner(bateria, bombo, t + s * pulso / 4, 0.75)
+            elif b in (0, 2) or (nivel >= 2 and b == 3):
+                _poner(bateria, bombo, t, 0.9)
+            if b in (1, 3):
+                _poner(bateria, redoble, t, 0.8)
+            for s in range(2):
+                _poner(bateria, hat, t + s * corchea, 0.25)
+        if nivel >= 2 or c % 4 == 0:
+            _poner(bateria, platillo, inicio, 0.8 if nivel >= 3 else 0.6)
+
+    # guitarra lider (Mi menor pentatonica) desde el nivel 2
+    if nivel >= 2:
+        frases = [
+            [7, 10, 12, 10, 7, 5, 3, 5], [7, 10, 12, 15, 12, 10, 7, 10],
+            [12, 10, 7, 5, 3, 5, 7, 3], [0, 3, 5, 7, 5, 3, 0, -2],
+        ]
+        desde = 4 if nivel == 2 else 0
+        for c in range(desde, compases):
+            frase = frases[c % 4]
+            for k, semi in enumerate(frase):
+                f = 329.63 * (2.0 ** ((semi + afinacion) / 12))
+                nota = _lead_guitarra(f, corchea, 3 + nivel)
+                _poner(lead, nota, c * compas + k * corchea, 0.35)
+                if nivel >= 4:
+                    # segunda voz a la quinta, como las guitarras gemelas del metal
+                    _poner(lead, _lead_guitarra(f * 1.5, corchea, 3 + nivel), c * compas + k * corchea, 0.22)
+
+    mezcla = guitarra * 0.55 + bajo * 0.5 + bateria * 0.7 + lead
+    return _ganar_volumen(fundido_de_bucle(mezcla), empuje=1.5 + 0.2 * nivel)
+
+
 # ----------------------------------------------------------------- ejecucion
 
 SFX = {
@@ -531,6 +1033,10 @@ SFX = {
 
 MUSICA = {
     "musica_juego": generar_musica_juego,
+    "musica_juego_metal1": lambda: generar_musica_juego_metal(1),
+    "musica_juego_metal2": lambda: generar_musica_juego_metal(2),
+    "musica_juego_metal3": lambda: generar_musica_juego_metal(3),
+    "musica_juego_metal4": lambda: generar_musica_juego_metal(4),
     "musica_menu": generar_musica_menu,
     "musica_muerte": generar_musica_muerte,
     "musica_jefe_sentinel": generar_musica_jefe_sentinel,
@@ -538,6 +1044,15 @@ MUSICA = {
     "musica_jefe_titan": generar_musica_jefe_titan,
     "musica_jefe_anomalia": generar_musica_jefe_anomalia,
     "musica_jefe_mega": generar_musica_jefe_mega,
+    "musica_jefe_nyan": generar_musica_jefe_nyan,
+    # mismo chiptune para el duo de sub-jefes: asi, si musica_jefe_nyan se
+    # reemplaza por una cancion propia (.mp3/.ogg), esa suena solo en la
+    # fase de Nyan Cat
+    "musica_jefe_gatos": generar_musica_jefe_nyan,
+    "musica_jefe_pan": generar_musica_jefe_pan,
+    "musica_cuna": generar_musica_cuna,
+    "musica_victoria_tecno": generar_musica_victoria_tecno,
+    "musica_glitch_epica": generar_musica_glitch_epica,
 }
 
 

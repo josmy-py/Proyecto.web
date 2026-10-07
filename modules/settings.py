@@ -19,6 +19,10 @@ _VALORES_POR_DEFECTO = {
     "pantalla_completa": True,
     "sensibilidad_mano": 1.0,
     "camera_index": 0,
+    # Jefe bonus (Nyan Cat): arrancar la pelea con todos los buffs activos
+    "bonus_todos_buffs": False,
+    # ELEGIR FASE: arrancar la partida elegida con todos los buffs activos
+    "fase_todos_buffs": False,
 }
 _ajustes = dict(_VALORES_POR_DEFECTO)
 

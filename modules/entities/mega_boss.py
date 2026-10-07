@@ -21,6 +21,12 @@ en dos fases:
   esa ventana para esquivar, dispara una rafaga densa de proyectiles por
   ese corredor.
 
+  Las dos fases se ven "mitad normal, mitad pixel art": la mitad derecha
+  del casco esta pixelada como el mundo del jefe bonus secreto (ver
+  modules/entities/nyan_boss.py), con una costura dentada que tiembla,
+  chispas de arcoiris y franjas que se escapan de lado (ver
+  _componer_glitch) - un adelanto de lo que viene despues de "ganarle".
+
   La transformacion entre fases no es un simple destello de color: el
   crucero EXPLOTA en pedazos reales (recortes de su propio sprite, ver
   _iniciar_fragmentacion) que primero salen disparados hacia afuera y
@@ -47,6 +53,7 @@ from modules.entities.asteroid import Asteroid
 from modules.entities.enemy import AlienShip
 from modules.systems.fonts import render_text
 from modules.systems import sprites
+from modules.entities.nyan_boss import PIXEL_BONUS, ARCOIRIS
 
 MEGA_BOSS_MAX_HP = 2800
 MEGA_BOSS_PHASE2_HP_RATIO = 0.5
@@ -109,6 +116,8 @@ class MegaBoss:
         # _actualizar_fragmentos/_dibujar_fragmentos.
         self.frag_pieces = []
         self.frag_stage = None
+        # version pixelada del sprite de cada fase (ver _componer_glitch)
+        self._cache_pixelado = {}
         self.frag_timer = 0
         self.frag_dur_explota = 42
         self.frag_dur_implota = 46
@@ -643,9 +652,11 @@ class MegaBoss:
             # destello generico mientras dura.
             self._dibujar_fragmentos(screen, cx, cy)
         elif sprite is not None:
+            # mitad normal / mitad pixel art (ver _componer_glitch) y
             # banqueo ligado al movimiento real (ver _mover): rota el
             # sprite ya compuesto en vez de tener un cuadro aparte por
             # angulo, el giro es chico (+-11°) asi que no hace falta cache.
+            sprite = self._componer_glitch(sprite)
             dibujado = sprite if abs(self.bank_angle) < 0.3 else pygame.transform.rotate(sprite, self.bank_angle)
             rect = dibujado.get_rect(center=(cx, cy))
             screen.blit(dibujado, rect)
@@ -696,6 +707,49 @@ class MegaBoss:
             size = max(1, int(p['radius'] * alpha))
             c = (int(255 * alpha), int(150 * alpha), int(60 * alpha))
             pygame.draw.circle(screen, c, (int(p['x']) + offset_x, int(p['y']) + offset_y), size)
+
+    def _componer_glitch(self, sprite):
+        """El sprite de la fase actual con la mitad derecha pixelada (bloques
+        de PIXEL_BONUS, como el mundo del jefe bonus). La costura y los
+        glitches cambian ~20 veces por segundo: el azar se siembra con el
+        tiempo, asi el efecto "salta" en vez de vibrar cada cuadro."""
+        w, h = sprite.get_size()
+        clave = (self.phase_name, w, h)
+        pixelado = self._cache_pixelado.get(clave)
+        if pixelado is None:
+            chico = pygame.transform.scale(sprite, (max(1, w // PIXEL_BONUS), max(1, h // PIXEL_BONUS)))
+            pixelado = pygame.transform.scale(chico, (w, h))
+            self._cache_pixelado[clave] = pixelado
+
+        rng = random.Random(pygame.time.get_ticks() // 50)
+        # la costura se corre mas cuanto mas herido esta el jefe
+        herida = 1 - self.hp / self.max_hp
+        corte = w // 2 + rng.randint(-6, 6) - int(herida * 20)
+        salida = sprite.copy()
+
+        # mitad derecha pixelada, con el borde dentado fila por fila
+        for y in range(0, h, 8):
+            c = max(0, min(w, corte + rng.choice((-8, -4, 0, 0, 4, 8))))
+            alto = min(8, h - y)
+            salida.fill((0, 0, 0, 0), (c, y, w - c, alto))
+            salida.blit(pixelado, (c, y), (c, y, w - c, alto))
+
+        # franjas que se escapan de lado (de cualquiera de las dos mitades)
+        for _ in range(rng.randint(1, 3 + int(herida * 4))):
+            y = rng.randrange(0, max(1, h - 4))
+            alto = min(rng.randint(3, 10), h - y)
+            origen = pixelado if rng.random() < 0.5 else sprite
+            franja = origen.subsurface((0, y, w, alto)).copy()
+            salida.fill((0, 0, 0, 0), (0, y, w, alto))
+            salida.blit(franja, (rng.randint(-30, 30), y))
+
+        # chispas de arcoiris sobre la costura (solo donde hay casco)
+        for _ in range(8):
+            y = rng.randrange(0, h) // PIXEL_BONUS * PIXEL_BONUS
+            x = max(0, min(w - PIXEL_BONUS, corte + rng.choice((-PIXEL_BONUS, 0, PIXEL_BONUS))))
+            if sprite.get_at((x, y)).a > 0:
+                salida.fill(rng.choice(ARCOIRIS), (x, y, PIXEL_BONUS, PIXEL_BONUS))
+        return salida
 
     def _dibujar_estela_motor(self, screen, cx, cy, display_w, display_h):
         """Estela de motor que se estira/atenua segun la velocidad REAL de

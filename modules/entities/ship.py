@@ -51,7 +51,7 @@ class Ship:
         self._fist_pending_count = 0
         self.burst_shots_pending = 0
         self.alive = True
-        self.max_lives = 3
+        self.max_lives = 5
         self.lives = self.max_lives
         self.invincible_timer = 0
         self.thrust_particles = []
@@ -89,7 +89,7 @@ class Ship:
         data = {
             "speed": 0.18,
             "shoot_delay": 20,
-            "max_lives": 3,
+            "max_lives": 5,
             "body_color": AZUL,
             "wing_color": AZUL_CIELO,
             "glow_color": (140, 210, 255),

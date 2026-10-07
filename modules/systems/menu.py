@@ -302,10 +302,31 @@ class Ripple:
         surface.blit(ripple_surf, (self.x - self.radius, self.y - self.radius))
 
 
+# Puntos de partida de "ELEGIR FASE": (id que entiende main.py, etiqueta,
+# es_bonus). "wN" arranca en la oleada N; "nyan"/"alien"/"pan" van directo
+# a ese jefe del bonus secreto.
+FASES_INICIO = (
+    ("w1", "OLEADA 1 - INICIO", False),
+    ("w10", "OLEADA 10 - CENTINELA", False),
+    ("w20", "OLEADA 20 - DRAGON", False),
+    ("w25", "OLEADA 25 - ZORRITO", False),
+    ("w30", "OLEADA 30 - TITAN", False),
+    ("w40", "OLEADA 40 - ANOMALIA", False),
+    ("w50", "OLEADA 50 - MEGA JEFE", False),
+    ("nyan", "BONUS - NYAN CAT", True),
+    ("alien", "BONUS - GATO ALIEN", True),
+    ("pan", "BONUS - GATO PAN", True),
+)
+
+
 class MenuScene:
     """Pantalla de menu completa. self.state controla que se dibuja/procesa:
 
-    - "main": los 3 botones (JUGAR, AJUSTES, SALIR).
+    - "main": los 4 botones (JUGAR, ELEGIR FASE, AJUSTES, SALIR).
+    - "fases": se entra con ELEGIR FASE; lista de puntos de partida (ver
+      FASES_INICIO). Elegido uno sigue el camino de JUGAR (modo de control
+      -> dificultad) y START_GAME lleva ":<id de la fase>" al final, mas
+      ":buffs" si esta prendido "TODOS LOS BUFFS" (boton o tecla T).
     - "control_mode": se entra al elegir JUGAR; CAMARA (gestos de mano) o
       MANDO (joystick). MANDO se deshabilita si no hay ningun mando
       conectado. La eleccion queda en self.modo_control ("camara"/"mando").
@@ -316,6 +337,9 @@ class MenuScene:
       (modules/settings.py los persiste en ajustes.json); pantalla completa
       y cambio de camara se resuelven en main.py via los resultados
       "TOGGLE_FULLSCREEN"/"CHANGE_CAMERA" que devuelve handle_event().
+      Ademas "JUGAR NIVEL BONUS" lleva por el mismo camino que JUGAR
+      (modo de control -> dificultad) pero agrega ":bonus" al START_GAME,
+      y main.py arranca directo en la pelea contra Nyan Cat.
 
     handle_event() devuelve None salvo que haya que avisarle algo a main.py
     (arrancar partida, salir, o esas dos señales de ajustes)."""
@@ -335,16 +359,30 @@ class MenuScene:
 
         self.stars = [Star(screen_width, screen_height) for _ in range(120)]
 
-        btn_w, btn_h = 240, 56
-        gap = 24
-        total_h = 3 * btn_h + 2 * gap
-        start_y = screen_height // 2 - total_h // 2
+        btn_w, btn_h = 260, 56
+        gap = 20
+        total_h = 4 * btn_h + 3 * gap
+        start_y = screen_height // 2 - total_h // 2 + btn_h // 2
         cx = screen_width // 2
         self.buttons = [
             MenuButton(cx, start_y, btn_w, btn_h, "JUGAR", self.button_font, (30, 200, 120)),
-            MenuButton(cx, start_y + btn_h + gap, btn_w, btn_h, "AJUSTES", self.button_font, (200, 180, 60)),
-            MenuButton(cx, start_y + 2 * (btn_h + gap), btn_w, btn_h, "SALIR", self.button_font, (220, 80, 80)),
+            MenuButton(cx, start_y + btn_h + gap, btn_w, btn_h, "ELEGIR FASE", self.button_font, (120, 140, 255)),
+            MenuButton(cx, start_y + 2 * (btn_h + gap), btn_w, btn_h, "AJUSTES", self.button_font, (200, 180, 60)),
+            MenuButton(cx, start_y + 3 * (btn_h + gap), btn_w, btn_h, "SALIR", self.button_font, (220, 80, 80)),
         ]
+
+        # ELEGIR FASE: grilla de 2 columnas x 5 filas + VOLVER
+        fase_font = get_font(17, bold=True)
+        self.fase_botones = []
+        for i, (_, etiqueta, es_bonus) in enumerate(FASES_INICIO):
+            col, fila = i // 5, i % 5
+            color = (255, 110, 200) if es_bonus else (100, 150, 255)
+            self.fase_botones.append(MenuButton(cx - 200 + col * 400, 190 + fila * 66, 360, 50, etiqueta, fase_font, color))
+        self.btn_fases_buffs = MenuButton(cx, 522, 340, 44, "TODOS LOS BUFFS: NO", get_font(16, bold=True), (255, 200, 90))
+        self.btn_fases_volver = MenuButton(cx, 582, 200, 44, "VOLVER", get_font(16, bold=True), (90, 90, 115))
+        self.fase_seleccionada = 0
+        # id de FASES_INICIO elegido (None = partida normal desde JUGAR)
+        self.inicio_elegido = None
         self.selected = 0
         self.hover_amp = 0
         self.state = "main"
@@ -352,25 +390,30 @@ class MenuScene:
         slider_w = 380
         slider_h = 18
         self.slider_musica = SettingsSlider(
-            cx - slider_w // 2, 190, slider_w, slider_h, "MUSICA",
+            cx - slider_w // 2, 165, slider_w, slider_h, "MUSICA",
             lambda: settings.get("volumen_musica"), self._cambiar_volumen_musica,
         )
         self.slider_sfx = SettingsSlider(
-            cx - slider_w // 2, 260, slider_w, slider_h, "EFECTOS",
+            cx - slider_w // 2, 225, slider_w, slider_h, "EFECTOS",
             lambda: settings.get("volumen_sfx"), self._cambiar_volumen_sfx,
         )
         self.slider_sensibilidad = SettingsSlider(
-            cx - slider_w // 2, 330, slider_w, slider_h, "SENSIBILIDAD",
+            cx - slider_w // 2, 285, slider_w, slider_h, "SENSIBILIDAD",
             lambda: settings.get("sensibilidad_mano"), self._cambiar_sensibilidad,
             minimo=0.5, maximo=2.0, formato=lambda v: f"{v:.1f}x",
         )
         toggle_font = get_font(16, bold=True)
-        self.btn_silencio = MenuButton(cx, 410, 300, 48, "SILENCIO: NO", toggle_font, (150, 150, 175))
-        self.btn_pantalla = MenuButton(cx, 470, 300, 48, "PANTALLA COMPLETA: SI", toggle_font, (150, 150, 175))
-        self.btn_camara = MenuButton(cx, 530, 300, 48, "CAMARA: 0", toggle_font, (150, 150, 175))
-        self.btn_volver = MenuButton(cx, 595, 200, 48, "VOLVER", toggle_font, (90, 90, 115))
+        self.btn_silencio = MenuButton(cx, 345, 300, 44, "SILENCIO: NO", toggle_font, (150, 150, 175))
+        self.btn_pantalla = MenuButton(cx, 397, 300, 44, "PANTALLA COMPLETA: SI", toggle_font, (150, 150, 175))
+        self.btn_camara = MenuButton(cx, 449, 300, 44, "CAMARA: 0", toggle_font, (150, 150, 175))
+        self.btn_bonus_buffs = MenuButton(cx, 507, 340, 44, "BONUS CON TODOS LOS BUFFS: NO", toggle_font, (255, 110, 200))
+        self.btn_bonus = MenuButton(cx, 559, 300, 44, "JUGAR NIVEL BONUS", toggle_font, (255, 110, 200))
+        self.btn_volver = MenuButton(cx, 619, 200, 44, "VOLVER", toggle_font, (90, 90, 115))
         self.settings_widgets = [self.slider_musica, self.slider_sfx, self.slider_sensibilidad,
-                                 self.btn_silencio, self.btn_pantalla, self.btn_camara, self.btn_volver]
+                                 self.btn_silencio, self.btn_pantalla, self.btn_camara,
+                                 self.btn_bonus_buffs, self.btn_bonus, self.btn_volver]
+        # True cuando se entro al flujo de partida desde "JUGAR NIVEL BONUS"
+        self.partida_bonus = False
 
         dif_btn_w, dif_btn_h, dif_gap = 240, 56, 24
         dif_total_h = 3 * dif_btn_h + 2 * dif_gap
@@ -424,6 +467,8 @@ class MenuScene:
             self.btn_silencio.update(mouse_pos, mouse_pressed)
             self.btn_pantalla.update(mouse_pos, mouse_pressed)
             self.btn_camara.update(mouse_pos, mouse_pressed)
+            self.btn_bonus_buffs.update(mouse_pos, mouse_pressed)
+            self.btn_bonus.update(mouse_pos, mouse_pressed)
             self.btn_volver.update(mouse_pos, mouse_pressed)
             self.title_phase += 0.025
             return
@@ -439,6 +484,17 @@ class MenuScene:
         if self.state == "dificultad":
             for btn in self.dificultad_botones:
                 btn.update(mouse_pos, mouse_pressed)
+            self.hover_amp += 0.12
+            self.title_phase += 0.025
+            return
+
+        if self.state == "fases":
+            for i, btn in enumerate(self.fase_botones):
+                btn.update(mouse_pos, mouse_pressed)
+                if btn.hovered:
+                    self.fase_seleccionada = i
+            self.btn_fases_buffs.update(mouse_pos, mouse_pressed)
+            self.btn_fases_volver.update(mouse_pos, mouse_pressed)
             self.hover_amp += 0.12
             self.title_phase += 0.025
             return
@@ -463,6 +519,8 @@ class MenuScene:
             return self._handle_control_mode_event(event)
         if self.state == "dificultad":
             return self._handle_dificultad_event(event)
+        if self.state == "fases":
+            return self._handle_fases_event(event)
 
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_UP:
@@ -507,6 +565,14 @@ class MenuScene:
             nuevo_indice = (settings.get("camera_index") + 1) % 4
             settings.set_valor("camera_index", nuevo_indice)
             return "CHANGE_CAMERA"
+        if self.btn_bonus_buffs.handle_event(event):
+            settings.set_valor("bonus_todos_buffs", not settings.get("bonus_todos_buffs"))
+            return None
+        if self.btn_bonus.handle_event(event):
+            self.partida_bonus = True
+            self.state = "control_mode"
+            self.control_mode_seleccionada = 0
+            return None
         if self.btn_volver.handle_event(event):
             self.exit_settings()
             return None
@@ -531,6 +597,54 @@ class MenuScene:
                 if btn.handle_event(event):
                     self.control_mode_seleccionada = i
                     return self._elegir_modo_control(i)
+        return None
+
+    def _handle_fases_event(self, event):
+        total = len(self.fase_botones)
+        if event.type == pygame.KEYDOWN:
+            if event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
+                self.state = "main"
+                audio.sonido_boton()
+                return None
+            if event.key == pygame.K_UP:
+                self.fase_seleccionada = (self.fase_seleccionada - 1) % total
+            elif event.key == pygame.K_DOWN:
+                self.fase_seleccionada = (self.fase_seleccionada + 1) % total
+            elif event.key in (pygame.K_LEFT, pygame.K_RIGHT):
+                self.fase_seleccionada = (self.fase_seleccionada + 5) % total
+            elif event.key == pygame.K_t:
+                self._alternar_buffs_fase()
+            elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+                audio.sonido_boton()
+                return self._elegir_fase(self.fase_seleccionada)
+            return None
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for i, btn in enumerate(self.fase_botones):
+                if btn.handle_event(event):
+                    self.fase_seleccionada = i
+                    return self._elegir_fase(i)
+            if self.btn_fases_buffs.handle_event(event):
+                self._alternar_buffs_fase()
+                return None
+            if self.btn_fases_volver.handle_event(event):
+                self.state = "main"
+        return None
+
+    def _alternar_buffs_fase(self):
+        settings.set_valor("fase_todos_buffs", not settings.get("fase_todos_buffs"))
+        audio.sonido_boton()
+
+    def _elegir_fase(self, indice):
+        self.inicio_elegido = FASES_INICIO[indice][0]
+        self.partida_bonus = False
+        self.state = "control_mode"
+        self.control_mode_seleccionada = 0
+        return None
+
+    def _etiqueta_inicio(self):
+        for fase_id, etiqueta, _ in FASES_INICIO:
+            if fase_id == self.inicio_elegido:
+                return etiqueta
         return None
 
     def _elegir_modo_control(self, indice):
@@ -566,13 +680,26 @@ class MenuScene:
     def _iniciar_partida(self, dificultad_id):
         self.transitioning_out = True
         audio.sonido_boton()
-        return f"START_GAME:scout:default:{dificultad_id}:{self.modo_control}"
+        if self.partida_bonus:
+            sufijo = ":bonus"
+        elif self.inicio_elegido:
+            sufijo = f":{self.inicio_elegido}"
+            if settings.get("fase_todos_buffs"):
+                sufijo += ":buffs"
+        else:
+            sufijo = ""
+        return f"START_GAME:scout:default:{dificultad_id}:{self.modo_control}{sufijo}"
 
     def _trigger_selected(self):
         label = self.buttons[self.selected].text
         if label == "JUGAR":
+            self.partida_bonus = False
+            self.inicio_elegido = None
             self.state = "control_mode"
             self.control_mode_seleccionada = 0
+            return None
+        if label == "ELEGIR FASE":
+            self.state = "fases"
             return None
         if label == "AJUSTES":
             self.state = "settings"
@@ -622,7 +749,10 @@ class MenuScene:
             return
 
         if self.state == "control_mode":
-            sub = render_texto_pixelado(self.subtitle_font, "ELEGI COMO JUGAR", (200, 200, 220))
+            titulo = "NIVEL BONUS: ELEGI COMO JUGAR" if self.partida_bonus else "ELEGI COMO JUGAR"
+            if self._etiqueta_inicio():
+                titulo = f"{self._etiqueta_inicio()}: ELEGI COMO JUGAR"
+            sub = render_texto_pixelado(self.subtitle_font, titulo, (200, 200, 220))
             self.surface.blit(sub, sub.get_rect(center=(self.screen_width // 2, 106)))
             for i, btn in enumerate(self.control_mode_botones):
                 extra = int(math.sin(self.hover_amp * 1.0) * 8) if i == self.control_mode_seleccionada else 0
@@ -636,12 +766,30 @@ class MenuScene:
             return
 
         if self.state == "dificultad":
-            sub = render_texto_pixelado(self.subtitle_font, "ELEGI LA DIFICULTAD", (200, 200, 220))
+            titulo = "NIVEL BONUS: ELEGI LA DIFICULTAD" if self.partida_bonus else "ELEGI LA DIFICULTAD"
+            if self._etiqueta_inicio():
+                titulo = f"{self._etiqueta_inicio()}: ELEGI LA DIFICULTAD"
+            sub = render_texto_pixelado(self.subtitle_font, titulo, (200, 200, 220))
             self.surface.blit(sub, sub.get_rect(center=(self.screen_width // 2, 106)))
             for i, btn in enumerate(self.dificultad_botones):
                 extra = int(math.sin(self.hover_amp * 1.0) * 8) if i == self.dificultad_seleccionada else 0
                 btn.draw(self.surface, extra_offset=extra)
             hint = render_texto_pixelado(get_font(13), "ESC para volver", (160, 160, 185))
+            self.surface.blit(hint, hint.get_rect(center=(self.screen_width // 2, self.screen_height - 50)))
+            surface.blit(self.surface, (0, 0))
+            return
+
+        if self.state == "fases":
+            sub = render_texto_pixelado(self.subtitle_font, "ELEGI EN QUE FASE EMPEZAR", (200, 200, 220))
+            self.surface.blit(sub, sub.get_rect(center=(self.screen_width // 2, 106)))
+            for i, btn in enumerate(self.fase_botones):
+                extra = int(math.sin(self.hover_amp * 1.0) * 6) if i == self.fase_seleccionada else 0
+                btn.draw(self.surface, extra_offset=extra)
+            self.btn_fases_buffs.text = f"TODOS LOS BUFFS: {'SI' if settings.get('fase_todos_buffs') else 'NO'}"
+            self.btn_fases_buffs.draw(self.surface)
+            self.btn_fases_volver.draw(self.surface)
+            hint = render_texto_pixelado(get_font(13), "Flechas para moverte - ENTER para elegir - T = todos los buffs - ESC para volver",
+                                         (160, 160, 185))
             self.surface.blit(hint, hint.get_rect(center=(self.screen_width // 2, self.screen_height - 50)))
             surface.blit(self.surface, (0, 0))
             return
@@ -674,11 +822,14 @@ class MenuScene:
         self.btn_silencio.text = f"SILENCIO: {'SI' if audio.esta_silenciado() else 'NO'}"
         self.btn_pantalla.text = f"PANTALLA COMPLETA: {'SI' if settings.get('pantalla_completa') else 'NO'}"
         self.btn_camara.text = f"CAMARA: {settings.get('camera_index')}"
+        self.btn_bonus_buffs.text = f"BONUS CON TODOS LOS BUFFS: {'SI' if settings.get('bonus_todos_buffs') else 'NO'}"
         self.btn_silencio.draw(self.surface)
         self.btn_pantalla.draw(self.surface)
         self.btn_camara.draw(self.surface)
+        self.btn_bonus_buffs.draw(self.surface)
+        self.btn_bonus.draw(self.surface)
         self.btn_volver.draw(self.surface)
 
         hint = render_texto_pixelado(get_font(13), "ESC para volver", (160, 160, 185))
-        self.surface.blit(hint, hint.get_rect(center=(self.screen_width // 2, self.screen_height - 50)))
+        self.surface.blit(hint, hint.get_rect(center=(self.screen_width // 2, self.screen_height - 30)))
 

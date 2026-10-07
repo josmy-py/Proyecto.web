@@ -27,6 +27,8 @@ _habilitado = False
 _sonidos = {}
 _volumen_sfx = 0.6
 _volumen_musica = 0.5
+# ganancia extra de la pista que esta sonando (ver reproducir_musica)
+_ganancia_pista = 1.0
 _pista_actual = None
 _silenciado = False
 
@@ -96,19 +98,61 @@ def sonido_victoria():
     _reproducir("victoria")
 
 
-def reproducir_musica(nombre, loop=True):
+# Canciones propias que se reconocen solas por el nombre del archivo (sin
+# mayusculas ni signos), dejandolas tal cual en assets/audio/music: por
+# ejemplo "OIIA OIIA (Spinning Cat).mp3" suena al aparecer el Gato Pan.
+_PALABRAS_CANCION_PROPIA = {
+    "jefe_pan": ("oiia", "spinningcat"),
+    "jefe_nyan": ("nyan",),
+}
+_EXTENSIONES_PROPIAS = (".ogg", ".mp3", ".wav")
+
+
+def _ruta_musica(nombre):
+    """Archivo a reproducir para la pista `nombre`, en este orden:
+      1. musica_<nombre>.ogg / .mp3 (cancion propia con el nombre exacto)
+      2. cualquier .ogg/.mp3/.wav de MUSIC_DIR cuyo nombre contenga una de
+         las palabras de _PALABRAS_CANCION_PROPIA[nombre]
+      3. musica_<nombre>.wav (el tema generado por tools/generate_audio.py)"""
+    for extension in (".ogg", ".mp3"):
+        candidata = os.path.join(MUSIC_DIR, f"musica_{nombre}{extension}")
+        if os.path.isfile(candidata):
+            return candidata
+
+    palabras = _PALABRAS_CANCION_PROPIA.get(nombre, ())
+    if palabras and os.path.isdir(MUSIC_DIR):
+        for archivo in sorted(os.listdir(MUSIC_DIR)):
+            base, extension = os.path.splitext(archivo)
+            if extension.lower() not in _EXTENSIONES_PROPIAS or base.startswith("musica_"):
+                continue
+            simple = "".join(c for c in base.lower() if c.isalnum())
+            if any(p in simple for p in palabras):
+                return os.path.join(MUSIC_DIR, archivo)
+
+    generada = os.path.join(MUSIC_DIR, f"musica_{nombre}.wav")
+    return generada if os.path.isfile(generada) else None
+
+
+def _volumen_efectivo():
+    return min(1.0, _volumen_musica * _ganancia_pista)
+
+
+def reproducir_musica(nombre, loop=True, ganancia=1.0):
     """nombre: 'menu', 'juego' o 'muerte'. No hace nada si esa pista ya esta
     sonando, asi se puede llamar en cada frame sin reiniciar la cancion.
-    loop=False se usa para el tema de derrota, que suena una sola vez."""
-    global _pista_actual
+    loop=False se usa para el tema de derrota, que suena una sola vez.
+    ganancia multiplica el volumen de musica solo mientras suene esta pista
+    (la VICTORIA falsa la usa para sonar mas fuerte), sin tocar el ajuste."""
+    global _pista_actual, _ganancia_pista
     if not _habilitado or _pista_actual == nombre:
         return
-    ruta = os.path.join(MUSIC_DIR, f"musica_{nombre}.wav")
-    if not os.path.isfile(ruta):
+    ruta = _ruta_musica(nombre)
+    if ruta is None:
         return
     try:
         pygame.mixer.music.load(ruta)
-        pygame.mixer.music.set_volume(0.0 if _silenciado else _volumen_musica)
+        _ganancia_pista = ganancia
+        pygame.mixer.music.set_volume(0.0 if _silenciado else _volumen_efectivo())
         pygame.mixer.music.play(loops=-1 if loop else 0)
         _pista_actual = nombre
     except pygame.error:
@@ -151,7 +195,7 @@ def set_volumen_musica(valor):
     _volumen_musica = max(0.0, min(1.0, valor))
     if _habilitado and not _silenciado:
         try:
-            pygame.mixer.music.set_volume(_volumen_musica)
+            pygame.mixer.music.set_volume(_volumen_efectivo())
         except pygame.error:
             pass
 
@@ -162,7 +206,7 @@ def alternar_silencio():
     _silenciado = not _silenciado
     if _habilitado:
         try:
-            pygame.mixer.music.set_volume(0.0 if _silenciado else _volumen_musica)
+            pygame.mixer.music.set_volume(0.0 if _silenciado else _volumen_efectivo())
         except pygame.error:
             pass
     return _silenciado

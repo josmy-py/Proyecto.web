@@ -785,10 +785,10 @@ y la seccion de abajo).
 ### Oleadas y dificultad
 La oleada YA NO sube por tiempo: sube al destruir una cuota minima de
 objetivos (asteroides + naves alienigenas, no cuentan los jefes).
-`constants.WAVE_OBJETIVOS_BASE` (15) + `WAVE_OBJETIVOS_STEP` (5) por cada
-oleada ya pasada, con un techo en `WAVE_OBJETIVOS_MAX` (20): la oleada N
-exige `min(20, 15 + 5*(N-1))` destruidos antes de subir, es decir la cuota
-llega a 20 en la oleada 2 y ya no vuelve a subir. Esto reemplaza el viejo
+`constants.cuota_de_oleada(N)`: las oleadas 1 a 30
+(`WAVE_OBJETIVOS_HASTA_OLEADA`) exigen 10 destruidos
+(`WAVE_OBJETIVOS_INICIAL`) y de la 31 en adelante 15
+(`WAVE_OBJETIVOS_AVANZADO`). Esto reemplaza el viejo
 avance por tiempo para que el juego no "salte" oleadas sin que el jugador
 haya hecho nada; el HUD muestra el progreso (`X/Y`) con una barrita, o
 "¡JEFE!" mientras hay un jefe en pantalla (ver `ModernHUD` en

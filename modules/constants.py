@@ -82,13 +82,20 @@ DIFICULTAD_DEFECTO = "normal"
 FINAL_BOSS_SPAWN_WAVE = 40
 
 # Cuota de objetivos (asteroides + naves alienigenas) para que una oleada
-# pase a la siguiente: oleada N exige WAVE_OBJETIVOS_BASE + WAVE_OBJETIVOS_STEP
-# * (N - 1), con un techo en WAVE_OBJETIVOS_MAX (a partir de ahi la cuota no
-# sigue subiendo). Reemplaza el avance por tiempo de antes, para que el
-# juego no "salte" oleadas sin que el jugador haya hecho nada.
-WAVE_OBJETIVOS_BASE = 15
-WAVE_OBJETIVOS_STEP = 5
-WAVE_OBJETIVOS_MAX = 20
+# pase a la siguiente: WAVE_OBJETIVOS_INICIAL en las oleadas 1 a
+# WAVE_OBJETIVOS_HASTA_OLEADA y WAVE_OBJETIVOS_AVANZADO de ahi en adelante
+# (ver cuota_de_oleada). Reemplaza el avance por tiempo de antes, para que
+# el juego no "salte" oleadas sin que el jugador haya hecho nada.
+WAVE_OBJETIVOS_INICIAL = 10
+WAVE_OBJETIVOS_AVANZADO = 15
+WAVE_OBJETIVOS_HASTA_OLEADA = 30
+
+
+def cuota_de_oleada(wave):
+    """Objetivos a destruir para pasar la oleada `wave`."""
+    if wave <= WAVE_OBJETIVOS_HASTA_OLEADA:
+        return WAVE_OBJETIVOS_INICIAL
+    return WAVE_OBJETIVOS_AVANZADO
 
 # Oleada del mega-jefe final unico (dos fases: crucero -> esfera de combate).
 MEGA_BOSS_SPAWN_WAVE = 50

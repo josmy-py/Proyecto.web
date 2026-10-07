@@ -773,13 +773,14 @@ def draw_game_over(surface, game_w, game_h, score, wave, font, big_font, buttons
             surface.blit(txt, (base_x + i * spacing + btn_w // 2 - txt.get_width() // 2, y + btn_h // 2 - txt.get_height() // 2))
 
 
-def draw_victory_screen(surface, game_w, game_h, score, wave, font, big_font, stats=None):
+def draw_victory_screen(surface, game_w, game_h, score, wave, font, big_font, stats=None,
+                        subtitulo="Has derrotado a La Anomalia Final"):
     overlay = pygame.Surface((game_w, game_h), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 180))
     surface.blit(overlay, (0, 0))
 
     title = render_texto_pixelado(big_font, "VICTORIA", AMARILLO)
-    sub = render_texto_pixelado(font, "Has derrotado a La Anomalia Final", WHITE)
+    sub = render_texto_pixelado(font, subtitulo, WHITE)
     sc_text = render_texto_pixelado(font, f"Puntuacion Final: {score}", WHITE)
     wt_text = render_texto_pixelado(font, f"Oleada Alcanzada: {wave}", AZUL)
     restart_text = render_texto_pixelado(font, "Presiona R para volver al menu", AMARILLO)
@@ -803,3 +804,135 @@ def draw_boss_rewards(surface, boss_name, rewards, x, y):
         color = ROSA if i % 2 == 0 else AZUL
         label_surf = render_text(f"{reward.label} - {reward.description}", 14, color)
         surface.blit(label_surf, (x - label_surf.get_width() // 2, y + 22 + i * 20))
+
+
+# ------------------------------------------------ pantalla final (jefe bonus)
+
+_ARCOIRIS_FINAL = [(255, 70, 70), (255, 160, 40), (255, 235, 60), (80, 230, 90), (60, 160, 255), (150, 90, 255)]
+
+
+def dibujar_texto_arcoiris(surface, texto, fuente, cx, y, t, amplitud=6, contorno=True):
+    """Texto centrado en cx con cada letra de un color del arcoiris que va
+    rotando con el tiempo y saltando en ola (t en cuadros)."""
+    letras = []
+    ancho_total = 0
+    for i, letra in enumerate(texto):
+        color = pygame.Color(0)
+        color.hsva = (((t * 3 + i * 28) % 360), 70, 100, 100)
+        surf = fuente.render(letra, True, color)
+        letras.append((surf, i))
+        ancho_total += surf.get_width()
+    x = cx - ancho_total // 2
+    for surf, i in letras:
+        dy = int(math.sin(t * 0.12 + i * 0.55) * amplitud)
+        if contorno:
+            sombra = fuente.render(texto[i], True, (20, 10, 40))
+            for ox, oy in ((-2, 0), (2, 0), (0, -2), (0, 2), (3, 3)):
+                surface.blit(sombra, (x + ox, y + dy + oy))
+        surface.blit(surf, (x, y + dy))
+        x += surf.get_width()
+
+
+def _confeti(surface, game_w, game_h, t, cantidad=70):
+    """Confeti deterministico (depende solo de t): no necesita estado."""
+    for i in range(cantidad):
+        velocidad = 0.8 + (i * 37 % 100) / 60.0
+        x = (i * 97 + int(math.sin(t * 0.02 + i) * 30)) % game_w
+        y = int((t * velocidad + i * 53) % (game_h + 40)) - 20
+        color = _ARCOIRIS_FINAL[i % len(_ARCOIRIS_FINAL)]
+        giro = abs(math.sin(t * 0.08 + i))
+        w = max(2, int(10 * giro))
+        pygame.draw.rect(surface, color, (x - w // 2, y, w, 6))
+
+
+def draw_victory_final(surface, game_w, game_h, score, wave, stats, texto_record, nuevo_record, t,
+                       icono=None):
+    """Pantalla de victoria de verdad (despues del Gato Pan): mucho mas
+    festiva que draw_victory_screen -confeti, titulo arcoiris, franja estilo
+    Nyan, tarjeta con borde animado y las estadisticas en chips de color-.
+    icono: Surface opcional (el gatito durmiendo) para la tarjeta."""
+    # fondo: degrade violeta -> azul noche semitransparente sobre el mundo
+    fondo = pygame.Surface((game_w, game_h), pygame.SRCALPHA)
+    for yy in range(0, game_h, 4):
+        k = yy / game_h
+        fondo.fill((int(60 - 40 * k), int(20 + 10 * k), int(90 + 20 * k), 215), (0, yy, game_w, 4))
+    surface.blit(fondo, (0, 0))
+    _confeti(surface, game_w, game_h, t)
+
+    # franja arcoiris ondulada detras del titulo
+    franja_y = 58
+    for i, color in enumerate(_ARCOIRIS_FINAL):
+        for sx in range(0, game_w, 16):
+            ondula = 4 if ((sx // 16) + t // 8) % 2 else 0
+            surface.fill(color, (sx, franja_y + i * 7 + ondula, 16, 7))
+
+    dibujar_texto_arcoiris(surface, "¡VICTORIA TOTAL!", get_font(60, bold=True), game_w // 2, 40, t)
+    sub = render_texto_pixelado(get_font(20), "Derrotaste a Nyan Cat y su pandilla... y el gatito ya duerme", WHITE)
+    surface.blit(sub, (game_w // 2 - sub.get_width() // 2, 132))
+
+    # tarjeta central con borde que cambia de color
+    card = pygame.Rect(game_w // 2 - 330, 170, 660, 330)
+    panel = pygame.Surface(card.size, pygame.SRCALPHA)
+    pygame.draw.rect(panel, (20, 14, 45, 225), panel.get_rect(), border_radius=22)
+    surface.blit(panel, card.topleft)
+    borde = pygame.Color(0)
+    borde.hsva = ((t * 2) % 360, 60, 100, 100)
+    pygame.draw.rect(surface, borde, card, width=4, border_radius=22)
+    pygame.draw.rect(surface, (255, 255, 255), card.inflate(-12, -12), width=1, border_radius=18)
+
+    stats = stats or {}
+    disparos = stats.get("disparos", 0)
+    precision = int(round(100 * stats.get("aciertos", 0) / disparos)) if disparos > 0 else 0
+    chips = [
+        ("PUNTUACION", f"{score}", AMARILLO),
+        ("OLEADA", f"{wave}", AZUL),
+        ("JEFES", f"{stats.get('jefes', 0)}", ROSA),
+        ("PRECISION", f"{precision}%", MENTA),
+        ("TIEMPO", formatear_tiempo(stats.get("tiempo", 0)), LAVANDA),
+        ("ENEMIGOS", f"{stats.get('asteroides', 0) + stats.get('alienigenas', 0)}", MELON),
+    ]
+    chip_w, chip_h = 190, 78
+    for i, (etiqueta, valor, color) in enumerate(chips):
+        col, fila = i % 3, i // 3
+        cx = card.x + 30 + col * (chip_w + 10)
+        cy = card.y + 28 + fila * (chip_h + 12) + int(math.sin(t * 0.06 + i) * 2)
+        chip = pygame.Surface((chip_w, chip_h), pygame.SRCALPHA)
+        pygame.draw.rect(chip, (*color[:3], 55), chip.get_rect(), border_radius=14)
+        pygame.draw.rect(chip, (*color[:3], 230), chip.get_rect(), width=2, border_radius=14)
+        surface.blit(chip, (cx, cy))
+        et = render_text(etiqueta, 13, color)
+        surface.blit(et, (cx + chip_w // 2 - et.get_width() // 2, cy + 10))
+        va = render_texto_pixelado(get_font(30, bold=True), valor, WHITE)
+        surface.blit(va, (cx + chip_w // 2 - va.get_width() // 2, cy + 30))
+
+    # gatito durmiendo + Zzz en la parte baja de la tarjeta
+    base_y = card.y + 232
+    if icono is not None:
+        surface.blit(icono, (card.x + 40, base_y + 6))
+        for k in range(3):
+            fase = (t * 0.02 + k / 3) % 1.0
+            z = render_text("z" if k < 2 else "Z", 14 + k * 5, (220, 220, 255))
+            z.set_alpha(int(255 * (1 - fase)))
+            surface.blit(z, (card.x + 40 + icono.get_width() - 8 + k * 12, base_y - int(fase * 30) + 4))
+
+    pulso = 0.5 + 0.5 * math.sin(t * 0.15)
+    color_record = AMARILLO if nuevo_record else WHITE
+    if nuevo_record:
+        color_record = (255, int(200 + 55 * pulso), int(90 + 100 * pulso))
+    centro_x = card.x + 250 + (card.w - 250) // 2
+    if nuevo_record:
+        aviso = render_texto_pixelado(get_font(14, bold=True), "¡NUEVO RÉCORD!", color_record)
+        surface.blit(aviso, (centro_x - aviso.get_width() // 2, base_y - 2))
+    rec = render_texto_pixelado(get_font(22, bold=True), texto_record, color_record)
+    surface.blit(rec, (centro_x - rec.get_width() // 2, base_y + 20))
+    gracias = render_texto_pixelado(get_font(15), "¡Gracias por jugar!", ROSA_CHICLE)
+    surface.blit(gracias, (centro_x - gracias.get_width() // 2, base_y + 56))
+
+    # boton de salida con color que rota y un latido suave
+    pie = render_texto_pixelado(get_font(18, bold=True), "ENTER / R  -  volver al menu", (30, 20, 50), contorno=False)
+    pill = pygame.Rect(0, 0, pie.get_width() + 40, pie.get_height() + 16)
+    pill.center = (game_w // 2, card.bottom + 44)
+    color_pill = pygame.Color(0)
+    color_pill.hsva = ((t * 2 + 180) % 360, 45, 100, 100)
+    pygame.draw.rect(surface, color_pill, pill.inflate(int(6 * pulso), int(4 * pulso)), border_radius=pill.h // 2)
+    surface.blit(pie, (pill.centerx - pie.get_width() // 2, pill.centery - pie.get_height() // 2))

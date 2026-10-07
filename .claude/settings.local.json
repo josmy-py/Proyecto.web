@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m py_compile modules/entities/ship.py modules/constants.py)",
+      "Bash(python -m py_compile modules/systems/menu.py)",
+      "Bash(python -m py_compile main.py modules/entities/ship.py modules/systems/menu.py modules/systems/input.py modules/constants.py)",
+      "Bash(python -c \"import main\")",
+      "Bash(python -m py_compile main.py)",
+      "Bash(python -m py_compile modules/systems/ui.py)",
+      "Bash(awk 'NR==732,NR==868' main.py)",
+      "Bash(python -m py_compile main.py modules/systems/ui.py)",
+      "PowerShell(cd \"C:\\\\Users\\\\Admin\\\\Documents\\\\Proyecto\"; $p = Start-Process -FilePath python -ArgumentList \"main.py\" -PassThru -RedirectStandardError \"err.log\" -RedirectStandardOutput \"out.log\"; Start-Sleep -Seconds 6; if \\(-not $p.HasExited\\) { Stop-Process -Id $p.Id -Force }; Write-Output \"EXITED: $\\($p.HasExited\\)\"; Write-Output \"---ERR---\"; Get-Content err.log -ErrorAction SilentlyContinue; Write-Output \"---OUT---\"; Get-Content out.log -ErrorAction SilentlyContinue)",
+      "PowerShell(cd \"C:\\\\Users\\\\Admin\\\\Documents\\\\Proyecto\"; $p = Start-Process -FilePath python -ArgumentList \"-u\",\"main.py\" -PassThru -RedirectStandardError \"err.log\" -RedirectStandardOutput \"out.log\"; Start-Sleep -Seconds 7; $alive = -not $p.HasExited; Write-Output \"STILL RUNNING AFTER 7s: $alive\"; if \\($alive\\) { Stop-Process -Id $p.Id -Force }; Write-Output \"---ERR---\"; Get-Content err.log -ErrorAction SilentlyContinue; Write-Output \"---OUT---\"; Get-Content out.log -ErrorAction SilentlyContinue)",
+      "Bash(python -c \"import PIL, numpy; print\\('ok'\\)\")",
+      "Bash(python -c ' *)"
+    ]
+  }
+}
