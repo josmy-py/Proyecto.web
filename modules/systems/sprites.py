@@ -381,7 +381,7 @@ def get_boss_surface(body_color, wing_color, width=BOSS_DISPLAY_W, height=BOSS_D
     (ver BossDefinition en modules/core/boss_system.py): decide que silueta
     de assets/sprites/boss/ se usa (BOSS_SPRITE_PREFIX).
     """
-    prefix = BOSS_SPRITE_PREFIX.get(kind, "centinela")
+    prefix = BOSS_SPRITE_PREFIX.get(kind, kind)
     key = ("boss", prefix, _quantize(body_color), _quantize(wing_color), int(width), int(height))
     if key in _composed_cache:
         return _composed_cache[key]
@@ -455,71 +455,6 @@ def get_mega_boss_surface(phase, width=MEGA_BOSS_DISPLAY_W, height=MEGA_BOSS_DIS
 
     raw = load_raw("boss", filename)
     surface = _scaled(raw, width, height) if raw is not None else None
-    _composed_cache[key] = surface
-    _cap(_composed_cache, _MAX_COMPOSED)
-    return surface
-
-
-# Dragon del jefe de la oleada 20 (ver modules/entities/dragon_boss.py y
-# build_dragon_robot()/DRAGON_ROBOT_* en tools/generate_sprites.py): los
-# nombres DRAGON_ROBOT_*/get_dragon_robot_surface se mantienen por
-# compatibilidad con el resto del codigo, aunque ya no hay nada robotico
-# en el diseño (mismo criterio que BOSS_SPRITE_PREFIX guardando "saucer"
-# como "mothership"). Tintable pero con 11 cuadros fijos (apertura 0.0 a
-# 1.0) en vez de una unica silueta - "intacto a hecho pedazos":
-# dragon_boss.py elige el cuadro mas cercano a su "apertura" (= daño)
-# actual, tanto para sus 3 formas fijas por fase como para reproducir el
-# deterioro cuadro a cuadro durante la transformacion entre fases.
-#
-# El PNG en si es pixel art de verdad -una grilla nativa CHICA (ver
-# DRAGON_PIXEL_W/H en tools/generate_sprites.py), no una silueta suave
-# reducida- asi que se escala siempre sin suavizar (ver
-# get_dragon_robot_surface, pixelado=True) para que los "pixeles" grandes
-# se vean como bloques solidos y no como un degrade continuo encogido.
-DRAGON_ROBOT_SPRITE_W, DRAGON_ROBOT_SPRITE_H = 80, 75
-DRAGON_ROBOT_FRAMES = 11
-DRAGON_ROBOT_DISPLAY_W = 250
-DRAGON_ROBOT_DISPLAY_H = round(DRAGON_ROBOT_DISPLAY_W * DRAGON_ROBOT_SPRITE_H / DRAGON_ROBOT_SPRITE_W)
-
-# Dos ojos (cuencas vacias horneadas, ver DRAGON_OJO_* en
-# tools/generate_sprites.py): dragon_boss.py dibuja las dos pupilas -que
-# siguen a la nave- centradas en estas fracciones, encima del aro ya
-# horneado de cada una (mismo criterio que ANOMALY_OJO_*).
-DRAGON_OJO_IZQ_X_FRAC = 0.41875
-DRAGON_OJO_DER_X_FRAC = 0.58125
-DRAGON_OJO_CY_FRAC = 0.2
-DRAGON_OJO_R_FRAC = 0.0375
-
-# Garganta: de aca sale telegrafiado el aliento de fuego (el resplandor en
-# si es 100% en tiempo real, ver dragon_boss.py _dibujar_garganta).
-DRAGON_GARGANTA_X_FRAC = 0.5
-DRAGON_GARGANTA_Y_FRAC = 0.34
-
-# Puntos de herida (fx, fy, inicio, fin) - deben coincidir con
-# _DRAGON_DAÑOS en tools/generate_sprites.py: dragon_boss.py los usa para
-# saber DONDE spawnear chispas/brasas animadas en tiempo real segun la
-# severidad actual (`apertura`), ademas de la grieta ya horneada en el
-# sprite.
-DRAGON_DAÑOS_FRAC = [
-    (0.96875, 0.28, 0.08, 0.42),
-    (0.35625, 0.75333, 0.18, 0.52),
-    (0.5, 0.62, 0.32, 0.68),
-    (0.03125, 0.28, 0.42, 0.78),
-    (0.65625, 0.26667, 0.62, 1.00),
-]
-
-
-def get_dragon_robot_surface(apertura, color, width=DRAGON_ROBOT_DISPLAY_W, height=DRAGON_ROBOT_DISPLAY_H):
-    """Cuadro del flipbook de daño mas cercano a `apertura` (0.0=Modo
-    Explorador casi intacto, 1.0=Modo Destructor hecho pedazos), tintado y
-    escalado. None si faltan los PNG."""
-    idx = max(0, min(DRAGON_ROBOT_FRAMES - 1, round(apertura * (DRAGON_ROBOT_FRAMES - 1))))
-    prefix = f"dragon_robot_{idx:02d}"
-    key = ("dragon_robot", idx, _quantize(color), int(width), int(height))
-    if key in _composed_cache:
-        return _composed_cache[key]
-
-    surface = _compose_layers("boss", prefix, color, color, width, height, con_ala=False, pixelado=True)
     _composed_cache[key] = surface
     _cap(_composed_cache, _MAX_COMPOSED)
     return surface

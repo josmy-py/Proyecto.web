@@ -1,687 +1,534 @@
 """
-Dragon Espacial (oleada 20): jefe unico como FinalBoss/TitanBoss/MegaBoss,
-ya no un WaveBoss generico con el molde "platillo". Es un DRAGON de
-verdad -craneo con cuernos, dos ojos que siguen a la nave con la mirada,
-alas de murcielago bien abiertas a los costados, brazos con garras y una
-cola larga que se curva hacia un lado, ver build_dragon_robot() en
-tools/generate_sprites.py- no una nave ni un casco blindado. Los nombres
-DRAGON_ROBOT_*/get_dragon_robot_surface se mantienen por compatibilidad
-con el resto del codigo aunque ya no hay nada robotico en el diseño.
+Dragon Espacial (oleada 20): un dragon en pixel art neon que baja de
+frente hacia la nave, con las alas abiertas y fuego en las fauces (arte en
+tools/generate_pixel_sprites.py, cuadros "dragon_a"/"dragon_b" del aleteo).
 
-"apertura" (0.0 a 1.0) no es un iris abriendose: es cuanto DAÑO/heridas
-tiene encima, y anima cuadro a cuadro por un flipbook real de 11 sprites
-(ver sprites.get_dragon_robot_surface) en vez de solo cambiar de color -se
-ve herirse de verdad, cada cambio de fase lo deja MAS lastimado que antes
-(mas grietas, mas heridas al rojo vivo). El daño en si no es un dibujo
-estatico: cada herida titila con brasas animadas y fase propia
-(_dibujar_daños_dinamicos) y ademas escupe chispas de verdad hacia arriba
-con probabilidad proporcional a su severidad (ver _emitir_chispas_daño),
-asi que se ve "vivo" y no solo pintado:
+Pelea en tres modos que cambian al 66% y 33% de vida; cada cambio lo deja
+mas lastimado (grietas al rojo vivo en el cuerpo) y de otro color:
 
-  Modo Acecho (fase 1, apertura 0.0 - casi intacto): dardos de fuego
-  dirigidos y rapidos, se reposiciona seguido.
+  Acecho (fase 1): rafagas de dardos de fuego apuntados y zarpazos que
+  salen de las garras en arco.
+  Envite (fase 2): suma un cono de fuego con un hueco para pasar y el
+  vendaval, plumas que caen en diagonal desde las puntas de las alas.
+  Furia (fase 3): suma el aliento de fuego (una linea marca hacia donde va
+  a escupir y se queda fija un momento antes del chorro) y un anillo de
+  fuego giratorio.
 
-  Modo Envite (fase 2, apertura 0.5 - ya con heridas visibles): cono de
-  fuego frontal denso mas dos zarpazos incendiarios a los costados.
+Desde la fase 2 cada tanto hace una PICADA: sale por arriba, marca una
+columna sobre la nave y baja en picada atravesando la pantalla.
 
-  Modo Furia (fase 3, apertura 1.0 - cubierto de heridas al rojo vivo):
-  barrida circular pesada de fuego mas un ALIENTO DE FUEGO telegrafiado
-  desde la garganta (la misma mecanica de "rayo de sobrecarga" de antes,
-  reubicada en la boca en vez del ojo -un dragon respira fuego, no
-  dispara laseres con la mirada), la version mas lenta pero mas letal.
+Todo ataque se carga antes de salir (chispas que se juntan en la boca, las
+garras o las alas), asi que siempre hay un momento para moverse. Al morir
+tiembla rugiendo y estalla en pedazos de su propio sprite; mientras dura
+esa secuencia sigue con active=True para que main.py no lo recompense
+antes de tiempo."""
 
-Al cruzar cada umbral de vida se queda quieto (igual que los demas jefes
-en phase_transition) mientras la transformacion entera se ve en pantalla
--no es un destello de color, son los cuadros intermedios del flipbook
-reproduciendose en tiempo real, con chispas y sacudida- antes de volver a
-atacar ya en el modo nuevo, MAS lastimado.
-
-Al morir no desaparece de golpe: primero se queda temblando en un ultimo
-gesto desafiante (death_state="riendo", los ojos estroboscopicos
-rojo/blanco a toda velocidad, ver _dibujar_ojos) y despues estalla en
-pedazos reales -no un destello vectorial- recortando su propio sprite en
-una grilla que sale disparada hacia afuera girando y desvaneciendose
-(death_state="explotando", ver _iniciar_explosion/_actualizar_explosion,
-misma tecnica de fragmentacion que MegaBoss pero de una sola vez, sin
-implosionar de vuelta). Mientras el death_state este activo sigue con
-self.active=True a proposito, para que main.py no lo recompense/remueva a
-mitad de la secuencia -recien pone self.active=False al terminar la
-explosion, momento en el que el bucle principal dispara la recompensa
-normal."""
-
-import random
 import math
-
-from modules.constants import (
-    ROSA, AMARILLO, WHITE, GAME_WIDTH, GAME_HEIGHT,
-)
-from modules.core.boss_system import WaveBossBullet
-from modules.systems.fonts import render_text
-from modules.systems import sprites
+import random
 
 import pygame
 
-# Tinte principal por fase/modo.
-TINTES_POR_FASE = {
-    1: (140, 100, 220),
-    2: (230, 150, 70),
-    3: (230, 70, 70),
+from modules.constants import AMARILLO, GAME_WIDTH, GAME_HEIGHT, WHITE
+from modules.core.boss_system import WaveBossBullet
+from modules.systems import pixelfx, sprites
+from modules.systems.fonts import render_text
+
+# (cuerpo, alas) por fase
+COLORES_FASE = {
+    1: ((150, 90, 230), (110, 50, 170)),
+    2: ((240, 140, 60), (170, 70, 40)),
+    3: ((205, 55, 70), (120, 30, 60)),
+}
+NOMBRE_MODO = {1: "ACECHO", 2: "ENVITE", 3: "FURIA"}
+
+FUEGO_ROJO = (255, 70, 50)
+FUEGO_NARANJA = (255, 150, 50)
+FUEGO_AMARILLO = (255, 220, 90)
+
+# Grietas por fase, en celdas de la grilla del arte (sin PAD): se dibujan
+# encima del sprite como lineas al rojo vivo que titilan.
+_GRIETAS = {
+    2: [[(30, 24), (32, 27), (31, 30), (33, 33)], [(41, 22), (39, 26), (41, 29)]],
+    3: [[(30, 24), (32, 27), (31, 30), (33, 33)], [(41, 22), (39, 26), (41, 29)],
+        [(16, 18), (20, 21), (19, 25)], [(55, 19), (52, 22), (53, 26)],
+        [(34, 42), (36, 45), (35, 47)], [(37, 34), (39, 37), (38, 40)]],
 }
 
-NOMBRE_MODO = {
-    1: "MODO ACECHO",
-    2: "MODO ENVITE",
-    3: "MODO FURIA",
-}
 
-_APERTURA_OBJETIVO = {1: 0.0, 2: 0.5, 3: 1.0}
+class Embestida:
+    """El cuerpo del dragon durante la picada: una "bala" grande que sigue
+    al dragon, para que main.py lo choque con la nave sin cambios."""
 
-# Colores de fuego reutilizados en varios ataques (dardos, cono, zarpazos,
-# barrida y el aliento) - todo el arsenal es fuego, no proyectiles
-# genericos de nave.
-_FUEGO_ROJO = (230, 70, 40)
-_FUEGO_NARANJA = (255, 140, 50)
-_FUEGO_AMARILLO = (255, 200, 90)
+    def __init__(self, jefe):
+        self.jefe = jefe
+        self.radius = 38
+        self.active = True
+        self.x, self.y = jefe.x, jefe.y
+
+    def update(self):
+        e = self.jefe.especial
+        if e is None or e.get("fase") != "picada" or not self.jefe.active:
+            self.active = False
+            return
+        self.x, self.y = self.jefe.x, self.jefe.y + 20
+
+    def draw(self, screen, offset_x=0, offset_y=0):
+        pass
 
 
 class DragonBoss:
-    """Jefe de la oleada 20. take_damage() sube de fase (1->2->3) al pasar
-    los umbrales de 66%/33% de vida; cada cambio de fase dispara una
-    transformacion visual real (ver apertura/_APERTURA_OBJETIVO) que lo
-    deja mas lastimado que antes, ademas de cambiar el modo de combate. Al
-    llegar a 0 de vida no muere al instante: ver
-    _iniciar_muerte/_actualizar_muerte."""
+    ESCALA = 3
+    # puntos del arte en px de pantalla respecto del centro
+    BOCA = (0, 72)
+    GARRAS = ((-44, 46), (43, 46))
+    PUNTAS_ALA = ((-104, -60), (104, -60))
+    OJOS = ((-17, 55), (16, 55))
 
     def __init__(self, dificultad=1.0):
-        self.x = GAME_WIDTH // 2
-        self.y = 100
+        self.x = GAME_WIDTH / 2
+        self.y = -120.0
         self.target_x = self.x
-        self.target_y = self.y
+        self.target_y = 120.0
         self.active = True
+        self._dificultad = dificultad
         self.max_hp = max(1, int(420 * (1.0 + (dificultad - 1.0) * 0.5)))
         self.hp = self.max_hp
-        self.display_hp = float(self.max_hp)
-        self.rotation = 0.0
-        self._dificultad = dificultad
+        self.size = 70
+        self.name = "DRAGON ESPACIAL"
         self.phase = 1
-        self.apertura = 0.0
-        self.damaged_timer = 0
-        self.particles = []
-        self.chispas = []
+        self.rewarded = False
+        self.t = 0
+        self.enter_timer = 90
         self.move_timer = 0
-        self.move_cooldown = 70
+        self.damaged_timer = 0
         self.health_shake = 0
         self.health_deplete_anim = 1.0
         self.phase_transition = False
         self.phase_timer = 0
-        self.name = "DRAGON ESPACIAL"
-        self.rewarded = False
-
-        self.shoot_timer = 30
-        self.shoot_rate = max(6, int(26 / dificultad))
-
-        # Aliento de fuego (fase 3 unicamente): aviso (carga en la
-        # garganta) -> disparo (el chorro de fuego en si).
-        self.rayo_cooldown = random.randint(260, 320) / dificultad
-        self.rayo_state = None
-        self.rayo_timer = 0
-        self.rayo_angulo = 0.0
-        self._ship_x, self._ship_y = self.x, self.y + 400
-
-        # Secuencia de muerte: None mientras pelea con normalidad; "riendo"
-        # -> "explotando" al llegar a 0 de vida (ver _iniciar_muerte).
-        # active se mantiene True durante toda la secuencia a proposito.
+        self.particles = []
+        self.cola = []              # balas de una rafaga: (demora, bala)
+        self.accion = None
+        self.carga = 0
+        self.carga_total = 1
+        self.shoot_timer = 50
+        self.ultimo = None
+        self.especial = None
+        self.timer_picada = 420
+        self._ship = None
         self.death_state = None
         self.death_timer = 0
-        self.risa_fase = 0.0
         self.frag_pieces = []
         self.frag_timer = 0
 
+    # ------------------------------------------------------------ estado
+
     @property
     def speed(self):
-        # mas agil casi intacto (fase 1), mas pesado y lastimado (fase 3).
-        return (1.5 - 0.55 * self.apertura) * self._dificultad
+        return (1.6 - 0.2 * (self.phase - 1)) * self._dificultad
 
     def take_damage(self, amount=1):
-        if self.death_state is not None:
-            return  # ya esta muriendo, ignora golpes de mas
-        prev_hp = self.hp
+        if self.death_state is not None or self.enter_timer > 0:
+            return
+        prev = self.hp
         self.hp = max(0, self.hp - amount)
-        if prev_hp > self.hp:
-            self.health_deplete_anim = prev_hp / self.max_hp
-        self.damaged_timer = 10
-        self.health_shake = 10
+        if prev > self.hp:
+            self.health_deplete_anim = max(self.health_deplete_anim, prev / self.max_hp)
+        self.damaged_timer = 6
+        self.health_shake = 4
         if self.hp <= 0:
             self._iniciar_muerte()
             return
-        if self.hp < self.max_hp * 0.66 and self.phase == 1:
-            self._transformar(2)
-        elif self.hp < self.max_hp * 0.33 and self.phase == 2:
-            self._transformar(3)
+        ratio = self.hp / self.max_hp
+        if (ratio < 0.66 and self.phase == 1) or (ratio < 0.33 and self.phase == 2):
+            self.phase += 1
+            self.phase_transition = True
+            self.phase_timer = 80
+            self.accion = None
+            self.cola = []
+            if self.especial is not None and self.especial["fase"] in ("sube", "marca"):
+                # estaba fuera de pantalla: vuelve y recien ahi se transforma
+                self.especial = {"tipo": "picada", "fase": "vuelve", "t": 0}
+                self.y = min(self.y, -160)
+            self._chispas(self.x, self.y, 30, 4.0)
 
-    def _transformar(self, fase_nueva):
-        self.phase = fase_nueva
-        self.phase_transition = True
-        self.phase_timer = 100
-        self.rayo_state = None
-        for _ in range(26):
-            self.chispas.append({
-                'x': self.x + random.uniform(-70, 70),
-                'y': self.y + random.uniform(-30, 30),
-                'vx': random.uniform(-3, 3),
-                'vy': random.uniform(-3, 3),
-                'life': random.randint(30, 60),
-                'max_life': 60,
-            })
+    def update(self, ship=None):
+        self.t += 1
+        self._ship = ship
+        self.damaged_timer = max(0, self.damaged_timer - 1)
+        if self.health_deplete_anim > self.hp / self.max_hp:
+            self.health_deplete_anim = max(self.hp / self.max_hp, self.health_deplete_anim - 0.01)
+        self._avanzar_particulas()
 
-    # -------------------------------------------------------------- muerte
-
-    def _iniciar_muerte(self):
-        """Arranca la secuencia de derrota: primero se queda temblando en
-        un ultimo gesto desafiante (death_state="riendo", los ojos
-        estroboscopicos, ver _dibujar_ojos) antes de estallar en pedazos
-        de verdad (ver _iniciar_explosion)."""
-        self.death_state = "riendo"
-        self.death_timer = 75
-        self.risa_fase = 0.0
-        self.rayo_state = None
-        for _ in range(24):
-            self.chispas.append({
-                'x': self.x + random.uniform(-50, 50),
-                'y': self.y + random.uniform(-60, 40),
-                'vx': random.uniform(-2, 2),
-                'vy': random.uniform(-3, 0.5),
-                'life': random.randint(25, 50),
-                'max_life': 50,
-            })
-
-    def _actualizar_muerte(self):
-        if self.death_state == "riendo":
-            self.risa_fase += 1
-            if random.random() < 0.5:
-                self.chispas.append({
-                    'x': self.x + random.uniform(-45, 45),
-                    'y': self.y + random.uniform(-50, 30),
-                    'vx': random.uniform(-1.5, 1.5),
-                    'vy': random.uniform(-2.5, -0.3),
-                    'life': random.randint(20, 40),
-                    'max_life': 40,
-                })
-            self.death_timer -= 1
-            if self.death_timer <= 0:
-                self._iniciar_explosion()
+        if self.death_state is not None:
+            self._actualizar_muerte()
             return []
-        # "explotando"
-        self._actualizar_explosion()
+
+        if self.enter_timer > 0:
+            self.enter_timer -= 1
+            self.y += (self.target_y - self.y) * 0.05
+            return []
+
+        if self.phase_transition and self.especial is None:
+            self.phase_timer -= 1
+            if self.phase_timer % 8 == 0:
+                self._chispas(self.x, self.y, 6, 3.0)
+            if self.phase_timer <= 0:
+                self.phase_transition = False
+                self.shoot_timer = 30
+            return []
+
+        balas = self._soltar_cola()
+
+        if self.especial is not None:
+            return balas + self._actualizar_especial(ship)
+
+        self._mover()
+
+        if self.phase >= 2 and self.accion is None and not self.cola:
+            self.timer_picada -= 1
+            if self.timer_picada <= 0:
+                self.especial = {"tipo": "picada", "fase": "sube", "t": 0}
+                self.timer_picada = random.randint(480, 600)
+                return balas
+
+        if self.accion is not None:
+            self.carga -= 1
+            if self.accion == "aliento":
+                self._apuntar_aliento()
+            if self.carga <= 0:
+                accion, self.accion = self.accion, None
+                self.shoot_timer = max(30, int(70 / self._dificultad) - 10 * self.phase)
+                balas += self._atacar(accion, ship)
+            return balas
+
+        if not self.cola:
+            self.shoot_timer -= 1
+            if self.shoot_timer <= 0:
+                self._elegir_ataque(ship)
+        return balas
+
+    def _mover(self):
+        dx, dy = self.target_x - self.x, self.target_y - self.y
+        dist = math.hypot(dx, dy)
+        lento = 0.3 if self.accion is not None else 1.0
+        if dist < 6:
+            self.move_timer += 1
+            if self.move_timer > 50:
+                self.move_timer = 0
+                self.target_x = random.randint(160, GAME_WIDTH - 160)
+                self.target_y = random.randint(100, 180)
+        else:
+            paso = min(dist, self.speed * lento)
+            self.x += dx / dist * paso
+            self.y += dy / dist * paso
+        self.y += math.sin(self.t * 0.06) * 0.4
+
+    # ------------------------------------------------------------ ataques
+
+    def _elegir_ataque(self, ship):
+        opciones = {1: ["dardos", "garras"],
+                    2: ["dardos", "garras", "cono", "vendaval"],
+                    3: ["cono", "vendaval", "aliento", "anillo", "garras"]}[self.phase]
+        if self.ultimo in opciones and len(opciones) > 1:
+            opciones.remove(self.ultimo)
+        self.accion = self.ultimo = random.choice(opciones)
+        self.carga = self.carga_total = {"aliento": 70, "cono": 34, "vendaval": 34}.get(self.accion, 28)
+        if self.accion == "aliento":
+            self.angulo_aliento = self._angulo_a_nave(*self.BOCA)
+
+    def _angulo_a_nave(self, ox, oy):
+        s = self._ship
+        if s is None:
+            return math.pi / 2
+        return math.atan2(s.y - (self.y + oy), s.x - (self.x + ox))
+
+    def _apuntar_aliento(self):
+        # sigue a la nave mientras carga y se queda fijo los ultimos cuadros
+        if self.carga > 16:
+            objetivo = self._angulo_a_nave(*self.BOCA)
+            diff = (objetivo - self.angulo_aliento + math.pi) % (2 * math.pi) - math.pi
+            self.angulo_aliento += diff * 0.07
+
+    def _bala(self, x, y, ang, vel, color, radio=4):
+        return WaveBossBullet(x, y, math.cos(ang) * vel, math.sin(ang) * vel, color, radio)
+
+    def _soltar_cola(self):
+        salen = []
+        quedan = []
+        for demora, fabrica in self.cola:
+            if demora <= 0:
+                salen.append(fabrica())
+            else:
+                quedan.append((demora - 1, fabrica))
+        self.cola = quedan
+        return salen
+
+    def _atacar(self, accion, ship):
+        bx, by = self.x + self.BOCA[0], self.y + self.BOCA[1]
+        balas = []
+        if accion == "dardos":
+            # rafaga de 3 (5 en fase 2+) dardos que apuntan a la nave al salir
+            for k in range(3 if self.phase == 1 else 5):
+                self.cola.append((k * 7, lambda: self._bala(
+                    self.x + self.BOCA[0], self.y + self.BOCA[1],
+                    self._angulo_a_nave(*self.BOCA), 5.2, FUEGO_NARANJA, 3)))
+        elif accion == "garras":
+            for (gx, gy), lado in zip(self.GARRAS, (-1, 1)):
+                for k in range(5):
+                    a = math.radians(90 + lado * (20 + k * 14))
+                    balas.append(self._bala(self.x + gx, self.y + gy, a, 2.6 + k * 0.25, FUEGO_AMARILLO, 3))
+        elif accion == "cono":
+            # abanico con un hueco de dos balas por donde pasar
+            n = 11
+            hueco = random.randint(2, n - 4)
+            for i in range(n):
+                if hueco <= i <= hueco + 1:
+                    continue
+                a = math.radians(90 + (i - (n - 1) / 2) * 9)
+                balas.append(self._bala(bx, by, a, 3.6, FUEGO_NARANJA, 4))
+        elif accion == "vendaval":
+            for (px, py), lado in zip(self.PUNTAS_ALA, (-1, 1)):
+                for k in range(6):
+                    self.cola.append((k * 6, lambda px=px, py=py, lado=lado: WaveBossBullet(
+                        self.x + px, self.y + py, -lado * 1.6, 3.0, self._color_alas(), 3)))
+        elif accion == "aliento":
+            for k in range(26):
+                self.cola.append((k * 2, lambda k=k: self._bala(
+                    self.x + self.BOCA[0], self.y + self.BOCA[1],
+                    self.angulo_aliento + math.sin(k * 0.9) * 0.06, 8.0,
+                    FUEGO_AMARILLO if k % 3 == 0 else FUEGO_ROJO, 5)))
+        elif accion == "anillo":
+            n = 16
+            base = self.t * 0.05
+            balas = [self._bala(self.x, self.y + 20, base + 2 * math.pi * i / n, 3.0, FUEGO_ROJO, 4)
+                     for i in range(n)]
+        return balas
+
+    def _actualizar_especial(self, ship):
+        e = self.especial
+        e["t"] += 1
+        if e["fase"] == "sube":
+            self.y -= 7
+            if self.y < -160:
+                e["fase"], e["t"] = "marca", 0
+                e["x"] = ship.x if ship is not None else GAME_WIDTH / 2
+                self.x = e["x"]
+            return []
+        if e["fase"] == "marca":
+            if e["t"] < 40 and ship is not None:
+                # sigue a la nave un rato y despues se queda fija
+                e["x"] += max(-3.0, min(3.0, (ship.x - e["x"]) * 0.1))
+                self.x = e["x"]
+            if e["t"] >= 64:
+                e["fase"], e["t"] = "picada", 0
+                return [Embestida(self)]
+            return []
+        if e["fase"] == "picada":
+            self.y += 13
+            if e["t"] % 5 == 0:
+                self._chispas(self.x, self.y - 60, 3, 1.5)
+            if self.y > GAME_HEIGHT + 200:
+                e["fase"] = "vuelve"
+                self.y = -200
+            return []
+        # vuelve a su lugar desde arriba
+        self.y += (120 - self.y) * 0.07
+        if abs(self.y - 120) < 4:
+            self.especial = None
+            self.shoot_timer = 40
         return []
 
-    def _iniciar_explosion(self):
-        """Recorta el sprite ACTUAL (ya en el peor estado de daño, fase 3)
-        en una grilla de pedazos reales -no una forma vectorial- y les da
-        una direccion de salida propia; a diferencia de MegaBoss no
-        implosiona de vuelta: esta vez muere de verdad."""
-        self.death_state = "explotando"
-        display_w = sprites.DRAGON_ROBOT_DISPLAY_W
-        display_h = sprites.DRAGON_ROBOT_DISPLAY_H
-        sprite = sprites.get_dragon_robot_surface(1.0, TINTES_POR_FASE[3], display_w, display_h)
-        self.frag_pieces = []
-        if sprite is not None:
-            cols, rows = 5, 7
-            pw, ph = display_w / cols, display_h / rows
-            for row in range(rows):
-                for col in range(cols):
-                    rx0, ry0 = int(col * pw), int(row * ph)
-                    rx1 = display_w if col == cols - 1 else int((col + 1) * pw)
-                    ry1 = display_h if row == rows - 1 else int((row + 1) * ph)
-                    rect = pygame.Rect(rx0, ry0, max(1, rx1 - rx0), max(1, ry1 - ry0))
-                    pieza = sprite.subsurface(rect).copy()
-                    base_x = rect.centerx - display_w / 2.0
-                    base_y = rect.centery - display_h / 2.0
-                    dist = math.hypot(base_x, base_y) or 1.0
-                    self.frag_pieces.append({
-                        'surf': pieza,
-                        'base_x': base_x, 'base_y': base_y,
-                        'dir_x': base_x / dist, 'dir_y': base_y / dist,
-                        'off': 0.0,
-                        'ang': 0.0, 'ang_vel': random.uniform(-9, 9),
-                    })
-        self.frag_timer = 70
-        self._frag_dur = 70
-        for _ in range(60):
-            ang = random.uniform(0, 2 * math.pi)
-            spd = random.uniform(2, 7)
-            self.particles.append({
-                'x': self.x, 'y': self.y,
-                'vx': math.cos(ang) * spd, 'vy': math.sin(ang) * spd,
-                'life': random.randint(30, 60), 'max_life': 60,
-                'radius': random.randint(2, 5),
-            })
+    # ------------------------------------------------------------ muerte
 
-    def _actualizar_explosion(self):
-        t = 1.0 - max(0.0, self.frag_timer / self._frag_dur)
+    def _iniciar_muerte(self):
+        self.death_state = "rugiendo"
+        self.death_timer = 80
+        self.accion = None
+        self.cola = []
+        self.especial = None
+        self.y = max(self.y, 100)
+
+    def _actualizar_muerte(self):
+        if self.death_state == "rugiendo":
+            self.death_timer -= 1
+            if self.death_timer % 3 == 0:
+                self._chispas(self.x, self.y, 3, 2.5)
+            if self.death_timer <= 0:
+                self._iniciar_explosion()
+            return
+        t = 1.0 - max(0.0, self.frag_timer / 70)
         for p in self.frag_pieces:
-            p['off'] = 150 * (t * t)
-            p['ang'] += p['ang_vel']
-        if random.random() < 0.7:
-            ang = random.uniform(0, 2 * math.pi)
-            rad = random.uniform(10, 90)
-            self.chispas.append({
-                'x': self.x + math.cos(ang) * rad, 'y': self.y + math.sin(ang) * rad,
-                'vx': random.uniform(-2, 2), 'vy': random.uniform(-3, -0.5),
-                'life': random.randint(20, 40), 'max_life': 40,
-            })
+            p['off'] = 170 * t * t
+            p['ang'] += p['giro']
         self.frag_timer -= 1
         if self.frag_timer <= 0:
             self.frag_pieces = []
             self.active = False
 
-    # -------------------------------------------------------------- update
+    def _iniciar_explosion(self):
+        self.death_state = "explotando"
+        sprite = self._sprite(0)
+        w, h = sprite.get_size()
+        cols, filas = 6, 5
+        self.frag_pieces = []
+        for fy in range(filas):
+            for fx in range(cols):
+                rect = pygame.Rect(fx * w // cols, fy * h // filas, w // cols, h // filas)
+                pieza = sprite.subsurface(rect).copy()
+                if pygame.mask.from_surface(pieza).count() < 20:
+                    continue
+                bx, by = rect.centerx - w / 2, rect.centery - h / 2
+                dist = math.hypot(bx, by) or 1.0
+                self.frag_pieces.append({'surf': pieza, 'bx': bx, 'by': by, 'dx': bx / dist, 'dy': by / dist,
+                                         'off': 0.0, 'ang': 0.0, 'giro': random.uniform(-8, 8)})
+        self.frag_timer = 70
+        self._chispas(self.x, self.y, 60, 6.0)
 
-    def update(self, ship=None):
-        bullets = []
-        self._ship_x = ship.x if ship is not None else self.x
-        self._ship_y = ship.y if ship is not None else self.y + 400
+    # ------------------------------------------------------------ efectos
 
-        if self.death_state is not None:
-            self.particles = [p for p in self._avanzar(self.particles)]
-            self.chispas = [p for p in self._avanzar(self.chispas)]
-            return self._actualizar_muerte()
+    def _chispas(self, x, y, n, vel):
+        for _ in range(n):
+            a = random.uniform(0, 2 * math.pi)
+            v = random.uniform(0.5, vel)
+            self.particles.append({'x': x + random.uniform(-50, 50), 'y': y + random.uniform(-40, 40),
+                                   'vx': math.cos(a) * v, 'vy': math.sin(a) * v - 0.5,
+                                   'life': random.randint(16, 34), 'max_life': 34})
 
-        objetivo_apertura = _APERTURA_OBJETIVO[self.phase]
-        self.apertura += (objetivo_apertura - self.apertura) * 0.045
-
-        if self.phase_transition:
-            self.phase_timer -= 1
-            if self.phase_timer <= 0:
-                self.phase_transition = False
-                self.apertura = objetivo_apertura
-
-        self._update_movement()
-        self.rotation += 0.6
-        self.damaged_timer = max(0, self.damaged_timer - 1)
-
-        if not self.phase_transition:
-            self.shoot_timer -= 1
-            if self.shoot_timer <= 0:
-                self.shoot_timer = self.shoot_rate
-                bullets.extend(self._crear_ataque(ship))
-
-            if self.phase == 3:
-                if self.rayo_state is not None:
-                    bullets.extend(self._actualizar_rayo())
-                else:
-                    self.rayo_cooldown -= 1
-                    if self.rayo_cooldown <= 0:
-                        self._iniciar_rayo()
-
-        if self.damaged_timer > 0 and random.random() < 0.4:
-            self.particles.append({
-                'x': self.x + random.uniform(-15, 15),
-                'y': self.y + random.uniform(-10, 10),
-                'vx': random.uniform(-2, 2),
-                'vy': random.uniform(-2, 2),
-                'life': random.randint(15, 35),
-                'max_life': 35,
-                'radius': random.randint(2, 5),
-            })
-
-        self._emitir_chispas_daño()
-
-        self.particles = [p for p in self._avanzar(self.particles)]
-        self.chispas = [p for p in self._avanzar(self.chispas)]
-
-        if self.health_deplete_anim > self.hp / self.max_hp:
-            self.health_deplete_anim = max(self.hp / self.max_hp, self.health_deplete_anim - 0.025)
-
-        return bullets
-
-    @staticmethod
-    def _avanzar(lista):
-        vivos = []
-        for p in lista:
+    def _avanzar_particulas(self):
+        if self.damaged_timer > 0 and random.random() < 0.5:
+            self._chispas(self.x, self.y, 1, 2.0)
+        if self.phase == 3 and self.death_state is None and random.random() < 0.3:
+            # brasas que se escapan de las grietas
+            gx, gy = random.choice(random.choice(_GRIETAS[3]))
+            x, y = self._celda(gx, gy)
+            self.particles.append({'x': x, 'y': y, 'vx': random.uniform(-0.5, 0.5), 'vy': random.uniform(-1.6, -0.4),
+                                   'life': 20, 'max_life': 20})
+        vivas = []
+        for p in self.particles:
             p['x'] += p['vx']
             p['y'] += p['vy']
             p['life'] -= 1
             if p['life'] > 0:
-                vivos.append(p)
-        return vivos
+                vivas.append(p)
+        self.particles = vivas
 
-    def _update_movement(self):
-        dx = self.target_x - self.x
-        dy = self.target_y - self.y
-        dist = math.sqrt(dx * dx + dy * dy)
-        if dist < 10:
-            self.move_timer += 1
-            if self.move_timer >= self.move_cooldown:
-                self.move_timer = 0
-                padding = 110
-                self.target_x = random.randint(padding, GAME_WIDTH - padding)
-                self.target_y = random.randint(60, GAME_HEIGHT // 3)
-        else:
-            self.x += (dx / dist) * self.speed
-            self.y += (dy / dist) * self.speed
-        self.x = max(90, min(GAME_WIDTH - 90, self.x))
-        self.y = max(50, min(GAME_HEIGHT // 3 + 20, self.y))
+    # ------------------------------------------------------------ dibujo
 
-    def _emitir_chispas_daño(self):
-        """Ademas de la grieta ya horneada en el sprite (ver
-        tools/generate_sprites.py _dragon_grieta), cada herida sigue
-        "viva" en tiempo real mientras dura: brasas que saltan hacia
-        arriba con probabilidad proporcional a la severidad actual (ver
-        sprites.DRAGON_DAÑOS_FRAC), reutilizando self.chispas -mismo
-        aspecto que las chispas de las transformaciones."""
-        ancho, alto = sprites.DRAGON_ROBOT_DISPLAY_W, sprites.DRAGON_ROBOT_DISPLAY_H
-        for fx, fy, inicio, fin in sprites.DRAGON_DAÑOS_FRAC:
-            severidad = max(0.0, min(1.0, (self.apertura - inicio) / (fin - inicio)))
-            if severidad <= 0 or random.random() >= severidad * 0.4:
-                continue
-            px = self.x + (fx - 0.5) * ancho
-            py = self.y + (fy - 0.5) * alto
-            self.chispas.append({
-                'x': px + random.uniform(-4, 4),
-                'y': py + random.uniform(-4, 4),
-                'vx': random.uniform(-0.6, 0.6),
-                'vy': random.uniform(-1.7, -0.4),
-                'life': random.randint(14, 26),
-                'max_life': 26,
-            })
+    def _color_alas(self):
+        return COLORES_FASE[self.phase][1]
 
-    # ------------------------------------------------------------ ataques
+    def _sprite(self, cuadro):
+        cuerpo, alas = COLORES_FASE[self.phase]
+        kind = ("dragon_a", "dragon_b")[cuadro]
+        w, h = sprites.tamano_pixel("boss", kind, self.ESCALA)
+        return sprites.get_boss_surface(cuerpo, alas, w, h, kind=kind)
 
-    def _crear_ataque(self, ship):
-        if self.phase == 1:
-            return self._ataque_acecho(ship)
-        if self.phase == 2:
-            return self._ataque_envite()
-        return self._ataque_furia()
+    def _celda(self, gx, gy):
+        """Centro en pantalla de una celda de la grilla del arte."""
+        w, h = sprites.tamano_pixel("boss", "dragon_a", self.ESCALA)
+        return (self.x + (gx + 3.5) * self.ESCALA - w / 2, self.y + (gy + 3.5) * self.ESCALA - h / 2)
 
-    def _ataque_acecho(self, ship):
-        """Modo Acecho: dardos de fuego dirigidos y rapidos, tres a la
-        vez en abanico angosto."""
-        bullets = []
-        if ship is None:
-            return bullets
-        angle_base = math.atan2(ship.y - self.y, ship.x - self.x)
-        for i in range(3):
-            angle = angle_base + (i - 1) * 0.1
-            speed = 5.5
-            bullets.append(WaveBossBullet(self.x, self.y, math.cos(angle) * speed, math.sin(angle) * speed, _FUEGO_NARANJA, 4))
-        return bullets
+    def _dibujar_grietas(self, screen, ox, oy):
+        grietas = _GRIETAS.get(self.phase if self.death_state is None else 3, [])
+        brillo = FUEGO_AMARILLO if (self.t // 4) % 3 else FUEGO_ROJO
+        for linea in grietas:
+            for (x0, y0), (x1, y1) in zip(linea, linea[1:]):
+                pasos = max(abs(x1 - x0), abs(y1 - y0))
+                for k in range(pasos + 1):
+                    gx = round(x0 + (x1 - x0) * k / max(1, pasos))
+                    gy = round(y0 + (y1 - y0) * k / max(1, pasos))
+                    x, y = self._celda(gx, gy)
+                    screen.fill(brillo, (int(x) - 1 + ox, int(y) - 1 + oy, self.ESCALA, self.ESCALA))
+            x, y = self._celda(*linea[len(linea) // 2])
+            pixelfx.dibujar_halo(screen, FUEGO_NARANJA, x + ox, y + oy, 7)
 
-    def _ataque_envite(self):
-        """Modo Envite: cono de fuego frontal denso mas dos zarpazos
-        incendiarios a los costados (ya con heridas visibles a esta
-        altura del daño)."""
-        bullets = []
-        for i in range(-3, 4):
-            angle = math.pi / 2 + i * 0.16
-            bullets.append(WaveBossBullet(self.x, self.y + 10, math.cos(angle) * 4.2, math.sin(angle) * 4.2, _FUEGO_AMARILLO))
-        for signo in (-1, 1):
-            bullets.append(WaveBossBullet(self.x, self.y + signo * 30, signo * 1.5, 4.5, _FUEGO_ROJO, 5))
-        return bullets
-
-    def _ataque_furia(self):
-        """Modo Furia: barrida circular pesada de fuego."""
-        bullets = []
-        count = 14
-        base = self.rotation * 0.05
-        for i in range(count):
-            angle = base + (2 * math.pi * i) / count
-            speed = 3.4
-            bullets.append(WaveBossBullet(self.x, self.y, math.cos(angle) * speed, math.sin(angle) * speed, _FUEGO_ROJO, 6))
-        return bullets
-
-    def _iniciar_rayo(self):
-        self.rayo_state = "aviso"
-        self.rayo_timer = 65
-        self.rayo_angulo = math.atan2(self._ship_y - self.y, self._ship_x - self.x)
-        self.rayo_cooldown = random.randint(320, 400) / self._dificultad
-
-    def _actualizar_rayo(self):
-        self.rayo_timer -= 1
-        if self.rayo_state == "aviso":
-            # sigue apuntando mientras carga en la garganta, con suavizado
-            objetivo = math.atan2(self._ship_y - self.y, self._ship_x - self.x)
-            diff = (objetivo - self.rayo_angulo + math.pi) % (2 * math.pi) - math.pi
-            self.rayo_angulo += diff * 0.08
-            if self.rayo_timer <= 0:
-                self.rayo_state = "disparo"
-                self.rayo_timer = 22
-            return []
-        bullets = []
-        vx = math.cos(self.rayo_angulo) * 9.0
-        vy = math.sin(self.rayo_angulo) * 9.0
-        bullets.append(WaveBossBullet(self.x, self.y, vx, vy, (255, 120, 60), 9))
-        if self.rayo_timer <= 0:
-            self.rayo_state = None
-        return bullets
-
-    # ---------------------------------------------------------------- draw
+    def _dibujar_aviso(self, screen, cx, cy):
+        if self.accion is None:
+            return
+        prog = 1 - self.carga / self.carga_total
+        if self.accion in ("dardos", "cono", "aliento"):
+            pixelfx.carga(screen, FUEGO_NARANJA, cx + self.BOCA[0], cy + self.BOCA[1], prog, self.t, 16)
+        elif self.accion == "garras":
+            for gx, gy in self.GARRAS:
+                pixelfx.carga(screen, FUEGO_AMARILLO, cx + gx, cy + gy, prog, self.t, 12)
+        elif self.accion == "vendaval":
+            for px, py in self.PUNTAS_ALA:
+                pixelfx.carga(screen, pixelfx.aclarar(self._color_alas(), 0.4), cx + px, cy + py, prog, self.t, 14)
+        elif self.accion == "anillo":
+            pixelfx.carga(screen, FUEGO_ROJO, cx, cy + 20, prog, self.t, 24)
+        if self.accion == "aliento":
+            # linea punteada hacia donde va a escupir (fija = roja)
+            fijo = self.carga <= 16
+            color = (255, 70, 90) if fijo else FUEGO_AMARILLO
+            bx, by = cx + self.BOCA[0], cy + self.BOCA[1]
+            for k in range(4, 70):
+                if (k + self.t // 2) % 4 < 2:
+                    continue
+                x = bx + math.cos(self.angulo_aliento) * k * 10
+                y = by + math.sin(self.angulo_aliento) * k * 10
+                if not (0 <= x < screen.get_width() and 0 <= y < screen.get_height()):
+                    break
+                screen.fill(color, (int(x) - 2, int(y) - 2, 4, 4))
 
     def draw(self, screen, offset_x=0, offset_y=0):
-        if self.death_state == "explotando":
-            self._dibujar_explosion(screen, offset_x, offset_y)
-            return
-
-        temblor_y = 0
-        if self.death_state == "riendo":
-            # el ultimo gesto desafiante: un rebote vertical ritmico, no
-            # un temblor al azar.
-            temblor_y = int(6 * math.sin(self.risa_fase * 0.9))
-
-        cx = int(self.x) + offset_x
-        cy = int(self.y) + offset_y + temblor_y
-
-        sombra_surf = pygame.Surface((200, 40), pygame.SRCALPHA)
-        pygame.draw.ellipse(sombra_surf, (0, 0, 0, 55), (0, 0, 200, 40))
-        screen.blit(sombra_surf, (cx - 100, cy + 90))
-
-        color = TINTES_POR_FASE.get(self.phase, TINTES_POR_FASE[1])
-        ancho = sprites.DRAGON_ROBOT_DISPLAY_W
-        alto = sprites.DRAGON_ROBOT_DISPLAY_H
-        sprite = sprites.get_dragon_robot_surface(self.apertura, color, ancho, alto)
-
-        if sprite is not None:
-            rect = sprite.get_rect(center=(cx, cy))
-            screen.blit(sprite, rect)
-            manto_top = rect.top
-            manto_cx = rect.centerx
-            ojo_izq_x = rect.left + ancho * sprites.DRAGON_OJO_IZQ_X_FRAC
-            ojo_der_x = rect.left + ancho * sprites.DRAGON_OJO_DER_X_FRAC
-            ojo_y = rect.top + alto * sprites.DRAGON_OJO_CY_FRAC
-            ojo_r = ancho * sprites.DRAGON_OJO_R_FRAC
-            self._dibujar_daños_dinamicos(screen, rect, ancho, alto)
-            self._dibujar_garganta(screen, rect, ancho, alto)
-        else:
-            # Sin PNG no se dibuja un casco de respaldo por codigo: solo
-            # quedan los "detalles" (ojos, barra de vida, chispas, particulas).
-            manto_top = cy - 90
-            manto_cx = cx
-            ojo_izq_x, ojo_der_x, ojo_y, ojo_r = cx - 26, cx + 26, cy - 40, 12
-
-        self._dibujar_ojos(screen, ojo_izq_x, ojo_der_x, ojo_y, ojo_r)
-
-        if self.rayo_state is not None:
-            self._dibujar_rayo(screen, cx, cy, offset_x, offset_y)
-
-        if self.death_state != "riendo":
-            barra_w = 150
-            barra_h = 13
-            barra_x = manto_cx - barra_w // 2
-            barra_y = manto_top - 24
-
-            temblor_x = temblor_y2 = 0
-            if self.health_shake > 0:
-                temblor_x = random.randint(-self.health_shake, self.health_shake)
-                temblor_y2 = random.randint(-self.health_shake, self.health_shake)
-                self.health_shake -= 1
-
-            bx, by = barra_x + temblor_x, barra_y + temblor_y2
-            sombra_barra = pygame.Surface((barra_w + 6, barra_h + 6), pygame.SRCALPHA)
-            pygame.draw.rect(sombra_barra, (0, 0, 0, 60), (3, 3, barra_w, barra_h), border_radius=barra_h // 2)
-            screen.blit(sombra_barra, (bx - 3, by - 3))
-
-            fondo = (bx, by, barra_w, barra_h)
-            pygame.draw.rect(screen, (20, 20, 35), fondo, border_radius=barra_h // 2)
-            proporcion = max(0, self.hp / self.max_hp)
-            relleno = int((barra_w - 2) * self.health_deplete_anim)
-            if relleno > 0:
-                color_vida = ROSA if proporcion > 0.66 else (AMARILLO if proporcion > 0.33 else _FUEGO_ROJO)
-                pygame.draw.rect(screen, color_vida, (bx + 1, by + 1, relleno, barra_h - 2), border_radius=barra_h // 2)
-            pygame.draw.rect(screen, WHITE, fondo, width=1, border_radius=barra_h // 2)
-
-            etiqueta = f"{self.name} · {NOMBRE_MODO.get(self.phase, '')}"
-            etiqueta_surf = render_text(etiqueta, 11, WHITE)
-            screen.blit(etiqueta_surf, (manto_cx - etiqueta_surf.get_width() // 2, by - 18))
-            porcentaje_surf = render_text(f"{int(proporcion * 100)}%", 10, WHITE)
-            screen.blit(porcentaje_surf, (manto_cx - porcentaje_surf.get_width() // 2, by - 32))
-
-        if self.phase_transition:
-            alfa = int(150 * (0.5 + 0.5 * math.sin(self.phase_timer * 0.4)))
-            destello = pygame.Surface((ancho + 60, alto + 60), pygame.SRCALPHA)
-            pygame.draw.ellipse(destello, (255, 255, 255, alfa), (0, 0, ancho + 60, alto + 60), 6)
-            screen.blit(destello, (cx - (ancho + 60) // 2, cy - (alto + 60) // 2))
-            aviso_surf = render_text("TRANSFORMANDO...", 13, (255, 255, 255))
-            screen.blit(aviso_surf, (cx - aviso_surf.get_width() // 2, manto_top - 52))
-
-        if self.damaged_timer > 0:
-            alfa_impacto = int(140 * (self.damaged_timer / 10))
-            impacto_surf = pygame.Surface((90, 90), pygame.SRCALPHA)
-            pygame.draw.circle(impacto_surf, (255, 130, 150, alfa_impacto), (45, 45), 45)
-            screen.blit(impacto_surf, (cx - 45, cy - 20))
-
-        for p in self.particles:
-            alpha = p['life'] / p['max_life']
-            size = max(1, int(p['radius'] * alpha))
-            c = (int(200 * alpha), int(180 * alpha), int(255 * alpha))
-            pygame.draw.circle(screen, c, (int(p['x']) + offset_x, int(p['y']) + offset_y), size)
-
-        for p in self.chispas:
-            alpha = p['life'] / p['max_life']
-            size = max(1, int(3 * alpha))
-            c = (255, int(220 * alpha), int(120 * alpha))
-            pygame.draw.circle(screen, c, (int(p['x']) + offset_x, int(p['y']) + offset_y), size)
-
-    def _dibujar_ojos(self, screen, ojo_izq_x, ojo_der_x, ojo_y, ojo_r):
-        for ojo_x in (ojo_izq_x, ojo_der_x):
-            self._dibujar_ojo(screen, ojo_x, ojo_y, ojo_r)
-
-    def _dibujar_ojo(self, screen, ojo_x, ojo_y, ojo_r):
-        """La pupila es 100% dinamica (la cuenca vacia ya viene horneada
-        en el sprite, ver DRAGON_OJO_* en tools/generate_sprites.py): se
-        desplaza cada frame hacia la nave, clampeada dentro de la cuenca,
-        para que ambos ojos la sigan con la mirada en tiempo real (mismo
-        truco que TitanBoss/FinalBoss, duplicado). En el ultimo gesto
-        desafiante antes de morir (death_state) el pulso se vuelve mucho
-        mas rapido y blanco, estroboscopico."""
-        zocalo_r = ojo_r * 0.72
-        dx, dy = self._ship_x - ojo_x, self._ship_y - ojo_y
-        dist = math.hypot(dx, dy) or 1.0
-        alcance = zocalo_r * 0.5
-        despl_x = dx / dist * min(alcance, dist * 0.06)
-        despl_y = dy / dist * min(alcance, dist * 0.06)
-        px, py = ojo_x + despl_x, ojo_y + despl_y
-
-        if self.death_state == "riendo":
-            pulse = 0.5 + 0.5 * math.sin(self.risa_fase * 0.9)
-            color = (255, int(60 + 150 * pulse), int(50 + 120 * pulse))
-            intensidad = int(120 + 110 * pulse)
-        else:
-            pulse = 0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.004)
-            color = (255, int(190 + 35 * pulse), int(60 + 25 * pulse))
-            intensidad = int(90 + 50 * pulse)
-
-        glow = pygame.Surface((int(zocalo_r * 3), int(zocalo_r * 3)), pygame.SRCALPHA)
-        pygame.draw.circle(glow, (*color, intensidad), (glow.get_width() // 2, glow.get_height() // 2), int(zocalo_r * 1.3))
-        screen.blit(glow, (px - glow.get_width() // 2, py - glow.get_height() // 2))
-        pygame.draw.circle(screen, color, (int(px), int(py)), max(2, int(zocalo_r * 0.62)))
-        pygame.draw.circle(screen, (255, 245, 225), (int(px), int(py)), max(2, int(zocalo_r * 0.28)))
-        pygame.draw.circle(screen, WHITE, (int(px - zocalo_r * 0.14), int(py - zocalo_r * 0.14)), max(1, int(zocalo_r * 0.14)))
-
-    def _dibujar_daños_dinamicos(self, screen, rect, ancho, alto):
-        """La grieta en si ya viene horneada en el sprite (ver
-        _dragon_grieta en tools/generate_sprites.py), pero el fuego que
-        sale de ella es 100% en tiempo real: un resplandor que titila con
-        una fase propia por punto (no todas parpadean sincronizadas, se
-        ve mas organico) superpuesto encima de cada herida segun su
-        severidad actual."""
-        t = pygame.time.get_ticks()
-        for fx, fy, inicio, fin in sprites.DRAGON_DAÑOS_FRAC:
-            severidad = max(0.0, min(1.0, (self.apertura - inicio) / (fin - inicio)))
-            if severidad <= 0:
-                continue
-            px = rect.left + fx * ancho
-            py = rect.top + fy * alto
-            titileo = 0.5 + 0.5 * math.sin(t * 0.02 + fx * 37.0 + fy * 19.0)
-            r = (9 + 15 * severidad) * (0.7 + 0.3 * titileo)
-            alpha = int(100 * severidad * (0.55 + 0.45 * titileo))
-            glow = pygame.Surface((int(r * 2.6), int(r * 2.6)), pygame.SRCALPHA)
-            pygame.draw.circle(glow, (255, 130, 60, alpha), (glow.get_width() // 2, glow.get_height() // 2), int(r))
-            screen.blit(glow, (px - glow.get_width() // 2, py - glow.get_height() // 2))
-
-    def _dibujar_garganta(self, screen, rect, ancho, alto):
-        """Resplandor de la garganta -100% en tiempo real, nada horneado
-        en el PNG-: un brillo tenue en reposo (como brasas siempre
-        encendidas adentro), que se intensifica mientras carga el aliento
-        de fuego (rayo_state == "aviso") y estalla brillante en el
-        instante del disparo, en vez de una luz de nave parpadeando sola
-        sin motivo."""
-        px = rect.left + ancho * sprites.DRAGON_GARGANTA_X_FRAC
-        py = rect.top + alto * sprites.DRAGON_GARGANTA_Y_FRAC
-        t = pygame.time.get_ticks()
-        if self.rayo_state == "aviso":
-            carga = 1.0 - max(0.0, self.rayo_timer / 65.0)
-            pulse = 0.5 + 0.5 * math.sin(t * 0.04)
-            r = 10 + 22 * carga * (0.8 + 0.2 * pulse)
-            alpha = int(120 + 120 * carga)
-        elif self.rayo_state == "disparo":
-            r = 30
-            alpha = 220
-        else:
-            pulse = 0.5 + 0.5 * math.sin(t * 0.01)
-            r = 8 + 2 * pulse
-            alpha = int(70 + 30 * pulse)
-        glow = pygame.Surface((int(r * 3), int(r * 3)), pygame.SRCALPHA)
-        pygame.draw.circle(glow, (255, 160, 60, alpha), (glow.get_width() // 2, glow.get_height() // 2), int(r))
-        screen.blit(glow, (px - glow.get_width() // 2, py - glow.get_height() // 2))
-
-    def _dibujar_explosion(self, screen, offset_x, offset_y):
         cx = int(self.x) + offset_x
         cy = int(self.y) + offset_y
-        for p in self.frag_pieces:
-            dx = p['base_x'] + p['dir_x'] * p['off']
-            dy = p['base_y'] + p['dir_y'] * p['off']
-            rotada = pygame.transform.rotate(p['surf'], p['ang'])
-            t = max(0.0, min(1.0, self.frag_timer / self._frag_dur))
-            rotada.set_alpha(max(0, int(255 * min(1.0, t * 1.6))))
-            rect = rotada.get_rect(center=(int(cx + dx), int(cy + dy)))
-            screen.blit(rotada, rect)
+
+        e = self.especial
+        if e is not None and e["fase"] == "marca":
+            pixelfx.columna_aviso(screen, int(e["x"]) + offset_x, 90, (255, 70, 90), self.t)
+
+        if self.death_state == "explotando":
+            for p in self.frag_pieces:
+                surf = pygame.transform.rotate(p['surf'], p['ang'])
+                k = max(0.0, self.frag_timer / 70)
+                surf.set_alpha(int(255 * k))
+                x = cx + p['bx'] + p['dx'] * p['off']
+                y = cy + p['by'] + p['dy'] * p['off']
+                screen.blit(surf, surf.get_rect(center=(int(x), int(y))))
+        else:
+            if self.death_state == "rugiendo":
+                cx += random.randint(-4, 4)
+                cy += random.randint(-3, 3)
+            ritmo = 7 if self.phase == 3 else 10
+            sprite = self._sprite((self.t // ritmo) % 2)
+            rect = sprite.get_rect(center=(cx, cy))
+            if self.enter_timer > 0:
+                copia = sprite.copy()
+                copia.set_alpha(int(255 * (1 - self.enter_timer / 90)))
+                screen.blit(copia, rect)
+            else:
+                screen.blit(sprite, rect)
+                self._dibujar_grietas(screen, cx - int(self.x), cy - int(self.y))
+                destello = self.damaged_timer > 3 or (self.phase_transition and (self.phase_timer // 4) % 2 == 0) \
+                    or (self.death_state == "rugiendo" and (self.death_timer // 3) % 2 == 0)
+                if destello:
+                    blanco = pixelfx.silueta_blanca(sprite)
+                    blanco.set_alpha(170)
+                    screen.blit(blanco, rect)
+                # ojos encendidos
+                ojo = (255, 255, 255) if self.death_state else (255, 90, 110)
+                for ox, oy in self.OJOS:
+                    pixelfx.dibujar_halo(screen, ojo, cx + ox, cy + oy, 6)
+                # brasa en la boca
+                pixelfx.dibujar_halo(screen, FUEGO_NARANJA, cx + self.BOCA[0], cy + self.BOCA[1], 7 + (self.t // 5) % 3 * 2)
+                if self.death_state is None:
+                    self._dibujar_aviso(screen, cx, cy)
 
         for p in self.particles:
-            alpha = p['life'] / p['max_life']
-            size = max(1, int(p['radius'] * alpha))
-            c = (int(255 * alpha), int(160 * alpha), int(60 * alpha))
-            pygame.draw.circle(screen, c, (int(p['x']) + offset_x, int(p['y']) + offset_y), size)
+            k = p['life'] / p['max_life']
+            c = (255, int(120 + 120 * k), int(60 * k))
+            lado = 4 if k > 0.5 else 2
+            screen.fill(c, (int(p['x']) + offset_x, int(p['y']) + offset_y, lado, lado))
 
-        for p in self.chispas:
-            alpha = p['life'] / p['max_life']
-            size = max(1, int(3 * alpha))
-            c = (255, int(200 * alpha), int(90 * alpha))
-            pygame.draw.circle(screen, c, (int(p['x']) + offset_x, int(p['y']) + offset_y), size)
-
-    def _dibujar_rayo(self, screen, cx, cy, offset_x, offset_y):
-        # Linea de mira/chorro de fuego dibujada directo sobre screen (sin
-        # alpha, para no crear una superficie del tamaño de la pantalla
-        # cada frame): alcanza y sobra con que la linea llegue bien afuera
-        # del viewport.
-        largo = math.hypot(GAME_WIDTH, GAME_HEIGHT) + 100
-        x1 = cx + math.cos(self.rayo_angulo) * largo
-        y1 = cy + math.sin(self.rayo_angulo) * largo
-        if self.rayo_state == "aviso":
-            pulse = 0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.03)
-            color = tuple(int(c * (0.5 + 0.5 * pulse)) for c in (255, 110, 60))
-            pygame.draw.line(screen, color, (cx, cy), (x1, y1), 2)
-            pygame.draw.circle(screen, (255, 140, 80), (cx, cy), int(8 + 6 * pulse), 2)
-        elif self.rayo_state == "disparo":
-            pygame.draw.line(screen, (255, 170, 80), (cx, cy), (x1, y1), 20)
-            pygame.draw.line(screen, (255, 235, 200), (cx, cy), (x1, y1), 7)
+        if self.enter_timer <= 0 and self.death_state is None and (e is None or e["fase"] == "vuelve"):
+            temblor = (0, 0)
+            if self.health_shake > 0:
+                temblor = (random.randint(-self.health_shake, self.health_shake), 0)
+                self.health_shake -= 1
+            ratio = max(0.0, self.hp / self.max_hp)
+            color = COLORES_FASE[self.phase][0]
+            y_barra = max(14, cy - 100)
+            pixelfx.barra_jefe(screen, cx, y_barra, 156, ratio, self.health_deplete_anim, color, temblor)
+            etiqueta = render_text(f"{self.name}  {NOMBRE_MODO[self.phase]}", 11, WHITE if self.phase < 3 else AMARILLO)
+            screen.blit(etiqueta, (cx - etiqueta.get_width() // 2, y_barra - 18))

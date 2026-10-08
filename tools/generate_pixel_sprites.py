@@ -24,7 +24,7 @@ import math
 import os
 
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_DIR = os.path.join(ROOT, "assets", "sprites")
@@ -44,6 +44,7 @@ GLOW_BLUR = 5.0
 #   G       luz de navegacion (verde a la izquierda, roja en el espejo)
 #   x u     sombra mas oscura del casco / del ala
 #   A a Y   piloto alien: piel clara / oscura / brillo de los ojos
+#   K       hueso: cuernos y garras
 
 BODY = {"B": 235, "b": 172, "d": 112, "x": 70}
 WING = {"W": 200, "w": 140, "v": 88, "u": 55}
@@ -60,6 +61,7 @@ DETAIL = {
     "A": (120, 240, 130, 255),
     "a": (40, 150, 80, 255),
     "Y": (255, 255, 255, 255),
+    "K": (236, 226, 204, 255),
 }
 GLOW = {"N": 1.0, "E": 1.0, "G": 0.8, "R": 0.8, "C": 0.35, "h": 0.35}
 
@@ -613,7 +615,110 @@ def centinela():
     return ["".join(f) for f in g]
 
 
-JEFES = {"centinela": centinela()}
+
+DRAGON_W, DRAGON_H = 72, 56
+_CH = ".oBbdxWwvuNCchEeGRAaYK"
+
+
+def _contorno(filas):
+    """Agrega contorno oscuro alrededor de todo lo dibujado."""
+    H, W = len(filas), len(filas[0])
+    g = [list(f) for f in filas]
+    for y in range(H):
+        for x in range(W):
+            if filas[y][x] != ".":
+                continue
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                xx, yy = x + dx, y + dy
+                if 0 <= xx < W and 0 <= yy < H and filas[yy][xx] not in ".o":
+                    g[y][x] = "o"
+                    break
+    return ["".join(f) for f in g]
+
+
+def _espejar(img):
+    """Mitad izquierda dibujada -> mapa completo simetrico."""
+    W, H = img.size
+    px = img.load()
+    filas = []
+    for y in range(H):
+        izq = "".join(_CH[px[x, y]] for x in range(W // 2))
+        filas.append(izq + izq[::-1])
+    return filas
+
+
+def dragon(alas=0):
+    """Dragon espacial visto desde arriba, bajando hacia la nave: cabeza
+    abajo con las fauces abiertas, alas de murcielago abiertas y la cola
+    hacia arriba. alas=0 alas arriba, 1 alas abajo (aleteo)."""
+    img = Image.new("L", (DRAGON_W, DRAGON_H), 0)
+    d = ImageDraw.Draw(img)
+    c = DRAGON_W // 2          # las figuras se dibujan a la izquierda de c
+
+    def P(pts, ch):
+        d.polygon(pts, fill=_CH.index(ch))
+
+    def L(pts, ch, ancho=1):
+        d.line(pts, fill=_CH.index(ch), width=ancho)
+
+    def E(caja, ch):
+        d.ellipse(caja, fill=_CH.index(ch))
+
+    # cola: sube hasta una punta de flecha, con pinchos neon en el lomo
+    P([(c - 3, 24), (c - 2, 9), (c, 9), (c, 24)], "d")
+    L([(c - 1, 22), (c - 1, 10)], "b")
+    for y in (12, 16, 20):
+        P([(c - 3, y), (c - 6, y + 1), (c - 3, y + 2)], "N")
+    P([(c - 6, 9), (c - 1, 0), (c, 0), (c, 10)], "b")
+    L([(c - 5, 8), (c - 1, 1)], "N")
+    # alas: brazo del ala, tres dedos y membrana
+    dy = 0 if alas == 0 else 7
+    hombro = (c - 7, 25)
+    codo = (c - 19, 13 + dy // 2)
+    puntas = [(1, 6 + dy * 2), (2, 23 + dy), (9, 35 + dy // 2)]
+    raiz = (c - 9, 34)
+    tonos = ("w", "v", "w")
+    for i, p in enumerate(puntas):
+        sig = puntas[i + 1] if i + 1 < len(puntas) else raiz
+        mx, my = (p[0] + sig[0]) // 2, (p[1] + sig[1]) // 2
+        P([codo, p, (mx + 2, my - 1), sig], tonos[i])
+    P([hombro, codo, raiz], "w")
+    for p in puntas:
+        L([codo, p], "N")
+    L([hombro, codo], "W", 2)
+    P([(codo[0] - 1, codo[1]), (codo[0] - 3, codo[1] - 4), (codo[0] + 1, codo[1] - 1)], "K")
+    # cuerpo y pecho
+    E([c - 10, 18, c + 9, 42], "d")
+    E([c - 9, 19, c + 6, 39], "b")
+    E([c - 7, 20, c + 2, 33], "B")
+    for y in (27, 30, 33, 36):
+        L([(c - 3, y), (c - 1, y)], "N")
+    # patas con garras a los costados
+    P([(c - 9, 34), (c - 15, 39), (c - 14, 42), (c - 8, 38)], "d")
+    for k in range(3):
+        d.point((c - 16 + k, 43 - (k == 1)), fill=_CH.index("K"))
+    # cuello
+    P([(c - 5, 38), (c - 4, 43), (c, 43), (c, 38)], "b")
+    # cuernos largos hacia atras
+    P([(c - 6, 42), (c - 13, 35), (c - 15, 30), (c - 11, 34), (c - 4, 39)], "K")
+    L([(c - 14, 32), (c - 15, 30)], "h")
+    P([(c - 8, 45), (c - 12, 44), (c - 8, 47)], "K")
+    # cabeza con hocico largo hacia abajo
+    E([c - 9, 40, c + 8, 51], "B")
+    P([(c - 7, 47), (c - 4, 54), (c, 55), (c, 46)], "b")
+    E([c - 7, 41, c - 2, 45], "B")
+    L([(c - 1, 41), (c - 1, 44)], "N")
+    # fauces abiertas con fuego adentro
+    E([c - 3, 49, c + 2, 55], "o")
+    E([c - 2, 50, c + 1, 54], "E")
+    d.point((c - 2, 49), fill=_CH.index("K"))
+    d.point((c - 3, 51), fill=_CH.index("K"))
+    # ojo
+    P([(c - 8, 45), (c - 4, 46), (c - 5, 47), (c - 8, 46)], "R")
+    return _contorno(_espejar(img))
+
+
+JEFES = {"centinela": centinela(), "dragon_a": dragon(0), "dragon_b": dragon(1)}
 
 
 def parse(mapa):
