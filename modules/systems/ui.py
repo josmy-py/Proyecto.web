@@ -7,10 +7,9 @@ estadisticas."""
 
 import pygame
 import math
-import random
 from modules.constants import (
     WHITE, ROSA, MENTA, AMARILLO, AZUL, AZUL_CIELO, MELON, LAVANDA, ROSA_CHICLE,
-    GAME_WIDTH, GAME_HEIGHT, GLASS_WHITE, GLASS_BLACK, SHADOW,
+    GAME_WIDTH, GAME_HEIGHT, SHADOW,
 )
 from modules.systems.fonts import get_font, render_text, render_texto_pixelado
 from modules.systems import neon, pixelfx
@@ -57,244 +56,152 @@ class AnimatedValue:
         return self.current
 
 
-class HealthBar:
-    """Barra de vidas del HUD (no confundir con la de los jefes, que vive
-    en boss.py/boss_system.py). set_hp() dispara particulas de impacto y
-    sacudida cuando la vida baja."""
+# jefe que espera al final de cada tramo de oleadas -> sprite pixel para la
+# silueta del contador (ver generate_pixel_sprites.py)
+_SILUETA_JEFE = {
+    "sentinel": "centinela",
+    "dragon": "dragon_a",
+    "titan": "titan_px",
+    "anomalia": "anomalia_px",
+    "mega": "coloso_crucero",
+}
 
-    def __init__(self, x, y, width, height, max_hp):
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
-        self.max_hp = max_hp
-        self.current_hp = max_hp
-        self.display_hp = float(max_hp)
-        self.animated_hp = AnimatedValue(max_hp, speed=0.12)
-        self.particles = []
-        self.shake_timer = 0
-        self.shake_intensity = 0
-        self.glow_phase = 0
-        self.fill_phase = 0
-        self.last_hp = max_hp
 
-    def set_hp(self, hp):
-        if hp < self.last_hp:
-            damage = self.last_hp - hp
-            for _ in range(int(damage * 0.5)):
-                self.particles.append({
-                    'x': random.uniform(self.x, self.x + self.width),
-                    'y': self.y + self.height // 2,
-                    'vx': random.uniform(-2, 2),
-                    'vy': random.uniform(-1.5, -0.5),
-                    'life': random.randint(15, 30),
-                    'max_life': 30,
-                    'size': random.randint(2, 4),
-                    'color': (255, random.randint(150, 220), random.randint(150, 200)),
-                })
-            self.shake_timer = 12
-            self.shake_intensity = 4
-        self.current_hp = max(0, min(self.max_hp, hp))
-        self.last_hp = self.current_hp
+def _jefes_por_oleada():
+    from modules.core.boss_system import BOSS_DEFINITIONS
+    from modules.constants import MEGA_BOSS_SPAWN_WAVE
+    jefes = [(d.spawn_wave, d.boss_id) for d in BOSS_DEFINITIONS]
+    jefes.append((MEGA_BOSS_SPAWN_WAVE, "mega"))
+    return sorted(jefes)
 
-    def update(self):
-        self.animated_hp.set(self.current_hp)
-        self.animated_hp.update()
-        self.display_hp = self.animated_hp.get()
-        self.glow_phase += 0.08
-        self.fill_phase += 0.05
 
-        if self.shake_timer > 0:
-            self.shake_timer -= 1
-            self.shake_intensity *= 0.85
+def _silueta_jefe(boss_id, color, alto=26):
+    """Silueta de un color del jefe (todas sus capas juntas), a `alto` px."""
+    clave = ("silueta_hud", boss_id, color, alto)
+    s = pixelfx._cache.get(clave)
+    if s is not None:
+        return s
+    from modules.systems import sprites
+    kind = _SILUETA_JEFE.get(boss_id)
+    capas = [sprites.load_raw("boss", f"{kind}_{capa}.png") for capa in ("wing", "body", "detail")]
+    capas = [c for c in capas if c is not None]
+    if not capas:
+        return None
+    base = pygame.Surface(capas[0].get_size(), pygame.SRCALPHA)
+    for c in capas:
+        base.blit(c, (0, 0))
+    mascara = pygame.mask.from_surface(base)
+    plana = mascara.to_surface(setcolor=(*color, 255), unsetcolor=(0, 0, 0, 0))
+    ancho = max(1, round(plana.get_width() * alto / plana.get_height()))
+    s = pygame.transform.scale(plana, (ancho, alto))
+    return pixelfx._guardar(clave, s)
 
-        alive_particles = []
-        for p in self.particles:
-            p['x'] += p['vx']
-            p['y'] += p['vy']
-            p['vy'] += 0.05
-            p['life'] -= 1
-            if p['life'] > 0:
-                alive_particles.append(p)
-        self.particles = alive_particles
 
-    def get_hp_ratio(self):
-        return self.display_hp / self.max_hp if self.max_hp > 0 else 0
-
-    def draw(self, surface):
-        ratio = clamp(self.get_hp_ratio(), 0.0, 1.0)
-        shake_x = 0
-        shake_y = 0
-        if self.shake_timer > 0:
-            shake_x = random.uniform(-self.shake_intensity, self.shake_intensity)
-            shake_y = random.uniform(-self.shake_intensity, self.shake_intensity)
-
-        draw_x = self.x + shake_x
-        draw_y = self.y + shake_y
-
-        shadow_surf = pygame.Surface((self.width + 6, self.height + 6), pygame.SRCALPHA)
-        pygame.draw.rect(shadow_surf, SHADOW, (3, 3, self.width, self.height), border_radius=self.height // 2)
-        surface.blit(shadow_surf, (draw_x, draw_y))
-
-        bg_surf = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
-        bg_color = (35, 35, 55)
-        pygame.draw.rect(bg_surf, bg_color, (0, 0, self.width, self.height), border_radius=self.height // 2)
-        surface.blit(bg_surf, (draw_x, draw_y))
-
-        inner_margin = 3
-        inner_x = draw_x + inner_margin
-        inner_y = draw_y + inner_margin
-        inner_w = self.width - inner_margin * 2
-        inner_h = self.height - inner_margin * 2
-
-        if ratio > 0.001:
-            fill_w = int(inner_w * ratio)
-            if fill_w > 0:
-                fill_surf = pygame.Surface((fill_w, inner_h), pygame.SRCALPHA)
-
-                if ratio > 0.6:
-                    base_color = ROSA
-                elif ratio > 0.3:
-                    base_color = AMARILLO
-                else:
-                    base_color = MELON
-
-                for row in range(inner_h):
-                    t = row / inner_h
-                    alpha = 255
-                    brightness = 1.0 - t * 0.3
-                    r = int(base_color[0] * brightness)
-                    g = int(base_color[1] * brightness)
-                    b = int(base_color[2] * brightness)
-                    pygame.draw.line(fill_surf, (r, g, b, alpha), (0, row), (fill_w - 1, row))
-
-                pygame.draw.rect(fill_surf, GLASS_WHITE, (0, 0, fill_w, inner_h), border_radius=inner_h // 2)
-                surface.blit(fill_surf, (inner_x, inner_y))
-
-                highlight_h = max(1, inner_h // 3)
-                hl_surf = pygame.Surface((fill_w, highlight_h), pygame.SRCALPHA)
-                for row in range(highlight_h):
-                    a = int(50 * (1 - row / highlight_h))
-                    pygame.draw.line(hl_surf, (255, 255, 255, a), (0, row), (fill_w - 1, row))
-                surface.blit(hl_surf, (inner_x, inner_y + 1))
-
-                wave_offset = int(self.fill_phase * 2) % 6 - 3
-                wave_surf = pygame.Surface((fill_w, 3), pygame.SRCALPHA)
-                for col in range(fill_w):
-                    wave_t = math.sin((col + self.fill_phase * 3) * 0.1) * 0.5 + 0.5
-                    a = int(30 * wave_t)
-                    pygame.draw.line(wave_surf, (255, 255, 255, a), (col, 0), (col, 2))
-                surface.blit(wave_surf, (inner_x, inner_y + inner_h - 5 + wave_offset))
-
-        border_rect = (draw_x, draw_y, self.width, self.height)
-        pygame.draw.rect(surface, WHITE, border_rect, width=1, border_radius=self.height // 2)
-
-        if ratio > 0.001:
-            cx = draw_x + self.width // 2
-            cy = draw_y + self.height // 2
-            pct_text = f"{int(ratio * 100)}%"
-            text_surf = render_text(pct_text, max(8, self.height - 2), WHITE)
-            surface.blit(text_surf, (cx - text_surf.get_width() // 2, cy - text_surf.get_height() // 2))
-
-        for p in self.particles:
-            life_ratio = p['life'] / p['max_life']
-            alpha = int(255 * life_ratio)
-            size = max(1, int(p['size'] * life_ratio))
-            c = (p['color'][0], p['color'][1], p['color'][2])
-            pygame.draw.circle(surface, c, (int(p['x']), int(p['y'])), size)
+def _color_rgb(t, desfase=0, sat=75):
+    color = pygame.Color(0)
+    color.hsva = ((t * 2 + desfase) % 360, sat, 100, 100)
+    return (color.r, color.g, color.b)
 
 
 class ModernHUD:
-    """Panel superior izquierdo con puntaje, oleada y la HealthBar. Se crea
-    una sola vez por partida (ver draw_hud, que la guarda como atributo de
-    si misma para no recrearla cada frame)."""
+    """Contador de arriba a la izquierda en estilo neon RGB: puntaje,
+    oleada y una barra de progreso hasta el proximo jefe con su silueta.
+    La vida esta en la barra de CASCO de abajo (draw_ship_status_bar)."""
+
+    ANCHO = 236
+    ALTO = 112
 
     def __init__(self, max_hp):
-        self.max_hp = max_hp
-        self.health_bar = HealthBar(12, 12, 180, 18, max_hp)
         self.score_value = AnimatedValue(0, speed=0.2)
+        self.progreso = AnimatedValue(0, speed=0.08)
         self.wave_value = 1
-        self.lives = 3
-        self.display_lives = AnimatedValue(3, speed=0.3)
-        self.buffs = {}
-        self.hand_active = False
-        self.pulse_phase = 0
-        self.fade_in = 0.0
-        self.score_flash = 0
-        self.lives_pulse = 0
         self.objetivos = 0
         self.objetivos_meta = 1
         self.jefe_activo = False
+        self.t = 0
+        self.jefes = _jefes_por_oleada()
 
     def update(self, score, wave, lives, buffs, hand_active, objetivos=0, objetivos_meta=1, jefe_activo=False):
+        self.t += 1
         self.score_value.set(score)
         self.score_value.update()
         self.wave_value = wave
-        self.lives = lives
-        self.display_lives.set(lives)
-        self.display_lives.update()
-        self.health_bar.set_hp(lives)
-        self.buffs = buffs
-        self.hand_active = hand_active
         self.objetivos = objetivos
         self.objetivos_meta = max(1, objetivos_meta)
         self.jefe_activo = jefe_activo
-        self.pulse_phase += 0.06
-        self.health_bar.update()
-        self.fade_in = min(1.0, self.fade_in + 0.05)
-        if self.score_flash > 0:
-            self.score_flash -= 1
-        if self.lives_pulse > 0:
-            self.lives_pulse -= 1
+        desde, jefe_wave, _ = self._tramo()
+        if jefe_wave is None:
+            meta = 1.0
+        elif jefe_activo or wave >= jefe_wave:
+            meta = 1.0
+        else:
+            hechas = (wave - desde) + min(1.0, objetivos / self.objetivos_meta)
+            meta = hechas / max(1, jefe_wave - desde)
+        self.progreso.set(max(0.0, min(1.0, meta)))
+        self.progreso.update()
+
+    def _tramo(self):
+        """(oleada donde empezo el tramo, oleada del proximo jefe, boss_id)."""
+        anterior = 1
+        for jefe_wave, boss_id in self.jefes:
+            if self.wave_value <= jefe_wave:
+                return anterior, jefe_wave, boss_id
+            anterior = jefe_wave + 1
+        return anterior, None, None
 
     def draw(self, surface):
-        panel_w = 200
-        panel_h = 116
-        panel_x = 8
-        panel_y = 8
+        t = self.t
+        borde = _color_rgb(t)
+        caja = pygame.Rect(10, 10, self.ANCHO, self.ALTO)
+        neon.panel(surface, caja, borde, t, halo=False, alfa=215, brillo_interno=False)
 
-        panel_surf = pygame.Surface((panel_w + 20, panel_h + 20), pygame.SRCALPHA)
-        shadow_surf = pygame.Surface((panel_w + 26, panel_h + 26), pygame.SRCALPHA)
-        pygame.draw.rect(shadow_surf, SHADOW, (5, 5, panel_w + 20, panel_h + 20), border_radius=16)
-        surface.blit(shadow_surf, (panel_x - 3, panel_y - 3))
+        # puntaje: etiqueta con letras de colores y numero con sombra
+        x = caja.x + 14
+        for k, letra in enumerate("SCORE"):
+            l = neon.texto(13, letra, _color_rgb(t, k * 40))
+            surface.blit(l, (x, caja.y + 10))
+            x += l.get_width() + 1
+        oleada = neon.texto(13, f"OLEADA {self.wave_value}", neon.CIAN)
+        surface.blit(oleada, (caja.right - oleada.get_width() - 14, caja.y + 10))
+        valor = neon.texto(26, f"{int(self.score_value.get()):,}".replace(",", "."), WHITE)
+        sombra = neon.texto(26, f"{int(self.score_value.get()):,}".replace(",", "."), neon.CONTORNO)
+        surface.blit(sombra, (caja.x + 16, caja.y + 30))
+        surface.blit(valor, (caja.x + 14, caja.y + 28))
 
-        bg_rect = (0, 0, panel_w + 20, panel_h + 20)
-        pygame.draw.rect(panel_surf, GLASS_BLACK, bg_rect, border_radius=16)
-        bg2 = pygame.Surface((panel_w + 20, panel_h + 20), pygame.SRCALPHA)
-        pygame.draw.rect(bg2, GLASS_WHITE, bg_rect, border_radius=16)
-        panel_surf.blit(bg2, (0, 0))
-        pygame.draw.rect(panel_surf, (255, 255, 255, 30), (1, 1, panel_w + 18, panel_h + 18), width=1, border_radius=16)
-        surface.blit(panel_surf, (panel_x, panel_y))
-
-        score = int(self.score_value.get())
-        score_text = render_text("SCORE", 22, (180, 180, 200))
-        score_val = render_text(f"{score}", 22, WHITE)
-        surface.blit(score_text, (panel_x + 16, panel_y + 16))
-        surface.blit(score_val, (panel_x + 16, panel_y + 36))
-
-        wave_color = AZUL
-        wave_text = render_text(f"WAVE {self.wave_value}", 16, wave_color)
-        surface.blit(wave_text, (panel_x + 16, panel_y + 60))
-
-        objetivos_y = panel_y + 82
-        if self.jefe_activo:
-            jefe_text = render_text("¡JEFE!", 13, ROSA)
-            surface.blit(jefe_text, (panel_x + 16, objetivos_y))
+        # progreso hasta el proximo jefe
+        _, jefe_wave, boss_id = self._tramo()
+        barra = pygame.Rect(caja.x + 14, caja.y + 80, 150, 14)
+        if jefe_wave is None:
+            etiqueta = "FASE BONUS"
+        elif self.jefe_activo:
+            etiqueta = "¡JEFE EN PANTALLA!"
         else:
-            objetivos_text = render_text(f"{self.objetivos}/{self.objetivos_meta}", 13, (200, 200, 220))
-            surface.blit(objetivos_text, (panel_x + 16, objetivos_y))
-            bar_w, bar_h = 168, 6
-            bar_x = panel_x + 16
-            bar_y = objetivos_y + 16
-            pygame.draw.rect(surface, (30, 30, 46), (bar_x, bar_y, bar_w, bar_h), border_radius=bar_h // 2)
-            frac = max(0.0, min(1.0, self.objetivos / self.objetivos_meta))
-            fill_w = int(bar_w * frac)
-            if fill_w > 0:
-                pygame.draw.rect(surface, MENTA, (bar_x, bar_y, fill_w, bar_h), border_radius=bar_h // 2)
+            etiqueta = f"PROXIMO JEFE: OLEADA {jefe_wave}"
+        txt = neon.texto(11, etiqueta, ROSA_CHICLE if self.jefe_activo else (200, 200, 230), bold=False)
+        surface.blit(txt, (barra.x, barra.y - 16))
+        surface.fill(neon.CONTORNO, barra.inflate(6, 6))
+        surface.fill(neon.FONDO, barra.inflate(2, 2))
+        bloques = 12
+        ancho = barra.w / bloques
+        llenos = self.progreso.get() * bloques
+        for k in range(bloques):
+            r = pygame.Rect(int(barra.x + k * ancho) + 1, barra.y + 1, int(ancho) - 2, barra.h - 2)
+            if k < int(llenos) or (k == int(llenos) and llenos - int(llenos) > 0.5):
+                c = _color_rgb(t, -k * 22)
+                surface.fill(c, r)
+                surface.fill(pixelfx.aclarar(c, 0.5), (r.x, r.y, r.w, 3))
+            else:
+                surface.fill((45, 34, 84), r)
 
-        self.health_bar.x = panel_x + 16
-        self.health_bar.y = panel_y + 108
-        self.health_bar.draw(surface)
+        if boss_id is not None:
+            cerca = self.jefe_activo or self.progreso.get() > 0.85
+            color = ROSA_CHICLE if cerca and (t // 10) % 2 == 0 else (150, 140, 200)
+            sil = _silueta_jefe(boss_id, color)
+            if sil is not None:
+                cx, cy = caja.right - 34, barra.centery - 4
+                if cerca:
+                    pixelfx.dibujar_halo(surface, pixelfx.apagar(ROSA_CHICLE, 0.4), cx, cy, 28)
+                surface.blit(sil, sil.get_rect(center=(cx, cy)))
 
 
 def draw_hud(surface, score, wave, lives, buffs, font, small_font, hand_active=False, max_hp=3,
@@ -302,7 +209,6 @@ def draw_hud(surface, score, wave, lives, buffs, font, small_font, hand_active=F
     if not hasattr(draw_hud, 'hud'):
         draw_hud.hud = ModernHUD(max_hp)
     hud = draw_hud.hud
-    hud.health_bar.max_hp = max_hp
     hud.update(score, wave, lives, buffs, hand_active, objetivos, objetivos_meta, jefe_activo)
     hud.draw(surface)
 

@@ -488,19 +488,19 @@ class SeleccionMejora:
 def dibujar_hud_mejoras(surface, estado, t=0):
     """Iconitos de las mejoras tomadas abajo a la izquierda del area de juego,
     con el nivel al lado cuando es mayor a 1."""
-    x = 12
-    y = GAME_HEIGHT - 48
+    x = 10
+    y = GAME_HEIGHT - 30
     for mid, nivel in estado.niveles.items():
         if mid == "reparar" or nivel <= 0:
             continue
         color = MEJORAS[mid][4]
-        ico = icono(mid, 3)
-        caja = pygame.Rect(x - 4, y - 4, ico.get_width() + 8, ico.get_height() + 8)
+        ico = icono(mid, 2)
+        caja = pygame.Rect(x - 3, y - 3, ico.get_width() + 6, ico.get_height() + 6)
         surface.fill(CONTORNO, caja.inflate(4, 4))
         surface.fill(FONDO_CARTA, caja)
         neon.marco_pixel(surface, caja, pixelfx.apagar(color, 0.7), 2)
         surface.blit(ico, (x, y))
         if nivel > 1:
-            n = render_text(f"x{nivel}", 12, pixelfx.aclarar(color, 0.4), bold=True)
-            surface.blit(n, (caja.right - n.get_width() + 4, caja.bottom - n.get_height() + 6))
-        x += caja.w + 10
+            n = render_text(f"{nivel}", 10, pixelfx.aclarar(color, 0.4), bold=True)
+            surface.blit(n, (caja.right - n.get_width() + 3, caja.bottom - n.get_height() + 5))
+        x += caja.w + 7
