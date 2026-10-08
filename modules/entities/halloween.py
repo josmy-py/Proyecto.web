@@ -8,7 +8,8 @@ llegan tres jefes de Halloween, uno tras otro:
   1. REY CALABAZA: calabaza gigante con corona; salta, tira semillas y
      calabazas bomba que estallan al caer.
   2. BRUJA NEON: vuela en su escoba; murcielagos que te persiguen, pociones
-     que dejan charcos toxicos y clones del aquelarre.
+     que dejan charcos toxicos y clones del aquelarre. A mitad de la vida
+     se toma una pocion y pelea gigante, con los brazos.
   3. LA PARCA: se teletransporta, dispara calaveras y almas y barre una
      fila entera con su guadaña (avisada antes).
 
@@ -125,46 +126,216 @@ def _arte_calabaza(cuadro):
     return _contornear(s, CONTORNO, (34, 34))
 
 
+# Bruja Neon: mujer adulta de anime (pelo violeta largo, ojos violeta,
+# labios rojos, aro de oro, vestido de cuello alto con ribete neon y medias
+# negras) sentada de costado en su escoba, mirando a la derecha.
+_PALETA_BRUJA = {
+    'K': CONTORNO, 'H': (58, 28, 88), 'h': (110, 64, 160), 'B': VIOLETA, 'G': VERDE_TOXICO,
+    'P': (110, 46, 170), 'p': (70, 26, 120), 'L': (170, 110, 235),
+    'S': (255, 226, 206), 's': (236, 184, 168), 'W': WHITE, 'E': (180, 70, 255), 'e': (90, 20, 150),
+    'R': (220, 40, 90), 'O': ORO, 'D': (58, 22, 92), 'd': (104, 48, 156), 'b': (255, 150, 170),
+    'M': MADERA, 'm': MADERA_OSCURA, 'Y': PAJA, 'y': (190, 140, 60), 'N': (30, 18, 40), 'n': (84, 60, 110),
+}
+_ARTE_BRUJA = (
+    "..............KKK...........................",
+    ".............KHHK...........................",
+    "..............KHHK..........................",
+    "...............KHHK.........................",
+    "...............KHHHK........................",
+    "..............KHHHHHK.......................",
+    "..............KHhHHHHK......................",
+    ".............KHHhHHHHHK.....................",
+    ".............KHHHhHHHHHK....................",
+    "............KBBBBBBBGBBBBK..................",
+    "............KHHHHHHHHHHHHHK.................",
+    ".......KKKKKHHHHHHHHHHHHHHHKKKKKK...........",
+    "......KhhhhHHHHHHHHHhhHHHHHHHHHHHK..........",
+    ".......KKKKPPPPPPPPPPPPPPPPKKKKKK...........",
+    ".........KPPPLPPPPPPPPPPPPPPPK..............",
+    "........KPPPLPPPPPPPPPPPPPPPSPK.............",
+    "........KPPLPPPPPPPPPPPPPPPSSSPK............",
+    ".......KPPLPPPPPPPPPPPPPPPKKKSSSK...........",
+    ".......KPPPPPPPPPPPPPPPPPKWEEKSSK...........",
+    ".......KPPPPPPPPPPPPPPPPPSWEeKSSSK..........",
+    "......KPPPPpPPPPPPPPPPPPPSSSSbbSSK..........",
+    "......KPPPPpPPPPPPPPPPPOPsSSSSSSSK..........",
+    "......KPPPPPpPPPPPPPPPPPPsSSSSRRK...........",
+    ".....KPPPPPPpPPPPPPPPPPPPPsSSSSK............",
+    ".....KPPPPPPPpPPPPPPPPPPPPKsSSK.............",
+    ".....KPPPPPPPpPPPPPPPPPKKKDGGGK.............",
+    "....KPPPPPPPPPpPPPPPPKDDDDGDDDDK............",
+    "....KPPPPPPPPPpPPPPPKDDdDDDDDDDDK...........",
+    "....KPPPPPPPPPPpPPPKDDdDDDDDDDDDDK..........",
+    "...KPPPPPPPPPPPpPPKDDdDDDDDdddddddKK........",
+    "...KPPPPPPPPPPPPpPKDDdDDDDDDDDDDDDdSSK......",
+    "...KPPPPPPPPPPPPpPKDDdDDDDKKKKKKKKKKSSK.....",
+    "YyYKPPPPPPPPPPPPpPKDDGGGGGGDDDK....KSSK.....",
+    "KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKMSSMKKKK.",
+    "YYyYYYYKMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMK",
+    "YyYYyYYKmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmK",
+    "yYYyYYYKKKKKKKKKKDDdDDDDDDDDDDKKKKKKKKKKKKK.",
+    "yYYyKPPPPPPPPPKDDdDDDDDDDDDDDDDK............",
+    "...KPPPPPPPPPKDDdDDDDDDDDDDDDDDDDK..........",
+    "....KPPPPPPPKDDdDDDDDDDDDDDGDDDDDDK.........",
+    ".....KPPPPPKDDDDDDDDDDDDDGGGKNNNK...........",
+    "......KPPPKGGGGGGGGGGGGGGGKKNnNNK...........",
+    ".......KKK...............K.KNnNK............",
+    "...........................KNnNK............",
+    "...........................KNnNNK...........",
+    "...........................KNNNNNNK.........",
+    "............................KKKKKKK.........",
+)
+
+
+def _desde_texto(filas, paleta):
+    s = pygame.Surface((len(filas[0]), len(filas)), pygame.SRCALPHA)
+    for y, fila in enumerate(filas):
+        for x, c in enumerate(fila):
+            color = paleta.get(c)
+            if color is not None:
+                s.set_at((x, y), color)
+    return s
+
+
 def _arte_bruja(cuadro):
-    """Bruja Neon (38x34) mirando a la derecha, sentada en su escoba.
-    cuadro 0/1: la capa y la paja flamean."""
-    s = pygame.Surface((38, 34), pygame.SRCALPHA)
-    # escoba
-    _px(s, MADERA, 2, 22 + 4, 34, 2)
-    _px(s, MADERA_OSCURA, 2, 23 + 4, 34, 1)
-    for i in range(6):
-        largo = 6 + (i + cuadro) % 3
-        _px(s, PAJA if i % 2 else (200, 150, 60), 0 - (largo - 6), 19 + i + 4, largo, 1)
-    _px(s, MADERA_OSCURA, 6, 19 + 4, 2, 7)
-    # capa que flamea hacia atras
-    ondas = (0, 1, 2, 1) if cuadro else (1, 2, 1, 0)
-    for i, o in enumerate(ondas):
-        _px(s, VIOLETA_OSCURO, 8 - o, 11 + i * 3 + 4, 6 + o, 3)
-    # cuerpo y vestido
-    _px(s, VIOLETA, 13, 11 + 4, 9, 11)
-    _px(s, VIOLETA_OSCURO, 13, 18 + 4, 9, 4)
-    _px(s, VIOLETA_CLARO, 14, 12 + 4, 1, 6)
-    _px(s, VERDE_TOXICO, 13, 17 + 4, 9, 1)  # cinturon neon
-    # pierna y bota
-    _px(s, PELO, 21, 20 + 4, 6, 2)
-    _px(s, PELO, 25, 22 + 4, 3, 3)
-    # brazo con la mano en la escoba
-    _px(s, VIOLETA, 21, 13 + 4, 5, 3)
-    _px(s, VERDE_BRUJA, 26, 14 + 4, 2, 3)
-    # pelo y cara
-    _px(s, PELO, 13, 6 + 4, 5, 8)
-    _px(s, VERDE_BRUJA, 17, 6 + 4, 6, 6)
-    _px(s, VERDE_BRUJA_OSCURO, 17, 10 + 4, 6, 2)
-    _px(s, VERDE_BRUJA, 23, 8 + 4, 2, 2)  # nariz larga
-    _px(s, (255, 230, 80), 20, 7 + 4, 2, 1)
-    _px(s, CONTORNO, 21, 7 + 4, 1, 1)
-    _px(s, (200, 40, 80), 19, 10 + 4, 3, 1)
-    # sombrero puntiagudo con banda neon
-    _px(s, PELO, 11, 5 + 4, 15, 2)
-    pygame.draw.polygon(s, PELO, ((13, 9), (23, 9), (17, 3), (11, 0)))
-    _px(s, VIOLETA, 13, 4 + 4, 10, 1)
-    _px(s, VERDE_TOXICO, 15, 4 + 4, 2, 1)
-    return _contornear(s, CONTORNO, (38, 34))
+    """Bruja Neon (44x47). cuadro 0/1: la paja de la escoba y las puntas
+    del pelo se mueven con el viento."""
+    filas = list(_ARTE_BRUJA)
+    if cuadro:
+        for y in range(32, 38):
+            filas[y] = filas[y][1:7] + filas[y][0] + filas[y][7:]
+        for y in range(36, 42):
+            fila = filas[y]
+            k = fila.find("K")
+            if k > 0:
+                filas[y] = fila[1:k + 1] + fila[k] + fila[k + 1:]
+    return _desde_texto(filas, _PALETA_BRUJA)
+
+
+def _arte_bruja_gigante(cuadro):
+    """La Bruja Neon gigante de frente, del pecho para arriba (66x60): los
+    brazos se dibujan aparte (ver BrujaBoss._dibujar_brazo).
+    cuadro: 0 normal, 1 parpadeo, 2 risa (boca abierta), 3 furia (ojos verdes)."""
+    pal = _PALETA_BRUJA
+    sf = pygame.Surface((66, 60), pygame.SRCALPHA)
+    ox = 1
+    # pelo largo ondulado detras
+    izq = [(16, 17), (12, 24), (14, 30), (9, 38), (11, 45), (6, 52), (8, 58)]
+    der = [(64 - x, y) for x, y in izq]
+    pygame.draw.polygon(sf, pal['p'], [(x + ox, y) for x, y in izq] + [(x + ox, y) for x, y in reversed(der)])
+    for (x1, y1), (x2, y2) in zip(izq[1:], izq[2:]):
+        pygame.draw.line(sf, pal['P'], (x1 + ox + 3, y1), (x2 + ox + 3, y2))
+        pygame.draw.line(sf, pal['P'], (64 - x1 + ox - 3, y1), (64 - x2 + ox - 3, y2))
+    # capa, hombros y vestido de cuello alto
+    pygame.draw.polygon(sf, (32, 14, 52), [(4 + ox, 60), (10 + ox, 46), (22 + ox, 41), (42 + ox, 41), (54 + ox, 46), (60 + ox, 60)])
+    pygame.draw.polygon(sf, pal['D'], [(14 + ox, 60), (18 + ox, 46), (27 + ox, 42), (37 + ox, 42), (46 + ox, 46), (50 + ox, 60)])
+    pygame.draw.line(sf, pal['d'], (20 + ox, 47), (17 + ox, 59))
+    pygame.draw.line(sf, pal['d'], (44 + ox, 47), (47 + ox, 59))
+    pygame.draw.line(sf, pal['G'], (18 + ox, 46), (27 + ox, 42))
+    pygame.draw.line(sf, pal['G'], (46 + ox, 46), (37 + ox, 42))
+    _px(sf, pal['G'], 31 + ox, 44, 2, 16)
+    _px(sf, pal['s'], 29 + ox, 32, 6, 7)
+    _px(sf, pal['D'], 27 + ox, 37, 10, 5)
+    _px(sf, pal['G'], 27 + ox, 37, 10, 1)
+    _px(sf, pal['O'], 31 + ox, 39, 2, 2)
+    # mechones que caen delante de los hombros
+    _px(sf, pal['P'], 20 + ox, 19, 4, 22)
+    _px(sf, pal['P'], 40 + ox, 19, 4, 22)
+    _px(sf, pal['L'], 21 + ox, 22, 1, 10)
+    _px(sf, pal['L'], 42 + ox, 22, 1, 10)
+    pygame.draw.polygon(sf, pal['P'], [(20 + ox, 40), (24 + ox, 40), (22 + ox, 46)])
+    pygame.draw.polygon(sf, pal['P'], [(40 + ox, 40), (44 + ox, 40), (42 + ox, 46)])
+    # cara y flequillo
+    pygame.draw.ellipse(sf, pal['S'], (23 + ox, 17, 18, 15))
+    pygame.draw.polygon(sf, pal['S'], [(24 + ox, 26), (40 + ox, 26), (35 + ox, 34), (29 + ox, 34)])
+    _px(sf, pal['s'], 24 + ox, 27, 1, 3)
+    _px(sf, pal['s'], 39 + ox, 27, 1, 3)
+    pygame.draw.polygon(sf, pal['P'], [(22 + ox, 16), (42 + ox, 16), (42 + ox, 23), (39 + ox, 20), (36 + ox, 23),
+                                       (33 + ox, 19), (30 + ox, 23), (27 + ox, 20), (23 + ox, 23)])
+    _px(sf, pal['L'], 27 + ox, 17, 3, 1)
+    _px(sf, pal['L'], 35 + ox, 17, 2, 1)
+    # cejas y ojos
+    _px(sf, CONTORNO, 26 + ox, 22, 4, 1)
+    _px(sf, CONTORNO, 34 + ox, 22, 4, 1)
+    if cuadro == 3:
+        _px(sf, CONTORNO, 29 + ox, 23)
+        _px(sf, CONTORNO, 34 + ox, 23)
+    iris = VERDE_TOXICO if cuadro == 3 else pal['E']
+    for ex, sentido in ((26, -1), (34, 1)):
+        x0 = ex + ox
+        if cuadro == 1:
+            _px(sf, CONTORNO, x0, 26, 4, 1)
+            _px(sf, CONTORNO, x0 + (4 if sentido > 0 else -1), 25)
+            continue
+        _px(sf, (150, 80, 200), x0, 23, 4, 1)  # sombra de ojos
+        _px(sf, CONTORNO, x0 - (1 if sentido < 0 else 0), 24, 5, 1)  # pestañas
+        _px(sf, CONTORNO, x0 + (4 if sentido > 0 else -1), 23)
+        _px(sf, iris, x0, 25, 4, 3)
+        _px(sf, pal['e'], x0 + 1, 26, 2, 2)
+        _px(sf, WHITE, x0 if sentido < 0 else x0 + 2, 25)
+        _px(sf, CONTORNO, x0, 28, 4, 1)
+    # nariz, rubor, boca y aros
+    _px(sf, pal['s'], 32 + ox, 29)
+    _px(sf, pal['b'], 25 + ox, 29, 2, 1)
+    _px(sf, pal['b'], 37 + ox, 29, 2, 1)
+    if cuadro == 2:
+        _px(sf, CONTORNO, 30 + ox, 31, 4, 1)
+        _px(sf, (200, 30, 80), 30 + ox, 32, 4, 2)
+        _px(sf, (120, 10, 40), 31 + ox, 32, 2, 1)
+    else:
+        _px(sf, (200, 30, 80), 30 + ox, 32, 3, 1)
+        _px(sf, (200, 30, 80), 33 + ox, 31)
+    _px(sf, pal['O'], 22 + ox, 30, 1, 2)
+    _px(sf, pal['O'], 42 + ox, 30, 1, 2)
+    # sombrero de ala ancha con la punta doblada
+    pygame.draw.ellipse(sf, pal['H'], (3 + ox, 13, 58, 6))
+    _px(sf, pal['h'], 9 + ox, 14, 12, 1)
+    _px(sf, pal['h'], 44 + ox, 14, 8, 1)
+    pygame.draw.polygon(sf, pal['H'], [(20 + ox, 15), (44 + ox, 15), (41 + ox, 7), (46 + ox, 2), (51 + ox, 1),
+                                       (44 + ox, 0), (37 + ox, 3), (28 + ox, 7)])
+    _px(sf, pal['h'], 30 + ox, 8, 2, 4)
+    _px(sf, pal['h'], 38 + ox, 3, 3, 1)
+    _px(sf, pal['B'], 21 + ox, 11, 22, 3)
+    _px(sf, pal['G'], 30 + ox, 11, 4, 3)
+    _px(sf, pal['B'], 31 + ox, 12, 2, 1)
+    return _contornear(sf, CONTORNO, (66, 60))
+
+
+_MANOS_BRUJA = (
+    (  # 0: abierta, con uñas violeta
+        "....KB.KB.KB....",
+        "...KSKKSKKSK....",
+        "...KSKKSKKSK.KB.",
+        "...KSKKSKKSKKSK.",
+        "...KSSKSSKSSKSK.",
+        "..KKSSSSSSSSSSK.",
+        ".KSKSSSSSSSSSSK.",
+        ".KSSSSSSSSSSSSK.",
+        "..KSSSSSSSSSSK..",
+        "...KSSSSSSSSK...",
+        "....KDDDDDDK....",
+        "....KGGGGGGK....",
+    ),
+    (  # 1: puño
+        "................",
+        "................",
+        "....KKKKKKKK....",
+        "...KSKSKSKSSK...",
+        "...KSKSKSKSSK...",
+        "..KSSSSSSSSSSK..",
+        "..KSSSSSSSSSSK..",
+        "..KSsSsSsSSSSK..",
+        "...KSSSSSSSSK...",
+        "....KSSSSSSK....",
+        "....KDDDDDDK....",
+        "....KGGGGGGK....",
+    ),
+)
+
+
+def _arte_mano_bruja(cuadro):
+    """Mano de la Bruja gigante (16x12): 0 abierta, 1 puño."""
+    return _desde_texto(_MANOS_BRUJA[cuadro], _PALETA_BRUJA)
 
 
 def _arte_parca(cuadro):
@@ -336,6 +507,7 @@ def _arte_lapida(cuadro):
 
 _ARTES = {
     "calabaza": _arte_calabaza, "bruja": _arte_bruja, "parca": _arte_parca,
+    "bruja_gigante": _arte_bruja_gigante, "mano_bruja": _arte_mano_bruja,
     "mini_calabaza": _arte_mini_calabaza, "murcielago": _arte_murcielago,
     "calavera": _arte_calavera, "alma": _arte_alma, "pocion": _arte_pocion,
     "brazo": _arte_brazo, "lapida": _arte_lapida,
@@ -683,11 +855,25 @@ class BrujaBoss(JefeHalloweenBase):
       - ESCOBA VELOZ: marca la fila de la nave y la cruza a toda velocidad.
       - CALDERO ESTELAR: se queda quieta girando una espiral de estrellas.
       - AQUELARRE: aparecen dos brujas fantasma que tambien disparan; solo
-        la de verdad recibe daño."""
+        la de verdad recibe daño.
+
+    A la mitad de la vida (UMBRAL_GIGANTE) pide la cinematica en la que se
+    toma una pocion y crece (pide_cinematica = "bruja_gigante", ver
+    modules/entities/bruja_gigante.py y main.py); mientras tanto no recibe
+    daño. Despues main.py llama a volverse_gigante() y la pelea cambia: la
+    bruja ocupa la parte de arriba de la pantalla, de frente, y ataca con
+    los brazos (animados de hombro a mano). Especiales del modo gigante:
+      - POCIONES: levanta una mano con una pocion y la arroja en tanda.
+      - MANOTAZO: una mano sigue a la nave, marca el lugar y lo aplasta.
+      - BARRIDO: marca la fila de la nave y la barre con el brazo."""
 
     nombre = "BRUJA NEON"
     hp_base = 1000
-    ESCALA = 4
+    ESCALA = 3
+    UMBRAL_GIGANTE = 0.5
+    ESCALA_GIGANTE = 5
+    ESCALA_MANO = 6
+    Y_GIGANTE = 150.0
 
     def __init__(self, dificultad=1.0):
         super().__init__(dificultad)
@@ -695,13 +881,54 @@ class BrujaBoss(JefeHalloweenBase):
         self.y = 150.0
         self.base_y = 150.0
         self.size = 60
-        self.alto_sprite = 34 * self.ESCALA
+        self.alto_sprite = 47 * self.ESCALA
         self.vx = 3.0
         self.mira_der = True
         self.timer_murcielagos = 80
         self.timer_pocion = 150
         self.clones = []
         self.charcos = []
+        self.gigante = False
+        self.transformando = False
+        self.pide_cinematica = None
+        self.manos = []
+
+    def take_damage(self, amount=1):
+        if self.transformando:
+            return
+        super().take_damage(amount)
+        if not self.gigante and self.active and self.hp <= self.max_hp * self.UMBRAL_GIGANTE:
+            # se guarda el resto del golpe para despues de crecer
+            self.transformando = True
+            self.pide_cinematica = "bruja_gigante"
+            self.especial = None
+            self.clones = []
+            self.bombas = []
+
+    def volverse_gigante(self):
+        """Despues de la cinematica: la bruja gigante de frente, con las
+        dos manos listas."""
+        self.gigante = True
+        self.transformando = False
+        self.pide_cinematica = None
+        self.entrando = False
+        self.especial = None
+        self.clones = []
+        self.bombas = []
+        self.name = "BRUJA NEON GIGANTE"
+        self.x = GAME_WIDTH / 2
+        self.y = self.Y_GIGANTE
+        self.size = 130
+        self.alto_sprite = 60 * self.ESCALA_GIGANTE
+        self.timer_especial = 120
+        self.indice_especial = 0
+        self.timer_pocion = 70
+        self.timer_murcielagos = 160
+        self.risa = 0
+        self.manos = []
+        for lado in (-1, 1):
+            rx, ry = self._reposo_mano(lado)
+            self.manos.append({'lado': lado, 'x': rx, 'y': ry, 'puno': False, 'pocion': False})
 
     def _charco(self, x, y):
         balas = []
@@ -712,8 +939,15 @@ class BrujaBoss(JefeHalloweenBase):
 
     def update(self, ship):
         self._tick_comun()
+        if self.transformando:
+            # espera la cinematica flotando hacia el centro
+            self.x += (GAME_WIDTH / 2 - self.x) * 0.1
+            self.y += (self.base_y - self.y) * 0.1
+            return []
         balas = self._actualizar_bombas()
         v = self._vel()
+        if self.gigante:
+            return balas + self._actualizar_gigante(ship, v)
         if self.entrando:
             self.x += 6
             self.y = self.base_y + math.sin(self.t * 0.08) * 10
@@ -831,7 +1065,209 @@ class BrujaBoss(JefeHalloweenBase):
                 self.especial = None
         return balas
 
+    # ------------------------------------------------------- modo gigante
+
+    def _hombro(self, lado):
+        return self.x + lado * 105, self.y + 100
+
+    def _reposo_mano(self, lado):
+        return self.x + lado * 235, self.y + 175 + math.sin(self.t * 0.05 + lado) * 10
+
+    def _mano_hacia(self, mano, x, y, k=0.15):
+        mano['x'] += (x - mano['x']) * k
+        mano['y'] += (y - mano['y']) * k
+
+    def _lanzar_desde(self, x0, y0, objetivo_x, objetivo_y):
+        bomba = _lanzar_en_arco(x0, y0, objetivo_x, objetivo_y, sprite_halloween("pocion", 1, 4), 12,
+                                vy0=-4.0, gravedad=0.2)
+        self.bombas.append((bomba, objetivo_y, self._charco))
+        return bomba
+
+    def _actualizar_gigante(self, ship, v):
+        balas = []
+        self.risa = max(0, self.risa - 1)
+        self.x = GAME_WIDTH / 2 + math.sin(self.t * 0.02) * 50
+        self.y = self.Y_GIGANTE + math.sin(self.t * 0.04) * 8
+        ocupadas = set()
+        if self.especial is not None:
+            balas += self._especial_gigante(ship, v, ocupadas)
+        else:
+            self.timer_especial -= 1
+            self.timer_pocion -= 1
+            self.timer_murcielagos -= 1
+            if self.timer_especial <= 0:
+                self.timer_especial = max(150, int((300 if not self.furioso else 220) / v))
+                tipo = ("pociones", "manotazo", "barrido")[self.indice_especial % 3]
+                self.indice_especial += 1
+                lado = -1 if ship.x < self.x else 1
+                self.especial = {'tipo': tipo, 't': 0, 'lado': lado, 'golpes': 0, 'fase': 'sube'}
+                self._anunciar({"pociones": "¡POCIONES!", "manotazo": "¡MANOTAZO!",
+                                "barrido": "¡BARRIDO!"}[tipo])
+            elif self.timer_pocion <= 0:
+                # una pocion suelta con un movimiento rapido de muñeca
+                self.timer_pocion = max(60, int((120 if not self.furioso else 80) / v))
+                mano = self.manos[0 if ship.x < self.x else 1]
+                balas.append(self._lanzar_desde(mano['x'], mano['y'] - 20, ship.x, ship.y))
+                mano['y'] -= 40
+            elif self.timer_murcielagos <= 0:
+                # murcielagos que salen del sombrero
+                self.timer_murcielagos = max(110, int((200 if not self.furioso else 140) / v))
+                for k in range(3 if self.furioso else 2):
+                    a = math.pi / 2 + (k - 0.5) * 0.9
+                    balas.append(Murcielago(self.x + (k - 0.5) * 300, self.y - 40, math.cos(a) * 3.0 * math.sqrt(v),
+                                            abs(math.sin(a)) * 3.0 * math.sqrt(v), ship))
+        for mano in self.manos:
+            if mano['lado'] not in ocupadas:
+                rx, ry = self._reposo_mano(mano['lado'])
+                self._mano_hacia(mano, rx, ry, 0.1)
+                mano['puno'] = False
+                mano['pocion'] = False
+        return balas
+
+    def _especial_gigante(self, ship, v, ocupadas):
+        e = self.especial
+        e['t'] += 1
+        balas = []
+        mano = self.manos[0 if e['lado'] < 0 else 1]
+        ocupadas.add(e['lado'])
+        if e['tipo'] == "pociones":
+            # sube la mano con la pocion, la arroja en tanda y cambia de mano
+            mano['pocion'] = True
+            arriba = (self.x + e['lado'] * 260, self.y - 40)
+            if e['t'] < 40:
+                self._mano_hacia(mano, *arriba, k=0.12)
+            elif e['t'] == 40:
+                n = 5 if self.furioso else 3
+                for k in range(n):
+                    dx = (k - (n - 1) / 2) * 110
+                    tx = max(40, min(GAME_WIDTH - 40, ship.x + dx))
+                    balas.append(self._lanzar_desde(mano['x'], mano['y'], tx, max(GAME_HEIGHT * 0.55, ship.y)))
+                self.risa = 30
+                mano['pocion'] = False
+            elif e['t'] < 60:
+                # el brazo sigue de largo hacia adelante
+                self._mano_hacia(mano, self.x + e['lado'] * 150, self.y + 230, k=0.3)
+                mano['pocion'] = False
+            else:
+                e['golpes'] += 1
+                if e['golpes'] >= (3 if self.furioso else 2):
+                    self.especial = None
+                else:
+                    e['t'], e['lado'] = 0, -e['lado']
+        elif e['tipo'] == "manotazo":
+            mano['puno'] = True
+            if e['fase'] == 'sube':
+                # la mano sigue a la nave desde arriba
+                self._mano_hacia(mano, ship.x, self.y + 150, k=0.12)
+                if e['t'] >= 55:
+                    e['fase'], e['t'] = 'fija', 0
+                    e['objetivo'] = (ship.x, max(GAME_HEIGHT * 0.55, ship.y))
+            elif e['fase'] == 'fija':
+                mano['y'] -= 1.5  # toma impulso
+                if e['t'] >= 18:
+                    e['fase'], e['t'] = 'golpe', 0
+                    e['desde'] = (mano['x'], mano['y'])
+            elif e['fase'] == 'golpe':
+                k = min(1.0, e['t'] / 7)
+                mano['x'] = e['desde'][0] + (e['objetivo'][0] - e['desde'][0]) * k
+                mano['y'] = e['desde'][1] + (e['objetivo'][1] - e['desde'][1]) * k * k
+                balas.append(_hitbox(mano['x'], mano['y'], 58))
+                if k >= 1.0:
+                    e['fase'], e['t'] = 'apoyada', 0
+                    n = 14 if self.furioso else 10
+                    balas += _anillo(mano['x'], mano['y'], n, 3.0 * math.sqrt(v), VIOLETA_CLARO, 12,
+                                     forma="estrella", desfase=random.uniform(0, 1))
+                    self.risa = 40
+            elif e['fase'] == 'apoyada':
+                if e['t'] < 10:
+                    balas.append(_hitbox(mano['x'], mano['y'], 50))
+                if e['t'] >= 30:
+                    e['golpes'] += 1
+                    if e['golpes'] >= (2 if self.furioso else 1):
+                        self.especial = None
+                    else:
+                        e['fase'], e['t'], e['lado'] = 'sube', 0, -e['lado']
+        else:
+            # barrido: la mano va a un costado a la altura de la fila y la cruza
+            mano['puno'] = False
+            if e['fase'] == 'sube':
+                e['fila'] = max(GAME_HEIGHT * 0.55, min(GAME_HEIGHT - 50, ship.y))
+                e['dir'] = -e['lado']
+                self._mano_hacia(mano, GAME_WIDTH / 2 + e['lado'] * (GAME_WIDTH / 2 + 30), e['fila'], k=0.1)
+                if e['t'] >= 60:
+                    e['fase'], e['t'] = 'barre', 0
+            elif e['fase'] == 'barre':
+                mano['x'] += e['dir'] * 17 * math.sqrt(v)
+                mano['y'] = e['fila'] + math.sin(e['t'] * 0.4) * 6
+                balas.append(_hitbox(mano['x'], mano['y'], 52))
+                if e['t'] % 5 == 0:
+                    balas.append(BalaPixel(mano['x'], mano['y'] - 30, random.uniform(-0.6, 0.6),
+                                           random.uniform(-2.5, -1.0), color=VERDE_TOXICO, tam=10,
+                                           forma="estrella", gravedad=0.06, vida=90))
+                if not -60 < mano['x'] < GAME_WIDTH + 60:
+                    e['golpes'] += 1
+                    self.risa = 30
+                    if self.furioso and e['golpes'] < 2:
+                        # la otra mano barre de vuelta desde el otro costado
+                        e['fase'], e['t'], e['lado'] = 'sube', 0, e['dir']
+                    else:
+                        self.especial = None
+        return balas
+
+    def _dibujar_brazo(self, screen, mano, ox, oy):
+        hx, hy = self._hombro(mano['lado'])
+        hx, hy = hx + ox, hy + oy
+        mx, my = mano['x'] + ox, mano['y'] + oy
+        # manga: de hombro a muñeca, con contorno y el puño neon
+        pygame.draw.line(screen, CONTORNO, (hx, hy), (mx, my), 46)
+        pygame.draw.circle(screen, CONTORNO, (int(hx), int(hy)), 23)
+        pygame.draw.line(screen, (58, 22, 92), (hx, hy), (mx, my), 36)
+        pygame.draw.circle(screen, (58, 22, 92), (int(hx), int(hy)), 18)
+        pygame.draw.line(screen, (104, 48, 156), (hx, hy - 8), (mx, my - 8), 6)
+        # la mano apunta hacia afuera del brazo (el arte la tiene "hacia arriba")
+        angulo = math.degrees(math.atan2(-(my - hy), mx - hx)) - 90
+        angulo = round(angulo / 15) * 15
+        mano_spr = sprite_halloween("mano_bruja", 1 if mano['puno'] else 0, self.ESCALA_MANO,
+                                    blanco=self.flash % 2 == 1)
+        mano_spr = pygame.transform.rotate(mano_spr, angulo)
+        _blit_centrado(screen, mano_spr, mx, my)
+        if mano['pocion']:
+            _blit_centrado(screen, sprite_halloween("pocion", 1, 5), mx, my - 46)
+
+    def _dibujar_gigante(self, screen, ox, oy):
+        e = self.especial
+        if e is not None and e['tipo'] == 'barrido' and e['fase'] == 'sube':
+            self._dibujar_aviso_fila(screen, e['fila'], e['t'], ox, oy)
+        if e is not None and e['tipo'] == 'manotazo' and e['fase'] in ('fija', 'golpe') and 'objetivo' in e:
+            tx, ty = int(e['objetivo'][0] + ox), int(e['objetivo'][1] + oy)
+            color = (255, 60, 80) if (self.t // 4) % 2 else (255, 200, 80)
+            pygame.draw.circle(screen, color, (tx, ty), 62, 4)
+            screen.fill(color, (tx - 74, ty - 2, 24, 4))
+            screen.fill(color, (tx + 50, ty - 2, 24, 4))
+            screen.fill(color, (tx - 2, ty - 74, 4, 24))
+            screen.fill(color, (tx - 2, ty + 50, 4, 24))
+        # aura que late detras
+        aura = pygame.Surface((440, 380), pygame.SRCALPHA)
+        alfa = 50 + int(30 * math.sin(self.t * 0.08))
+        pygame.draw.ellipse(aura, (150, 60, 220, alfa), aura.get_rect())
+        _blit_centrado(screen, aura, self.x + ox, self.y + oy + 20)
+        if self.risa > 0:
+            cuadro = 2
+        elif self.furioso:
+            cuadro = 3
+        elif self.t % 150 < 7:
+            cuadro = 1
+        else:
+            cuadro = 0
+        cuerpo = sprite_halloween("bruja_gigante", cuadro, self.ESCALA_GIGANTE, blanco=self.flash % 2 == 1)
+        _blit_centrado(screen, cuerpo, self.x + ox, self.y + oy)
+        for mano in self.manos:
+            self._dibujar_brazo(screen, mano, ox, oy)
+
     def draw(self, screen, offset_x=0, offset_y=0):
+        if self.gigante:
+            self._dibujar_gigante(screen, offset_x, offset_y)
+            return
         e = self.especial
         if e is not None and e['tipo'] == 'escoba' and e['fase'] == 'aviso':
             self._dibujar_aviso_fila(screen, e['fila'], e['t'], offset_x, offset_y)

@@ -57,6 +57,7 @@ from modules.entities.halloween import (
     PROB_HALLOWEEN, FondoHalloween, ReyCalabazaBoss, BrujaBoss, ParcaBoss,
     CinematicaVictoriaHalloween, CinematicaFinHalloween, icono_final as icono_halloween,
 )
+from modules.entities.bruja_gigante import CinematicaBrujaGigante
 from modules.entities.parca_dimension import (
     FondoDimension, ParcaDimension, CinematicaParcaLlega, CinematicaParcaConquista, CinematicaParcaVencida,
     icono_calavera,
@@ -1074,6 +1075,21 @@ def main():
             draw_viewport_frame(screen, game_offset_x, game_offset_y, GAME_WIDTH, GAME_HEIGHT, pygame.time.get_ticks())
             pygame.display.flip()
 
+    def _cinematica_bruja_gigante(bruja):
+        """La Bruja Neon se toma una pocion y se vuelve gigante (ver
+        modules/entities/bruja_gigante.py); al volver sigue la pelea con
+        la bruja de frente y su tema mas pesado."""
+        nonlocal bonus_banner
+        boss_bullets.clear()
+        golpe = (audio.sonido_explosion, audio.sonido_impacto)
+        _correr_cinematica(CinematicaBrujaGigante(), "jefe_bruja",
+                           {"pocion": (audio.sonido_powerup,), "trago": (audio.sonido_boton,),
+                            "crece": (audio.sonido_alerta_jefe,), "flash": golpe, "risa": golpe})
+        bruja.volverse_gigante()
+        ship.invincible_timer = max(ship.invincible_timer, 120)
+        bonus_banner = ["¡SEGUNDA FASE!", "BRUJA NEON GIGANTE", 150]
+        audio.reproducir_musica("jefe_bruja_gigante")
+
     def _cinematica_fin_halloween():
         """Final de la ruta de Halloween ("¡FELIZ HALLOWEEN!", ver
         CinematicaFinHalloween), con el mismo mini-bucle que el gatito."""
@@ -1718,6 +1734,10 @@ def main():
                     if ret_b:
                         for rb in ret_b:
                             boss_bullets.append(rb)
+                    if getattr(b, "pide_cinematica", None) == "bruja_gigante":
+                        # la Bruja llego a la mitad de la vida: se toma la
+                        # pocion y crece (ver BrujaBoss.UMBRAL_GIGANTE)
+                        _cinematica_bruja_gigante(b)
                     if getattr(b, "pide_matar_nave", False):
                         # rayo de abduccion del Gato Alien invencible: ni el
                         # escudo ni la invencibilidad salvan a la nave

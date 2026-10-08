@@ -1243,6 +1243,25 @@ def generar_musica_jefe_bruja():
     return _ganar_volumen(fundido_de_bucle(base * 0.85 + capa), empuje=2.0)
 
 
+def generar_musica_jefe_bruja_gigante():
+    """Bruja Neon gigante (segunda fase): el thrash de la bruja mas lento y
+    pesado, en Re menor a 150 BPM, con coro, organo y campanadas."""
+    bpm, tonica = 150, 73.42
+    riff = [0, "-", 0, 1, 0, "-", 6, "-", 5, "-", 3, 0, 1, "-", 0, None]
+    riff_b = [0, 0, 3, 0, 0, 6, 0, 0, 5, 0, 3, 0, 1, 1, 0, 0]
+    melodia = [(12, 2), (15, 2), (18, 2), (17, 2), (15, 4), (13, 2), (12, 2), (15, 1), (18, 1),
+               (21, 2), (20, 2), (18, 4), (15, 2), (13, 2), (12, 8)]
+    secciones = [(riff, [0, 0, 1, 0], "mitad", False),
+                 (riff_b, [0, 0, 3, 1, 0, 0, 6, 5], "thrash", True),
+                 (riff, [0, 3, 6, 5], "doble", True)]
+    base = _tema_metal(bpm, tonica, secciones, ganancia=13, melodia=melodia, voz_melodia="gemelas",
+                       golpes_bronce=False, coro=True, empuje=2.1)
+    raices = [r for _, rs, _, _ in secciones for r in rs]
+    capa = _capa_halloween(len(base), bpm, tonica, raices, (0, 3, 6, 9, 12, 9, 6, 3), _organo, 0.22,
+                           campanas=True)
+    return _ganar_volumen(fundido_de_bucle(base * 0.85 + capa), empuje=2.0)
+
+
 def generar_musica_jefe_parca():
     """La Parca: doom de cementerio en Do# a 96 BPM, organo de iglesia,
     coro y campanadas cada cuatro compases."""
@@ -1353,6 +1372,7 @@ MUSICA = {
     "musica_impostor": generar_musica_impostor,
     "musica_jefe_calabaza": generar_musica_jefe_calabaza,
     "musica_jefe_bruja": generar_musica_jefe_bruja,
+    "musica_jefe_bruja_gigante": generar_musica_jefe_bruja_gigante,
     "musica_jefe_parca": generar_musica_jefe_parca,
     "musica_fin_halloween": generar_musica_fin_halloween,
     "musica_dimension_parca": generar_musica_dimension_parca,
