@@ -20,17 +20,41 @@ from modules.constants import (
     BUFF_STACK_BONUS, FIST_BURST_SHOTS, FIST_CONFIRM_FRAMES,
 )
 from modules.entities.bullet import Bullet
-from modules.skins import apply_skin_to_ship
+from modules.skins import apply_skin_to_ship, get_skin_colors
 from modules.systems import sprites
 
 
+# Naves que se pueden elegir en el menu (MenuScene, estado "nave"). Los
+# colores del jugador son siempre los del Explorador, asi no se confunde con
+# las naves bonus enemigas que reciclan los mismos cascos.
+TIPOS_NAVE = {
+    "scout": {
+        "nombre": "EXPLORADOR", "speed": 0.18, "shoot_delay": 20, "max_lives": 5,
+        "rasgo": "Pareja en todo, sin puntos flojos",
+    },
+    "interceptor": {
+        "nombre": "INTERCEPTOR", "speed": 0.24, "shoot_delay": 15, "max_lives": 4,
+        "rasgo": "La mas veloz y la que mas dispara",
+    },
+    "tank": {
+        "nombre": "ACORAZADO", "speed": 0.14, "shoot_delay": 24, "max_lives": 7,
+        "rasgo": "Escudo que se recarga solo",
+    },
+    "bomber": {
+        "nombre": "BOMBARDERO", "speed": 0.16, "shoot_delay": 26, "max_lives": 5,
+        "rasgo": "Balas perforantes siempre",
+    },
+}
+ORDEN_NAVES = ("scout", "interceptor", "tank", "bomber")
+# cuadros entre recargas del escudo del Acorazado / de la mejora de escudo
+ESCUDO_RECARGA = 1200
+
+
 class Ship:
-    """La nave del jugador (siempre clase Scout: la seleccion de clase de
-    nave del jugador se elimino y sus sprites/colores de tank/interceptor/
-    bomber se reciclaron como la nave bonus de modules/entities/enemy.py).
-    `skin_id` fija los colores (ver modules/skins.py). target_x/target_y son
-    la posicion de la mano detectada por MediaPipe; update() interpola la
-    nave hacia ahi."""
+    """La nave del jugador. ship_type es una de TIPOS_NAVE (velocidad,
+    cadencia, vidas y un rasgo propio); `skin_id` fija los colores (ver
+    modules/skins.py). target_x/target_y son la posicion de la mano
+    detectada por MediaPipe; update() interpola la nave hacia ahi."""
 
     def __init__(self, x, y, ship_type="scout", skin_id="default"):
         self.ship_type = ship_type
@@ -80,33 +104,45 @@ class Ship:
         self._sprite = None
         self._sprite_key = None
         self.bank_angle = 0.0
+        # escudo que se recarga solo (rasgo del Acorazado o mejora)
+        self.escudo_max = 0
+        self.escudo_timer = 0
         self._apply_type_stats()
         apply_skin_to_ship(self, skin_id)
+        if ship_type != "scout" and skin_id == "default":
+            # los cascos nuevos con los colores de siempre del jugador
+            body, wing, glow, flame = get_skin_colors("scout", "default")
+            self.body_color, self.wing_color, self.glow_color, self.flame_color = body, wing, glow, flame
+            self.invalidate_sprite()
 
     def _apply_type_stats(self):
-        data = {
-            "speed": 0.18,
-            "shoot_delay": 20,
-            "max_lives": 5,
-            "body_color": AZUL,
-            "wing_color": AZUL_CIELO,
-            "glow_color": (140, 210, 255),
-            "flame_color": AZUL,
-            "name": "Scout",
-            "description": "Nave equilibrada con buena maniobrabilidad",
-        }
+        if self.ship_type not in TIPOS_NAVE:
+            self.ship_type = "scout"
+        data = TIPOS_NAVE[self.ship_type]
         self.speed = data["speed"]
         self.base_shoot_delay = data["shoot_delay"]
         self.shoot_delay = self.base_shoot_delay
         self.max_lives = data["max_lives"]
         self.lives = self.max_lives
-        self.body_color = data["body_color"]
-        self.wing_color = data["wing_color"]
-        self.glow_color = data["glow_color"]
-        self.flame_color = data["flame_color"]
-        self.name = data["name"]
-        self.description = data["description"]
+        self.body_color = AZUL
+        self.wing_color = AZUL_CIELO
+        self.glow_color = (140, 210, 255)
+        self.flame_color = AZUL
+        self.name = data["nombre"]
+        self.description = data["rasgo"]
         self.class_buffs.clear()
+        if self.ship_type == "tank":
+            self.sumar_escudo_recargable()
+        elif self.ship_type == "bomber":
+            self.class_buffs.add(BUFF_TYPE_PIERCING)
+            self.piercing_active = True
+
+    def sumar_escudo_recargable(self):
+        """Una carga mas de escudo que se recarga sola cada ESCUDO_RECARGA
+        cuadros (rasgo del Acorazado y mejora "Escudo recargable")."""
+        self.escudo_max += 1
+        self.class_buffs.add(BUFF_TYPE_SHIELD)
+        self.shield_hits = max(self.shield_hits, self.escudo_max)
 
     def invalidate_sprite(self):
         """Fuerza a recomponer el sprite (se llama al cambiar de skin/color)."""
@@ -143,6 +179,11 @@ class Ship:
             self.shoot_cooldown -= 1
         if self.invincible_timer > 0:
             self.invincible_timer -= 1
+        if self.escudo_max > 0 and self.shield_hits < self.escudo_max:
+            self.escudo_timer += 1
+            if self.escudo_timer >= ESCUDO_RECARGA:
+                self.escudo_timer = 0
+                self.shield_hits += 1
         if self.lightning_active:
             self.lightning_phase += 0.3
             if self.lightning_zap_cooldown > 0:
@@ -163,8 +204,8 @@ class Ship:
                 self.triple_shot_active = False
                 self.shoot_delay = max(5, int(self.shoot_delay / TRIPLE_SHOT_CADENCIA_PENALIDAD))
             if buff_type == BUFF_TYPE_SHIELD:
-                self.shield_hits = 0
-            if buff_type == BUFF_TYPE_PIERCING:
+                self.shield_hits = min(self.shield_hits, self.escudo_max)
+            if buff_type == BUFF_TYPE_PIERCING and BUFF_TYPE_PIERCING not in self.class_buffs:
                 self.piercing_active = False
             if buff_type == BUFF_TYPE_ATTRACT:
                 self.attract_active = False
@@ -267,7 +308,7 @@ class Ship:
             c = (int(255 * alpha), int(200 * alpha), int(50 * alpha))
             pygame.draw.circle(screen, c, (int(tp[0]) + offset_x, int(tp[1]) + offset_y), max(1, int(3 * alpha)))
 
-        if BUFF_TYPE_SHIELD in self.buffs or BUFF_TYPE_SHIELD in self.class_buffs:
+        if (BUFF_TYPE_SHIELD in self.buffs or BUFF_TYPE_SHIELD in self.class_buffs) and self.shield_hits > 0:
             shield_radius = w * 0.9
             shield_surf = pygame.Surface((shield_radius * 2, shield_radius * 2), pygame.SRCALPHA)
             pulse = 0.5 + 0.5 * math.sin(self.glow_phase * 2)
@@ -507,7 +548,7 @@ class Ship:
             self._extender_buff(buff_type, BUFF_DURATION_TRIPLE)
             return "Rafaga triple"
         elif buff_type == BUFF_TYPE_SHIELD:
-            self.shield_hits = 3
+            self.shield_hits = max(3, self.shield_hits)
             self._extender_buff(buff_type, BUFF_DURATION_SHIELD)
             return "Escudo activo"
         elif buff_type == BUFF_TYPE_PIERCING:

@@ -59,6 +59,7 @@ from modules.entities.tripulante import TripulanteAliado, CinematicaTripulante
 from modules.entities import mascota as mascota_mod
 from modules.entities.mascota import ZorritoEspacial, CapsulaMascota, dibujar_aviso_mascota
 from modules.systems.menu import MenuScene, Star
+from modules.systems.mejoras import EstadoMejoras, SeleccionMejora, dibujar_hud_mejoras, MEJORAS
 from modules.systems import audio
 from modules.systems import sprites
 from modules.systems.fonts import render_text, render_texto_pixelado, get_font
@@ -236,6 +237,14 @@ def main():
     capsula_mascota = None
     mascota_ofrecida = False
     aviso_mascota = None
+
+    # Mejoras (ver modules/systems/mejoras.py): cartas para elegir una al
+    # arrancar, cada 5 oleadas y despues de cada jefe. Mientras `eleccion`
+    # esta abierta el mundo queda congelado y la nave solo mueve el cursor.
+    estado_mejoras = EstadoMejoras()
+    eleccion = None
+    ultima_oleada_mejora = 1
+    mejora_inicial_pendiente = False
     bonus_estado = None
     bonus_timer = 0
     # Punto de partida elegido en el menu (ELEGIR FASE, ver FASES_INICIO en
@@ -277,6 +286,7 @@ def main():
         nonlocal stats_disparos, stats_aciertos, stats_alienigenas, stats_jefes, tiempo_sobrevivido
         nonlocal bonus_estado, bonus_timer, bonus_banner, fondo_pixel, bonus_directo_pendiente, aliado
         nonlocal mascota, capsula_mascota, mascota_ofrecida, aviso_mascota
+        nonlocal estado_mejoras, eleccion, ultima_oleada_mejora, mejora_inicial_pendiente
         if hasattr(draw_hud, 'hud'):
             del draw_hud.hud
         if hasattr(draw_buff_hud, 'hud'):
@@ -307,6 +317,10 @@ def main():
             wave = int(inicio_partida[1:])
         if inicio_con_buffs:
             _dar_todos_los_buffs()
+        estado_mejoras = EstadoMejoras()
+        eleccion = None
+        ultima_oleada_mejora = wave
+        mejora_inicial_pendiente = bonus_directo_pendiente is None
         start_time = pygame.time.get_ticks()
         start_countdown = 5
         _musica_partida()
@@ -959,12 +973,38 @@ def main():
         ship.draw(surface)
 
     def _dibujar_companeros(surface):
-        """Capsula de rescate y Zorrito Espacial (en la partida normal van
-        con el resto del mundo; en el entorno pixel, nitidos encima)."""
+        """Capsula de rescate, Zorrito Espacial y drones escolta (en la
+        partida normal van con el resto del mundo; en el entorno pixel,
+        nitidos encima)."""
         if capsula_mascota is not None:
             capsula_mascota.draw(surface)
         if mascota is not None:
             mascota.draw(surface)
+        for dron in estado_mejoras.drones:
+            dron.draw(surface)
+
+    def _abrir_eleccion(titulo):
+        nonlocal eleccion
+        opciones = estado_mejoras.opciones(ship, mascota is not None)
+        if opciones:
+            eleccion = SeleccionMejora(opciones, titulo, modo_control, estado_mejoras.niveles)
+            ship.burst_shots_pending = 0
+            audio.sonido_powerup()
+
+    def _aplicar_mejora(mejora_id):
+        """La carta elegida: el zorrito se arma aca (la mascota vive en
+        main); el resto lo aplica EstadoMejoras."""
+        nonlocal mascota, capsula_mascota, mascota_ofrecida, aviso_mascota
+        estado_mejoras.aplicar(mejora_id, ship)
+        if mejora_id == "zorrito":
+            mascota = ZorritoEspacial(ship)
+            mascota_ofrecida = True
+            capsula_mascota = None
+            aviso_mascota = ["¡NUEVO COMPAÑERO!", "El Zorrito Espacial se une a tu aventura", 260]
+        nombre, _, _, _, color = MEJORAS[mejora_id]
+        explosions.append(Explosion(ship.x, ship.y, color, 30))
+        particles.extend([Particle(ship.x, ship.y, color) for _ in range(24)])
+        audio.sonido_victoria()
 
     def _soltar_recompensa_bonus(x, y, miniboss=False):
         """Recompensa de una nave bonus (tank/interceptor/bomber reciclados
@@ -1052,6 +1092,9 @@ def main():
                         game_over = False
                         game_victory = False
                         paused = False
+
+            if eleccion is not None and not menu_scene.active and not paused:
+                eleccion.handle_event(event, game_offset_x, game_offset_y)
 
             if menu_scene.active:
                 result = menu_scene.handle_event(event)
@@ -1164,7 +1207,26 @@ def main():
             en_bonus = bonus_estado is not None
             congelado_bonus = bonus_estado in congelados_bonus
 
-        if not paused and not congelado_bonus:
+        # se abre la eleccion de mejora: al arrancar y al cruzar cada 5
+        # oleadas (6, 11, 16...), asi tambien al caer cada jefe (pasa a la
+        # 11, 21...). Si justo hay un jefe o su cartel, espera a que termine.
+        if (eleccion is None and not game_over and not dying and not paused and countdown_val <= 0
+                and bonus_estado is None and not bonus_directo_pendiente and not bosses
+                and boss_reward_timer <= 0):
+            if mejora_inicial_pendiente:
+                mejora_inicial_pendiente = False
+                _abrir_eleccion("ELEGI TU MEJORA INICIAL")
+            elif (wave - 1) // 5 > (ultima_oleada_mejora - 1) // 5:
+                ultima_oleada_mejora = wave
+                _abrir_eleccion(f"OLEADA {wave}: ELEGI UNA MEJORA")
+
+        if eleccion is not None and not paused:
+            ship.update()
+            elegida = eleccion.update(ship)
+            if elegida is not None:
+                eleccion = None
+                _aplicar_mejora(elegida)
+        elif not paused and not congelado_bonus:
             ship.update()
             new_bullets = ship.update_burst_fire()
             if new_bullets:
@@ -1189,7 +1251,7 @@ def main():
                 else:
                     terminar_partida(False)
 
-        if not game_over and countdown_val <= 0 and not paused and not congelado_bonus:
+        if not game_over and countdown_val <= 0 and not paused and not congelado_bonus and eleccion is None:
             cuota_oleada = cuota_de_oleada(wave)
             boss_def = None if en_bonus else get_boss_for_wave(wave)
             # Oleada de jefe (10/20/30/40, o el mega-jefe en MEGA_BOSS_SPAWN_WAVE):
@@ -1334,6 +1396,8 @@ def main():
             if mascota is not None:
                 bullets.extend(mascota.update(ship, asteroids + alien_ships + bosses,
                                               alien_bullets + boss_bullets, powerups))
+            for dron in estado_mejoras.drones:
+                bullets.extend(dron.update(ship, asteroids + alien_ships + bosses))
 
             if not bosses and not game_over and bonus_estado is None:
                 # se derroto al ultimo jefe en pantalla (o no hay ninguno
@@ -1673,6 +1737,7 @@ def main():
             draw_hud(game_surface, score, wave, ship.lives, ship.buffs, font, small_font, hand_active, ship.max_lives,
                      objetivos_oleada, cuota_hud, len(bosses) > 0)
             mostrar_hud_margenes = True
+            dibujar_hud_mejoras(game_surface, estado_mejoras, frame_count)
 
             if boss_reward_timer > 0 and last_boss_rewards:
                 draw_boss_rewards(game_surface, "Jefe Derrotado", last_boss_rewards, GAME_WIDTH // 2, GAME_HEIGHT - 60)
@@ -1688,6 +1753,9 @@ def main():
                 else:
                     indicator = render_texto_pixelado(small_font, "Mando no detectado", RED)
             game_surface.blit(indicator, (GAME_WIDTH - indicator.get_width() - 8, 8))
+
+            if eleccion is not None:
+                eleccion.draw(game_surface)
 
             if paused:
                 overlay_pausa = pygame.Surface(game_surface.get_size(), pygame.SRCALPHA)
@@ -1795,4 +1863,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main()

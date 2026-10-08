@@ -11,6 +11,9 @@ from modules.constants import WHITE, AZUL, MENTA
 from modules.systems import audio
 from modules.systems.fonts import render_texto_pixelado
 from modules import settings
+from modules.systems import sprites, pixelfx
+from modules.entities.ship import TIPOS_NAVE, ORDEN_NAVES
+from modules.skins import get_skin_colors
 
 
 class Star:
@@ -328,8 +331,10 @@ class MenuScene:
     - "control_mode": se entra al elegir JUGAR; CAMARA (gestos de mano) o
       MANDO (joystick). MANDO se deshabilita si no hay ningun mando
       conectado. La eleccion queda en self.modo_control ("camara"/"mando").
-    - "dificultad": se entra tras elegir el modo de control; FACIL/NORMAL/
-      DIFICIL devuelven "START_GAME:<nave>:<skin>:<dificultad>:<modo_control>"
+    - "dificultad": se entra tras elegir el modo de control (FACIL/NORMAL/
+      DIFICIL) y lleva a "nave".
+    - "nave": cuatro cartas con las naves de TIPOS_NAVE (ship.py); la
+      elegida devuelve "START_GAME:<nave>:<skin>:<dificultad>:<modo_control>"
       que main.py interpreta para arrancar la partida.
     - "settings": volumen de musica/efectos, sensibilidad de mano y camara
       (modules/settings.py los persiste en ajustes.json); pantalla completa
@@ -435,6 +440,11 @@ class MenuScene:
         self.control_mode_seleccionada = 0
         self.modo_control = "camara"
 
+        # ELEGI TU NAVE: cuatro cartas; la eleccion se recuerda entre partidas
+        self.nave_seleccionada = 0
+        self.dificultad_elegida = "normal"
+        self.nave_t = 0
+
     def _cambiar_volumen_musica(self, valor):
         audio.set_volumen_musica(valor)
         settings.set_valor("volumen_musica", valor)
@@ -486,6 +496,14 @@ class MenuScene:
             self.title_phase += 0.025
             return
 
+        if self.state == "nave":
+            self.nave_t += 1
+            for i in range(len(ORDEN_NAVES)):
+                if self._rect_nave(i).collidepoint(mouse_pos):
+                    self.nave_seleccionada = i
+            self.title_phase += 0.025
+            return
+
         if self.state == "fases":
             for i, btn in enumerate(self.fase_botones):
                 btn.update(mouse_pos, mouse_pressed)
@@ -517,6 +535,8 @@ class MenuScene:
             return self._handle_control_mode_event(event)
         if self.state == "dificultad":
             return self._handle_dificultad_event(event)
+        if self.state == "nave":
+            return self._handle_nave_event(event)
         if self.state == "fases":
             return self._handle_fases_event(event)
 
@@ -667,12 +687,49 @@ class MenuScene:
                 self.dificultad_seleccionada = min(len(self.dificultad_botones) - 1, self.dificultad_seleccionada + 1)
                 return None
             if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
-                return self._iniciar_partida(self.dificultad_ids[self.dificultad_seleccionada])
+                return self._elegir_dificultad(self.dificultad_seleccionada)
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             for i, btn in enumerate(self.dificultad_botones):
                 if btn.handle_event(event):
                     self.dificultad_seleccionada = i
-                    return self._iniciar_partida(self.dificultad_ids[i])
+                    return self._elegir_dificultad(i)
+        return None
+
+    def _elegir_dificultad(self, indice):
+        self.dificultad_elegida = self.dificultad_ids[indice]
+        self.state = "nave"
+        self.nave_t = 0
+        audio.sonido_boton()
+        return None
+
+    def _rect_nave(self, i):
+        ancho, alto, gap = 250, 400, 26
+        total = len(ORDEN_NAVES) * ancho + (len(ORDEN_NAVES) - 1) * gap
+        x0 = self.screen_width // 2 - total // 2
+        return pygame.Rect(x0 + i * (ancho + gap), 150, ancho, alto)
+
+    def _handle_nave_event(self, event):
+        n = len(ORDEN_NAVES)
+        if event.type == pygame.KEYDOWN:
+            if event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
+                self.state = "dificultad"
+                audio.sonido_boton()
+                return None
+            if event.key in (pygame.K_LEFT, pygame.K_a):
+                self.nave_seleccionada = (self.nave_seleccionada - 1) % n
+                audio.sonido_boton()
+                return None
+            if event.key in (pygame.K_RIGHT, pygame.K_d):
+                self.nave_seleccionada = (self.nave_seleccionada + 1) % n
+                audio.sonido_boton()
+                return None
+            if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+                return self._iniciar_partida(self.dificultad_elegida)
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for i in range(n):
+                if self._rect_nave(i).collidepoint(event.pos):
+                    self.nave_seleccionada = i
+                    return self._iniciar_partida(self.dificultad_elegida)
         return None
 
     def _iniciar_partida(self, dificultad_id):
@@ -686,7 +743,8 @@ class MenuScene:
                 sufijo += ":buffs"
         else:
             sufijo = ""
-        return f"START_GAME:scout:default:{dificultad_id}:{self.modo_control}{sufijo}"
+        nave = ORDEN_NAVES[self.nave_seleccionada]
+        return f"START_GAME:{nave}:default:{dificultad_id}:{self.modo_control}{sufijo}"
 
     def _trigger_selected(self):
         label = self.buttons[self.selected].text
@@ -777,6 +835,20 @@ class MenuScene:
             surface.blit(self.surface, (0, 0))
             return
 
+        if self.state == "nave":
+            sub = render_texto_pixelado(self.subtitle_font, "ELEGI TU NAVE", (200, 200, 220))
+            self.surface.blit(sub, sub.get_rect(center=(self.screen_width // 2, 106)))
+            for i in range(len(ORDEN_NAVES)):
+                if i != self.nave_seleccionada:
+                    self._dibujar_carta_nave(i)
+            self._dibujar_carta_nave(self.nave_seleccionada)
+            hint = render_texto_pixelado(get_font(13), "Flechas para moverte - ENTER para despegar - ESC para volver",
+                                         (160, 160, 185))
+            self.surface.blit(hint, hint.get_rect(center=(self.screen_width // 2, self.screen_height - 50)))
+            self._dibujar_transicion()
+            surface.blit(self.surface, (0, 0))
+            return
+
         if self.state == "fases":
             sub = render_texto_pixelado(self.subtitle_font, "ELEGI EN QUE FASE EMPEZAR", (200, 200, 220))
             self.surface.blit(sub, sub.get_rect(center=(self.screen_width // 2, 106)))
@@ -803,6 +875,10 @@ class MenuScene:
                 extra = int(math.sin(self.hover_amp * 1.0) * 8)
             btn.draw(self.surface, extra_offset=extra)
 
+        self._dibujar_transicion()
+        surface.blit(self.surface, (0, 0))
+
+    def _dibujar_transicion(self):
         if self.transitioning_out or self.transition_alpha < 255:
             overlay = pygame.Surface(
                 (self.screen_width, self.screen_height), pygame.SRCALPHA
@@ -810,7 +886,82 @@ class MenuScene:
             overlay.fill((0, 0, 0, max(0, 255 - self.transition_alpha)))
             self.surface.blit(overlay, (0, 0))
 
-        surface.blit(self.surface, (0, 0))
+    def _dibujar_carta_nave(self, i):
+        """Carta de una nave: sprite grande con su llama, nombre, barras de
+        VELOCIDAD/CADENCIA/VIDAS en bloques y el rasgo propio."""
+        tipo = ORDEN_NAVES[i]
+        datos = TIPOS_NAVE[tipo]
+        marcada = i == self.nave_seleccionada
+        t = self.nave_t
+        rect = self._rect_nave(i)
+        entrada = max(0.0, min(1.0, (t - i * 5) / 18))
+        rect.y += int((1 - (1 - (1 - entrada) ** 3)) * 300)
+        if marcada:
+            rect.y -= 12 + int(math.sin(t * 0.12) * 3)
+        neon = (90, 220, 255) if not marcada else (255, 120, 230)
+        borde = neon if marcada else (70, 110, 170)
+
+        if marcada:
+            pixelfx.dibujar_halo(self.surface, neon, rect.centerx, rect.centery, int(rect.w * 0.62))
+        self.surface.fill(pixelfx.CONTORNO, rect.inflate(8, 8))
+        self.surface.fill((20, 12, 48), rect)
+        for y in range(rect.y + 6, rect.bottom - 4, 6):
+            self.surface.fill((27, 17, 60), (rect.x + 6, y, rect.w - 12, 2))
+        p = 4
+        x, y, w, h = rect
+        for caja in ((x + 2 * p, y, w - 4 * p, p), (x + 2 * p, y + h - p, w - 4 * p, p),
+                     (x, y + 2 * p, p, h - 4 * p), (x + w - p, y + 2 * p, p, h - 4 * p),
+                     (x + p, y + p, p, p), (x + w - 2 * p, y + p, p, p),
+                     (x + p, y + h - 2 * p, p, p), (x + w - 2 * p, y + h - 2 * p, p, p)):
+            self.surface.fill(borde, caja)
+
+        # nave con llama
+        cuerpo, ala, glow, _ = get_skin_colors("scout", "default")
+        sw, sh = sprites.get_ship_size(tipo, 40, 32)
+        escala = 2
+        nave = sprites.get_ship_surface(tipo, cuerpo, ala, sw * escala, sh * escala)
+        ncx = rect.centerx
+        ncy = rect.y + 110 + int(math.sin(t * 0.08 + i) * 4)
+        pixelfx.dibujar_halo(self.surface, glow, ncx, ncy, 70 if marcada else 52)
+        self.surface.blit(nave, nave.get_rect(center=(ncx, ncy)))
+
+        nombre = render_texto_pixelado(get_font(22, bold=True), datos["nombre"], WHITE if marcada else (200, 205, 230))
+        self.surface.blit(nombre, nombre.get_rect(center=(rect.centerx, rect.y + 206)))
+
+        stats = (
+            ("VELOCIDAD", (datos["speed"] - 0.10) / 0.14, (120, 255, 190)),
+            ("CADENCIA", (30 - datos["shoot_delay"]) / 15, (255, 220, 110)),
+            ("VIDAS", datos["max_lives"] / 7, (255, 120, 150)),
+        )
+        fuente = get_font(12, bold=True)
+        for k, (etiqueta, valor, color) in enumerate(stats):
+            yy = rect.y + 238 + k * 30
+            lab = fuente.render(etiqueta, True, (170, 175, 210))
+            self.surface.blit(lab, (rect.x + 18, yy))
+            llenos = max(1, min(7, int(round(valor * 7))))
+            for n in range(7):
+                caja = (rect.x + 112 + n * 17, yy + 1, 13, 12)
+                self.surface.fill(pixelfx.CONTORNO, pygame.Rect(caja).inflate(2, 2))
+                self.surface.fill(color if n < llenos else (45, 34, 84), caja)
+
+        rasgo_font = get_font(14)
+        palabras, lineas, actual = datos["rasgo"].split(), [], ""
+        for palabra in palabras:
+            prueba = f"{actual} {palabra}".strip()
+            if rasgo_font.size(prueba)[0] > rect.w - 30 and actual:
+                lineas.append(actual)
+                actual = palabra
+            else:
+                actual = prueba
+        lineas.append(actual)
+        for k, linea in enumerate(lineas):
+            s = rasgo_font.render(linea, True, neon if marcada else (150, 190, 230))
+            self.surface.blit(s, s.get_rect(center=(rect.centerx, rect.y + 340 + k * 18)))
+
+        if marcada:
+            ay = rect.bottom + 12 + int(math.sin(t * 0.2) * 3)
+            for k in range(5):
+                self.surface.fill(neon, (rect.centerx - (5 - k) * 2, ay + k * 2, (5 - k) * 4, 2))
 
     def _draw_settings(self):
         self.slider_musica.draw(self.surface, AZUL)
