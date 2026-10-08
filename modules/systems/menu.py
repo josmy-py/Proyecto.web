@@ -174,8 +174,14 @@ FASES_INICIO = (
     ("calabaza", "HALLOWEEN - REY CALABAZA", True),
     ("bruja", "HALLOWEEN - BRUJA NEON", True),
     ("parca", "HALLOWEEN - LA PARCA", True),
+    ("netrunner", "CYBER - NETRUNNER", True),
+    ("tarantula", "CYBER - TARANTULA-9", True),
+    ("kaiser", "CYBER - KAISER CROMADO", True),
 )
 FASES_HALLOWEEN = ("calabaza", "bruja", "parca")
+FASES_CYBER = ("netrunner", "tarantula", "kaiser")
+# filas de la grilla de ELEGIR FASE (las columnas se llenan de arriba abajo)
+FILAS_FASES = 6
 
 
 class MenuScene:
@@ -232,16 +238,18 @@ class MenuScene:
             MenuButton(cx, start_y + 3 * (btn_h + gap), btn_w, btn_h, "SALIR", self.button_font, (220, 80, 80)),
         ]
 
-        # ELEGIR FASE: grilla de 3 columnas x 5 filas + VOLVER
+        # ELEGIR FASE: grilla de 3 columnas x FILAS_FASES filas + VOLVER
         fase_font = get_font(17, bold=True)
         self.fase_botones = []
         for i, (fase_id, etiqueta, es_bonus) in enumerate(FASES_INICIO):
-            col, fila = i // 5, i % 5
+            col, fila = i // FILAS_FASES, i % FILAS_FASES
             if fase_id in FASES_HALLOWEEN:
                 color = (255, 140, 40)
+            elif fase_id in FASES_CYBER:
+                color = (0, 230, 255)
             else:
                 color = (255, 110, 200) if es_bonus else (100, 150, 255)
-            self.fase_botones.append(MenuButton(cx - 400 + col * 400, 190 + fila * 66, 370, 50, etiqueta, fase_font, color))
+            self.fase_botones.append(MenuButton(cx - 400 + col * 400, 172 + fila * 56, 370, 46, etiqueta, fase_font, color))
         self.btn_fases_buffs = MenuButton(cx, 522, 340, 44, "TODOS LOS BUFFS: NO", get_font(16, bold=True), (255, 200, 90))
         self.btn_fases_volver = MenuButton(cx, 582, 200, 44, "VOLVER", get_font(16, bold=True), (90, 90, 115))
         self.fase_seleccionada = 0
@@ -541,10 +549,10 @@ class MenuScene:
                 self.fase_seleccionada = (self.fase_seleccionada + 1) % total
             elif event.key == pygame.K_RIGHT:
                 i = self.fase_seleccionada
-                self.fase_seleccionada = i + 5 if i + 5 < total else i % 5
+                self.fase_seleccionada = i + FILAS_FASES if i + FILAS_FASES < total else i % FILAS_FASES
             elif event.key == pygame.K_LEFT:
                 i = self.fase_seleccionada
-                self.fase_seleccionada = i - 5 if i >= 5 else max(range(i, total, 5))
+                self.fase_seleccionada = i - FILAS_FASES if i >= FILAS_FASES else max(range(i, total, FILAS_FASES))
             elif event.key == pygame.K_t:
                 self._alternar_buffs_fase()
             elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):

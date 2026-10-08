@@ -39,6 +39,12 @@ ESC sale del juego.
   zombi rompe la cinematica), la ruta de Halloween: Rey Calabaza, Bruja Neon y La Parca.
   A mitad de su pelea, la Bruja Neon se toma una pocion y se vuelve gigante:
   ataca con los brazos (pociones, manotazos y barridos).
+- O la hackean y sale la ruta cyberpunk: Netrunner Fantasma, Tarantula-9 y
+  Kaiser Cromado, cada uno con su cinematica de entrada. Al final la nave
+  viaja a la Luna, Lucy baja y mira la Tierra, y la victoria sale al costado.
+  Para que en ese final suene una cancion propia, deja el archivo (.mp3, .ogg
+  o .wav) en assets/audio/music con "stay at your house" o "edgerunners" en
+  el nombre; si no hay ninguno suena el tema generado (musica_luna).
 - Si perdes dos veces seguidas aparece una calavera en "Intentar de Nuevo": al
   elegirlo, la Parca te lleva a su dimension para un duelo a muerte. Si te
   gana, conquista la galaxia.

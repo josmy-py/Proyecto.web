@@ -101,6 +101,8 @@ _PALABRAS_CANCION_PROPIA = {
     "jefe_pan": ("oiia", "spinningcat"),
     "jefe_nyan": ("nyan",),
     "impostor": ("amongus", "impostor"),
+    # final de la ruta cyberpunk (la Luna)
+    "luna": ("stayatyourhouse", "ireallywanttostay", "edgerunners"),
 }
 _EXTENSIONES_PROPIAS = (".ogg", ".mp3", ".wav")
 

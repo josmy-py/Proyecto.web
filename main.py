@@ -41,7 +41,7 @@ from modules.systems.input import (
     is_fist,
     find_hand_position,
 )
-from modules.systems.ui import draw_hud, draw_countdown, draw_camera_preview, draw_game_over, draw_victory_screen, draw_viewport_frame, draw_ship_status_bar, draw_victory_final
+from modules.systems.ui import draw_hud, draw_countdown, draw_camera_preview, draw_game_over, draw_victory_screen, draw_viewport_frame, draw_ship_status_bar, draw_victory_final, draw_victory_lateral
 from modules.core.boss_system import get_boss_for_wave, WaveBoss
 from modules.entities.boss import FinalBoss
 from modules.entities.titan_boss import TitanBoss
@@ -62,6 +62,10 @@ from modules.entities.parca_dimension import (
     FondoDimension, ParcaDimension, CinematicaParcaLlega, CinematicaParcaConquista, CinematicaParcaVencida,
     icono_calavera,
 )
+from modules.entities.cyberpunk import (
+    PROB_CYBER, FondoCyber, NetrunnerBoss, TarantulaBoss, KaiserBoss, icono_final as icono_cyber,
+)
+from modules.entities.cyberpunk_cine import CinematicaVictoriaCyber, CinematicaEntradaCyber, CinematicaLuna
 from modules.entities import mascota as mascota_mod
 from modules.entities.mascota import ZorritoEspacial, CapsulaMascota, dibujar_aviso_mascota
 from modules.systems.menu import MenuScene, Star
@@ -292,12 +296,21 @@ def main():
     # la victoria falsa la elige en vez de la de los gatos, ver ruta_bonus):
     #   "calabaza" -> "interludio_bruja" -> "bruja" -> "interludio_parca"
     #   -> "parca" -> "final" (cinematica de Halloween) -> "terminado"
+    # Ruta secreta cyberpunk (ver modules/entities/cyberpunk.py), igual:
+    #   "netrunner" -> "interludio_tarantula" -> "tarantula" ->
+    #   "interludio_kaiser" -> "kaiser" -> "final" (viaje a la Luna) -> "terminado"
     GAME_OVER_FALSO_FRAMES = 170
     congelados_bonus = ("victoria_falsa", "game_over_falso")
-    INTERLUDIOS_BONUS = ("interludio_alien", "interludio_pan", "interludio_bruja", "interludio_parca")
+    INTERLUDIOS_BONUS = ("interludio_alien", "interludio_pan", "interludio_bruja", "interludio_parca",
+                         "interludio_tarantula", "interludio_kaiser")
     JEFES_HALLOWEEN = ("calabaza", "bruja", "parca")
-    # "gatos" (Nyan -> Alien -> OIIA) o "halloween" (Calabaza -> Bruja -> Parca)
+    JEFES_CYBER = ("netrunner", "tarantula", "kaiser")
+    # "gatos" (Nyan -> Alien -> OIIA), "halloween" (Calabaza -> Bruja ->
+    # Parca) o "cyber" (Netrunner -> Tarantula -> Kaiser)
     ruta_bonus = "gatos"
+    # escena de la Luna que sigue animada detras de la victoria final de la
+    # ruta cyberpunk (ver _cinematica_luna)
+    escena_final = None
     aliado = None
     # El desafio de la Parca (ver modules/entities/parca_dimension.py): con
     # dos derrotas seguidas (reintentando, sin pasar por el menu) sale una
@@ -330,7 +343,7 @@ def main():
     # "pan" entran directo a ese jefe del bonus al terminar la cuenta
     # regresiva (sin la partida normal ni la victoria falsa; AJUSTES > "JUGAR
     # NIVEL BONUS" equivale a "nyan"). "Intentar de nuevo" lo respeta.
-    JEFES_BONUS_DIRECTOS = ("nyan", "alien", "pan", "calabaza", "bruja", "parca")
+    JEFES_BONUS_DIRECTOS = ("nyan", "alien", "pan", "calabaza", "bruja", "parca", "netrunner", "tarantula", "kaiser")
     inicio_partida = "w1"
     # ELEGIR FASE con "TODOS LOS BUFFS": la nave arranca con todo (ver
     # _dar_todos_los_buffs)
@@ -363,7 +376,7 @@ def main():
         nonlocal paused, nuevo_record, dificultad
         nonlocal stats_disparos, stats_aciertos, stats_alienigenas, stats_jefes, tiempo_sobrevivido
         nonlocal bonus_estado, bonus_timer, bonus_banner, fondo_pixel, bonus_directo_pendiente, aliado
-        nonlocal ruta_bonus
+        nonlocal ruta_bonus, escena_final
         nonlocal mascota, capsula_mascota, mascota_ofrecida, aviso_mascota
         nonlocal estado_mejoras, eleccion, ultima_oleada_mejora, mejora_inicial_pendiente
         if hasattr(draw_hud, 'hud'):
@@ -385,11 +398,17 @@ def main():
         bonus_estado = None; bonus_timer = 0; bonus_banner = None; fondo_pixel = None
         aliado = None
         mascota = None; capsula_mascota = None; mascota_ofrecida = False; aviso_mascota = None
-        ruta_bonus = "halloween" if inicio_partida in JEFES_HALLOWEEN else "gatos"
+        escena_final = None
+        if inicio_partida in JEFES_HALLOWEEN:
+            ruta_bonus = "halloween"
+        elif inicio_partida in JEFES_CYBER:
+            ruta_bonus = "cyber"
+        else:
+            ruta_bonus = "gatos"
         if inicio_partida in JEFES_BONUS_DIRECTOS:
             bonus_directo_pendiente = inicio_partida
             # la cuenta regresiva ya se ve sobre el cielo pixel del bonus
-            fondo_pixel = FondoHalloween() if ruta_bonus == "halloween" else FondoPixel()
+            fondo_pixel = {"halloween": FondoHalloween, "cyber": FondoCyber}.get(ruta_bonus, FondoPixel)()
         else:
             bonus_directo_pendiente = None
             wave = int(inicio_partida[1:])
@@ -746,7 +765,9 @@ def main():
         READY" y compañia (ver CinematicaVictoriaFalsa). Enter salta la
         parte tranquila; el glitch se ve entero. Con probabilidad
         PROB_HALLOWEEN un brazo de zombi rompe el glitch y la ruta pasa a
-        ser la de Halloween (ver CinematicaVictoriaHalloween)."""
+        ser la de Halloween (ver CinematicaVictoriaHalloween); con
+        PROB_CYBER la hackean y la ruta es la cyberpunk
+        (ver CinematicaVictoriaCyber)."""
         nonlocal tiempo_sobrevivido, ruta_bonus
         # el tiempo de verdad en la pantalla trampa (terminar_partida lo
         # recalcula al final de todo)
@@ -767,9 +788,17 @@ def main():
         audio.sonido_victoria()
         # mas fuerte que el resto de la musica (sin tocar el ajuste guardado)
         audio.reproducir_musica("victoria_tecno", ganancia=1.7)
-        ruta_bonus = "halloween" if random.random() < PROB_HALLOWEEN else "gatos"
+        dado = random.random()
+        if dado < PROB_HALLOWEEN:
+            ruta_bonus = "halloween"
+        elif dado < PROB_HALLOWEEN + PROB_CYBER:
+            ruta_bonus = "cyber"
+        else:
+            ruta_bonus = "gatos"
         if ruta_bonus == "halloween":
             cine = CinematicaVictoriaHalloween(captura)
+        elif ruta_bonus == "cyber":
+            cine = CinematicaVictoriaCyber(captura)
         else:
             cine = CinematicaVictoriaFalsa(captura)
         cine_surface = pygame.Surface((GAME_WIDTH, GAME_HEIGHT))
@@ -786,7 +815,7 @@ def main():
             for ev in cine.eventos:
                 if ev == "epica":
                     audio.reproducir_musica("glitch_epica", loop=False, ganancia=1.7)
-                elif ev in ("brazo", "agarra"):
+                elif ev in ("brazo", "agarra", "hackeo", "acceso"):
                     audio.sonido_explosion()
                     audio.sonido_impacto()
                 else:
@@ -815,6 +844,8 @@ def main():
         ship.invincible_timer = 90
         if jefe == "dimension":
             fondo_pixel = FondoDimension()
+        elif jefe in JEFES_CYBER:
+            fondo_pixel = FondoCyber()
         else:
             fondo_pixel = FondoHalloween() if jefe in JEFES_HALLOWEEN else FondoPixel()
         if settings.get("bonus_todos_buffs") or jefe == "dimension":
@@ -827,6 +858,8 @@ def main():
             audio.reproducir_musica("jefe_parca")
         elif jefe in JEFES_HALLOWEEN:
             _entrar_jefe_halloween(jefe)
+        elif jefe in JEFES_CYBER:
+            _entrar_jefe_cyber(jefe)
         elif jefe == "alien":
             _entrar_gato_alien()
         elif jefe == "pan":
@@ -854,6 +887,25 @@ def main():
         bonus_estado = jefe
         bonus_banner = [titulo, clase.nombre, 170]
         audio.reproducir_musica(f"jefe_{jefe}")
+
+    def _entrar_jefe_cyber(jefe):
+        """Jefe de la ruta cyberpunk: primero su cinematica de entrada (ver
+        CinematicaEntradaCyber) y despues la pelea, con su cartel y su tema
+        (musica_jefe_netrunner / _tarantula / _kaiser)."""
+        nonlocal bonus_estado, bonus_banner
+        golpe = (audio.sonido_explosion, audio.sonido_impacto)
+        _correr_cinematica(CinematicaEntradaCyber(jefe), f"jefe_{jefe}",
+                           {"glitch": (audio.sonido_impacto,), "golpe": golpe,
+                            "ojos": (audio.sonido_boton,), "carga": (audio.sonido_powerup,)})
+        clase, titulo = {
+            "netrunner": (NetrunnerBoss, "¡JEFE CYBERPUNK!"),
+            "tarantula": (TarantulaBoss, "¡SIGUIENTE JEFE!"),
+            "kaiser": (KaiserBoss, "¡ULTIMO JEFE!"),
+        }[jefe]
+        bosses.append(clase(dificultad))
+        bonus_estado = jefe
+        bonus_banner = [titulo, clase.nombre, 170]
+        ship.invincible_timer = max(ship.invincible_timer, 90)
 
     def _entrar_gato_alien():
         """El Gato Alien entra INVENCIBLE: antes de la pelea, la cinematica
@@ -968,7 +1020,7 @@ def main():
         for color in (ROSA, AMARILLO, MENTA, AZUL_CIELO):
             particles.extend([Particle(boss.x, boss.y, color) for _ in range(20)])
         audio.sonido_explosion()
-        if isinstance(boss, (GatoPanBoss, ParcaBoss)):
+        if isinstance(boss, (GatoPanBoss, ParcaBoss, KaiserBoss)):
             # un respiro para ver la explosion y despues la cinematica del
             # gatito durmiendo (ver _actualizar_bonus / _cinematica_gato_durmiendo)
             bonus_estado = "final"
@@ -977,7 +1029,7 @@ def main():
             audio.sonido_victoria()
             return
         # en vez de soltar ayuda: una carta de mejora en el respiro
-        if ruta_bonus == "halloween":
+        if ruta_bonus in ("halloween", "cyber"):
             _pedir_mejora("¡JEFE VENCIDO! ELEGI UNA MEJORA")
         else:
             _pedir_mejora("¡GATO VENCIDO! ELEGI UNA MEJORA")
@@ -989,6 +1041,12 @@ def main():
         elif isinstance(boss, BrujaBoss):
             bonus_estado = "interludio_parca"
             bonus_banner = ["¡ULTIMO JEFE!", ParcaBoss.nombre, 170]
+        elif isinstance(boss, NetrunnerBoss):
+            bonus_estado = "interludio_tarantula"
+            bonus_banner = ["¡SIGUIENTE JEFE!", TarantulaBoss.nombre, 170]
+        elif isinstance(boss, TarantulaBoss):
+            bonus_estado = "interludio_kaiser"
+            bonus_banner = ["¡ULTIMO JEFE!", KaiserBoss.nombre, 170]
         elif isinstance(boss, NyanBoss):
             bonus_estado = "interludio_alien"
             bonus_banner = ["¡SIGUIENTE JEFE!", "GATO ALIEN", 170]
@@ -1009,11 +1067,14 @@ def main():
                 bonus_banner = None
         if bonus_estado == "victoria_falsa":
             _cinematica_victoria_falsa()
-            _iniciar_pelea_bonus("calabaza" if ruta_bonus == "halloween" else "nyan")
+            _iniciar_pelea_bonus({"halloween": "calabaza", "cyber": "netrunner"}.get(ruta_bonus, "nyan"))
         elif bonus_estado in INTERLUDIOS_BONUS:
             bonus_timer -= 1
             if bonus_timer <= 0 and bonus_estado in ("interludio_bruja", "interludio_parca"):
                 _entrar_jefe_halloween(bonus_estado.split("_")[1])
+                audio.sonido_alerta_jefe()
+            elif bonus_timer <= 0 and bonus_estado in ("interludio_tarantula", "interludio_kaiser"):
+                _entrar_jefe_cyber(bonus_estado.split("_")[1])
                 audio.sonido_alerta_jefe()
             elif bonus_timer <= 0:
                 # cada gato con su tema: musica_jefe_gatos para el
@@ -1040,6 +1101,8 @@ def main():
                                         "libre": (audio.sonido_explosion, audio.sonido_victoria)})
                 elif ruta_bonus == "halloween":
                     _cinematica_fin_halloween()
+                elif ruta_bonus == "cyber":
+                    _cinematica_luna()
                 else:
                     _cinematica_gato_durmiendo()
                 bonus_estado = "terminado"
@@ -1089,6 +1152,16 @@ def main():
         ship.invincible_timer = max(ship.invincible_timer, 120)
         bonus_banner = ["¡SEGUNDA FASE!", "BRUJA NEON GIGANTE", 150]
         audio.reproducir_musica("jefe_bruja_gigante")
+
+    def _cinematica_luna():
+        """Final de la ruta cyberpunk: viaje a la Luna, Lucy baja de la nave
+        y mira la Tierra (ver CinematicaLuna) con musica_luna (o la cancion
+        propia que se reconozca por el nombre, ver audio._PALABRAS_CANCION_PROPIA).
+        La escena queda en escena_final: sigue animada detras de la victoria."""
+        nonlocal escena_final
+        escena_final = CinematicaLuna(ship._get_sprite())
+        _correr_cinematica(escena_final, "luna",
+                           {"aterriza": (audio.sonido_impacto,), "puerta": (audio.sonido_boton,)})
 
     def _cinematica_fin_halloween():
         """Final de la ruta de Halloween ("¡FELIZ HALLOWEEN!", ver
@@ -2159,7 +2232,15 @@ def main():
 
             if game_victory:
                 if bonus_estado == "terminado":
-                    if ruta_bonus == "dimension":
+                    if ruta_bonus == "cyber" and escena_final is not None:
+                        escena_final.update()
+                        escena_final.eventos.clear()
+                        escena_final.draw(game_surface)
+                        draw_victory_lateral(game_surface, GAME_WIDTH, GAME_HEIGHT, score, wave, stats_actuales(),
+                                             f"Récord: {progress.puntaje_maximo()}", nuevo_record, frame_count,
+                                             icono=icono_cyber(), entrada=escena_final.entrada_panel(),
+                                             mensaje="Venciste al Netrunner, a la Tarantula-9 y al Kaiser Cromado")
+                    elif ruta_bonus == "dimension":
                         draw_victory_final(game_surface, GAME_WIDTH, GAME_HEIGHT, score, wave, stats_actuales(),
                                            f"Récord: {progress.puntaje_maximo()}", nuevo_record, frame_count,
                                            icono=icono_calavera(), zetas=False, tema="halloween",

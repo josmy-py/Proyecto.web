@@ -1338,6 +1338,191 @@ def generar_musica_dimension_parca():
     return _ganar_volumen(fundido_de_bucle(mezcla, ms=200), empuje=1.6, pico=0.9)
 
 
+# ------------------------------------------------------- ruta cyberpunk
+
+def _sinte_lead(freq, dur):
+    """Lead de sintetizador: dos sierras apenas desafinadas, suavizadas,
+    con un vibrato que entra despacio."""
+    n = int(SR * dur)
+    t = np.arange(n) / SR
+    vibrato = 1 + 0.004 * np.sin(2 * np.pi * 5.5 * t) * np.minimum(1, t / 0.25)
+    fase = np.cumsum(freq * vibrato) / SR
+    onda = 0.5 * (((fase * 1.003) % 1.0) * 2 - 1) + 0.5 * (((fase * 0.997) % 1.0) * 2 - 1)
+    return suavizar(onda, 3) * envolvente(n, 0.008, dur * 1.3)
+
+
+def _bajo_synth(freq, dur):
+    """Bajo de sierra filtrado que "pica" (decae rapido)."""
+    n = int(SR * dur)
+    onda = onda_sierra(freq, dur) * 0.7 + onda_cuadrada(freq / 2, dur) * 0.3
+    return suavizar(onda, 10) * envolvente(n, 0.003, dur * 0.6)
+
+
+def _piano_electrico(freq, dur):
+    """Piano electrico suave (seno + armonicos que se apagan antes)."""
+    n = int(SR * dur)
+    t = np.arange(n) / SR
+    onda = (np.sin(2 * np.pi * freq * t) + 0.35 * np.sin(2 * np.pi * 2 * freq * t) * np.exp(-t / 0.3)
+            + 0.12 * np.sin(2 * np.pi * 7 * freq * t) * np.exp(-t / 0.05))
+    return onda * envolvente(n, 0.004, dur * 0.8)
+
+
+def _eco(señal, retardo, ganancia, repeticiones=3):
+    """Ecos (delay) que se van apagando."""
+    salida = señal.copy()
+    paso = int(SR * retardo)
+    for k in range(1, repeticiones + 1):
+        if paso * k >= len(señal):
+            break
+        salida[paso * k:] += señal[:-paso * k] * ganancia ** k
+    return salida
+
+
+def _tema_synth(bpm, tonica, acordes, compases, figura_bajo, melodia, glitch=False, empuje=2.0):
+    """Tema electronico (darksynth): bombo en negras, palmas en 2 y 4, hats
+    a contratiempo, bajo con la figura de 16 semicorcheas sobre la raiz de
+    cada acorde, colchon de supersierras y arpegios (rotos si glitch).
+    acordes: un acorde por compas (semitonos sobre la tonica), se repiten
+    hasta llenar `compases`. melodia: (semitono sobre tonica x4, corcheas)
+    desde el compas 5."""
+    pulso = 60.0 / bpm
+    compas = pulso * 4
+    semi = compas / 16
+    largo = int(SR * compas * compases) + 1
+    bajo, bateria, colchon, arpegio, lead = (np.zeros(largo) for _ in range(5))
+    bombo, palmas, hat = _bombo_tecno(0.3), _palmas(), _hat_abierto(0.05)
+    for c in range(compases):
+        inicio = c * compas
+        acorde = acordes[c % len(acordes)]
+        f_raiz = tonica * 2 ** (acorde[0] / 12)
+        for k in range(4):
+            _poner(bateria, bombo, inicio + k * pulso, 0.9)
+            _poner(bateria, hat, inicio + k * pulso + pulso / 2, 0.35)
+        for k in (1, 3):
+            _poner(bateria, palmas, inicio + k * pulso, 0.55)
+        for k, paso in enumerate(figura_bajo):
+            if paso is not None:
+                _poner(bajo, _bajo_synth(f_raiz * 2 ** (paso / 12), semi * 0.95), inicio + k * semi, 0.6)
+        n = int(SR * compas)
+        for nota in acorde:
+            capa = suavizar(_supersierra(tonica * 4 * 2 ** (nota / 12), compas, voces=5, semilla=c), 14)
+            _poner(colchon, capa * envolvente(n, 0.15, compas * 1.5), inicio, 0.14)
+        notas = [acorde[i % len(acorde)] + 12 * (i // len(acorde) % 2) for i in range(16)]
+        for k in range(16):
+            if glitch and (k * 5 + c) % 7 == 0:
+                continue
+            f = tonica * 8 * 2 ** (notas[k] / 12)
+            voz = _arpegio_glitch(f, semi) if glitch else _sinte_impostor(f, semi * 0.9)
+            _poner(arpegio, voz, inicio + k * semi, 0.1)
+    t = 4 * compas
+    i = 0
+    while t < largo / SR - 1e-6:
+        semitono, corcheas = melodia[i % len(melodia)]
+        dur = corcheas * pulso / 2
+        if semitono is not None:
+            _poner(lead, _sinte_lead(tonica * 4 * 2 ** (semitono / 12), dur), t, 0.3)
+        t += dur
+        i += 1
+    lead = _eco(lead, pulso * 0.75, 0.35)
+    mezcla = bajo * 0.6 + bateria * 0.8 + colchon + arpegio + lead
+    return _ganar_volumen(fundido_de_bucle(mezcla), empuje=empuje)
+
+
+def generar_musica_jefe_netrunner():
+    """Netrunner Fantasma: darksynth en La menor a 124 BPM, bajo que bombea
+    en octavas, arpegios rotos (bitcrush) y un lead con ecos."""
+    acordes = [(0, 3, 7), (0, 3, 7), (-4, 0, 3), (-4, 0, 3), (3, 7, 10), (3, 7, 10), (-2, 2, 5), (-1, 2, 5)]
+    bajo = [0, None, 12, 0, None, 0, 12, None, 0, None, 12, 0, 3, None, 12, 0]
+    melodia = [(12, 2), (15, 2), (19, 3), (17, 1), (15, 2), (12, 2), (10, 2), (12, 6), (None, 2),
+               (8, 2), (12, 2), (15, 3), (14, 1), (12, 2), (10, 2), (7, 2), (10, 6), (None, 2)]
+    return _tema_synth(124, 55.0, acordes, 24, bajo, melodia, glitch=True)
+
+
+def generar_musica_jefe_tarantula():
+    """Tarantula-9: metal industrial en Re# a 170 BPM con arpegios rotos y
+    guitarras gemelas."""
+    bpm, tonica = 170, 77.78
+    riff = [0, 0, None, 0, 0, None, 1, 0, 0, None, 0, 0, 6, "-", 5, "-"]
+    riff_b = [0, None, 0, 0, 3, None, 0, 0, 5, None, 3, 0, 1, "-", 0, None]
+    melodia = [(12, 1), (13, 1), (15, 1), (18, 1), (17, 2), (15, 2), (13, 1), (12, 1), (10, 1), (12, 1),
+               (13, 4), (12, 2), (15, 2), (18, 2), (17, 2), (15, 6), (None, 2)]
+    secciones = [(riff, [0, 0, 1, 0], "thrash", False),
+                 (riff_b, [0, 0, 3, 1, 0, 0, 6, 5], "thrash", True),
+                 (riff, [0, 1, 3, 1], "doble", True)]
+    return _tema_metal(bpm, tonica, secciones, ganancia=13, melodia=melodia, voz_melodia="gemelas",
+                       golpes_bronce=False, glitch=True, empuje=2.1)
+
+
+def generar_musica_jefe_kaiser():
+    """Kaiser Cromado (ultimo jefe cyberpunk): metal epico en Re menor a
+    150 BPM con bronces, coro y arpegios electronicos rotos."""
+    bpm, tonica = 150, 73.42
+    riff = [0, "-", 0, 0, 3, "-", 0, 0, 5, "-", 3, 0, 7, "-", 5, "-"]
+    riff_b = [0, 0, 0, None, 0, 0, 0, None, 1, 1, 1, None, 3, "-", 1, "-"]
+    melodia = [(12, 2), (15, 2), (19, 4), (17, 2), (15, 2), (14, 2), (15, 2), (12, 8),
+               (10, 2), (12, 2), (15, 4), (14, 2), (12, 2), (10, 2), (7, 2), (12, 8)]
+    secciones = [(riff, [0, 0, -2, 0], "galope", False),
+                 (riff_b, [0, 0, -4, -2, 0, 0, 3, 1], "doble", True),
+                 (riff, [0, -2, -4, -5], "blast", True)]
+    return _tema_metal(bpm, tonica, secciones, ganancia=12, melodia=melodia, voz_melodia="bronces",
+                       golpes_bronce=True, coro=True, glitch=True, empuje=2.1)
+
+
+def generar_musica_luna():
+    """Final de la ruta cyberpunk (el viaje a la Luna): balada synthwave
+    melancolica en Mi mayor a 84 BPM, medio tiempo, piano electrico,
+    colchon calido, bajo redondo y un lead con ecos largos. Si en
+    assets/audio/music hay una cancion propia cuyo nombre la nombre
+    (ver audio._PALABRAS_CANCION_PROPIA["luna"]), suena esa en su lugar."""
+    bpm, tonica = 84, 82.41
+    pulso = 60.0 / bpm
+    compas = pulso * 4
+    # Mi, Do#m, La, Si (un compas cada uno)
+    acordes = [(0, 4, 7, 11), (-3, 0, 4, 7), (-7, -3, 0, 4), (-5, -1, 2, 7)]
+    melodia = [(7, 2), (4, 2), (2, 1), (4, 3), (4, 2), (2, 2), (0, 2), (-1, 2),
+               (0, 3), (2, 1), (4, 2), (7, 2), (11, 4), (7, 2), (2, 2),
+               (11, 2), (9, 2), (7, 2), (4, 2), (9, 3), (7, 1), (4, 4),
+               (4, 2), (7, 2), (9, 2), (11, 2), (14, 4), (11, 4)]
+    compases = 16
+    largo = int(SR * compas * compases) + 1
+    bajo, bateria, colchon, piano, lead = (np.zeros(largo) for _ in range(5))
+    bombo, palmas, hat = _bombo_tecno(0.35), _palmas(0.4), _hat_abierto(0.04)
+    for c in range(compases):
+        inicio = c * compas
+        acorde = acordes[c % len(acordes)]
+        f_raiz = tonica * 2 ** (acorde[0] / 12)
+        if c >= 2:
+            _poner(bateria, bombo, inicio, 0.8)
+            _poner(bateria, bombo, inicio + pulso * 2.5, 0.5)
+            _poner(bateria, palmas, inicio + pulso * 2, 0.45)
+            for k in range(8):
+                _poner(bateria, hat, inicio + k * pulso / 2, 0.18 if k % 2 else 0.1)
+        nb = int(SR * compas)
+        _poner(bajo, onda_seno(f_raiz, compas) * envolvente(nb, 0.02, compas * 0.9), inicio, 0.5)
+        _poner(bajo, onda_seno(f_raiz, pulso * 1.5) * envolvente(int(SR * pulso * 1.5), 0.02, pulso),
+               inicio + pulso * 2.5, 0.35)
+        for nota in acorde:
+            capa = suavizar(_supersierra(tonica * 4 * 2 ** (nota / 12), compas, voces=5, desafino=0.004, semilla=c), 24)
+            _poner(colchon, capa * envolvente(nb, 0.4, compas * 2.5), inicio, 0.12)
+            for k in (0, 1.5, 3):
+                _poner(piano, _piano_electrico(tonica * 4 * 2 ** (nota / 12), pulso * 1.4), inicio + k * pulso, 0.1)
+    t = 4 * compas
+    i = 0
+    while t < largo / SR - 1e-6:
+        semitono, corcheas = melodia[i % len(melodia)]
+        dur = corcheas * pulso / 2
+        if semitono is not None:
+            _poner(lead, _sinte_lead(tonica * 4 * 2 ** (semitono / 12), dur * 1.1), t, 0.28)
+            _poner(lead, onda_seno(tonica * 8 * 2 ** (semitono / 12), dur) * envolvente(int(SR * dur), 0.01, dur),
+                   t, 0.08)
+        t += dur
+        i += 1
+    lead = _eco(lead, pulso * 0.75, 0.45, repeticiones=4)
+    bateria = _eco(bateria, pulso * 0.5, 0.2, repeticiones=2)
+    mezcla = bajo * 0.7 + bateria * 0.6 + colchon + piano + lead
+    return _ganar_volumen(fundido_de_bucle(mezcla, ms=120), empuje=1.5, pico=0.9)
+
+
 # ----------------------------------------------------------------- ejecucion
 
 SFX = {
@@ -1376,6 +1561,10 @@ MUSICA = {
     "musica_jefe_parca": generar_musica_jefe_parca,
     "musica_fin_halloween": generar_musica_fin_halloween,
     "musica_dimension_parca": generar_musica_dimension_parca,
+    "musica_jefe_netrunner": generar_musica_jefe_netrunner,
+    "musica_jefe_tarantula": generar_musica_jefe_tarantula,
+    "musica_jefe_kaiser": generar_musica_jefe_kaiser,
+    "musica_luna": generar_musica_luna,
     "musica_cuna": generar_musica_cuna,
     "musica_victoria_tecno": generar_musica_victoria_tecno,
     "musica_glitch_epica": generar_musica_glitch_epica,

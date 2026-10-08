@@ -691,3 +691,86 @@ def draw_victory_final(surface, game_w, game_h, score, wave, stats, texto_record
     neon.boton(surface, (game_w // 2 - 190, card.bottom + 26, 380, 40), "ENTER / R  -  volver al menu",
                color_pill, True, t)
     neon.scanlines(surface)
+
+
+_CYBER_FINAL = ((252, 238, 10), (0, 240, 255), (255, 40, 170))
+
+
+def _partir_lineas(texto, fuente, ancho):
+    lineas, actual = [], ""
+    for palabra in texto.split():
+        prueba = (actual + " " + palabra).strip()
+        if actual and fuente.size(prueba)[0] > ancho:
+            lineas.append(actual)
+            actual = palabra
+        else:
+            actual = prueba
+    if actual:
+        lineas.append(actual)
+    return lineas
+
+
+def draw_victory_lateral(surface, game_w, game_h, score, wave, stats, texto_record, nuevo_record, t,
+                         icono=None, mensaje="", entrada=1.0):
+    """Victoria final mas chica, en un panel al costado derecho (ruta
+    cyberpunk): la escena de la Luna sigue animada detras (ver
+    cyberpunk_cine.CinematicaLuna). entrada (0..1) la desliza desde el
+    borde. Mismos datos que draw_victory_final, en colores cian, magenta y
+    amarillo."""
+    if entrada <= 0:
+        return
+    ancho, alto = 400, 540
+    panel = pygame.Rect(game_w - ancho - 30 + int((1 - entrada) * (ancho + 60)), (game_h - alto) // 2, ancho, alto)
+    borde = _CYBER_FINAL[(t // 20) % 3]
+    neon.panel(surface, panel, borde, t, halo=False, alfa=215)
+    cx = panel.centerx
+    dibujar_texto_arcoiris(surface, "¡VICTORIA TOTAL!", get_font(34, bold=True), cx, panel.y + 22, t,
+                           amplitud=4, paleta=_CYBER_FINAL)
+    fuente = get_font(15)
+    for n, linea in enumerate(_partir_lineas(mensaje, fuente, ancho - 50)[:3]):
+        sub = render_texto_pixelado(fuente, linea, WHITE)
+        surface.blit(sub, (cx - sub.get_width() // 2, panel.y + 80 + n * 20))
+
+    stats = stats or {}
+    disparos = stats.get("disparos", 0)
+    precision = int(round(100 * stats.get("aciertos", 0) / disparos)) if disparos > 0 else 0
+    chips = [
+        ("PUNTUACION", f"{score}", AMARILLO),
+        ("OLEADA", f"{wave}", AZUL),
+        ("JEFES", f"{stats.get('jefes', 0)}", ROSA),
+        ("PRECISION", f"{precision}%", MENTA),
+        ("TIEMPO", formatear_tiempo(stats.get("tiempo", 0)), LAVANDA),
+        ("ENEMIGOS", f"{stats.get('asteroides', 0) + stats.get('alienigenas', 0)}", MELON),
+    ]
+    chip_w, chip_h = 168, 62
+    for i, (etiqueta, valor, color) in enumerate(chips):
+        col, fila = i % 2, i // 2
+        x = panel.x + 24 + col * (chip_w + 16)
+        y = panel.y + 150 + fila * (chip_h + 12) + int(math.sin(t * 0.06 + i) * 2)
+        chip = pygame.Rect(x, y, chip_w, chip_h)
+        surface.fill(neon.CONTORNO, chip.inflate(6, 6))
+        surface.fill((20, 14, 44), chip)
+        neon.marco_pixel(surface, chip, color, 3)
+        neon.cinta(surface, etiqueta, color, (chip.centerx, chip.y + 12), tam=10)
+        va = render_texto_pixelado(get_font(24, bold=True), valor, WHITE)
+        surface.blit(va, (chip.centerx - va.get_width() // 2, y + 28))
+
+    base_y = panel.y + 380
+    if icono is not None:
+        surface.blit(icono, (panel.x + 30, base_y))
+    centro_x = panel.x + 60 + (ancho - 60) // 2
+    if nuevo_record:
+        neon.cinta(surface, "¡NUEVO RÉCORD!", neon.ORO, (centro_x, base_y + 6), tam=12)
+    pulso = 0.5 + 0.5 * math.sin(t * 0.15)
+    color_record = (255, int(200 + 55 * pulso), int(90 + 100 * pulso)) if nuevo_record else WHITE
+    rec = render_texto_pixelado(get_font(19, bold=True), texto_record, color_record)
+    surface.blit(rec, (centro_x - rec.get_width() // 2, base_y + 22))
+    gracias = render_texto_pixelado(get_font(14), "¡Gracias por jugar!", ROSA_CHICLE)
+    surface.blit(gracias, (centro_x - gracias.get_width() // 2, base_y + 54))
+    # boton sin el halo de neon.boton (se veia como un foco sobre la Luna)
+    boton = pygame.Rect(cx - 165, panel.bottom - 58, 330, 38)
+    surface.fill(neon.CONTORNO, boton.inflate(6, 6))
+    surface.fill(pixelfx.apagar(_CYBER_FINAL[0], 0.35), boton)
+    neon.marco_pixel(surface, boton, _CYBER_FINAL[0], 3)
+    letras = neon.texto(15, "ENTER / R  -  volver al menu", WHITE)
+    surface.blit(letras, letras.get_rect(center=boton.center))
