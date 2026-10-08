@@ -50,7 +50,7 @@ from modules.entities.mega_boss import MegaBoss
 from modules.entities.nyan_boss import (
     JefeGatoBase, NyanBoss, GatoPanBoss, GatoAlienBoss,
     FondoPixel, pixelar, dibujar_scanlines, PIXEL_BONUS,
-    CinematicaGatoDormido, CinematicaVictoriaFalsa, sprite_pixel,
+    CinematicaGatoDormido, CinematicaVictoriaFalsa, CinematicaGolpeAlien, sprite_pixel,
 )
 from modules.entities.tripulante import TripulanteAliado, CinematicaTripulante
 from modules.entities import mascota as mascota_mod
@@ -793,20 +793,58 @@ def main():
         audio.sonido_alerta_jefe()
 
     def _entrar_gato_alien():
-        """El Gato Alien entra INVENCIBLE y el casco de la nave queda con una
-        sola vida (sin escudo): esta fase es corta a proposito, termina en
-        el GAME OVER falso y el tripulante te devuelve todas las vidas (ver
-        _revivir_con_aliado)."""
+        """El Gato Alien entra INVENCIBLE: antes de la pelea, la cinematica
+        del golpe (ver _cinematica_golpe_alien) deja el casco de la nave con
+        una sola vida (sin escudo). Esta fase es corta a proposito, termina
+        en el GAME OVER falso y el tripulante te devuelve todas las vidas
+        (ver _revivir_con_aliado)."""
         nonlocal bonus_estado, bonus_banner
+        _cinematica_golpe_alien()
+        bullets.clear(); boss_bullets.clear(); alien_bullets.clear()
         bosses.append(GatoAlienBoss(dificultad, invencible=True))
         bonus_estado = "alien"
         ship.lives = 1
         ship.shield_hits = 0
         ship.buffs.pop(BUFF_TYPE_SHIELD, None)
-        explosions.append(Explosion(ship.x, ship.y, RED, 30))
-        bonus_banner = ["¡GATO ALIEN!", "Tu casco quedo con 1 sola vida", 170]
-        audio.sonido_impacto()
+        ship.invincible_timer = 90
+        bonus_banner = ["¡GATO ALIEN!", "1 VIDA RESTANTE", 150]
         audio.reproducir_musica("jefe_gatos")
+
+    def _cinematica_golpe_alien():
+        """El plato del Gato Alien baja, carga y te pega de lleno: la barra de
+        corazones se vacia hasta dejar 1 (ver CinematicaGolpeAlien). Mini-bucle
+        propio como las otras cinematicas; Enter/Espacio/click/boton del mando
+        la adelantan."""
+        audio.detener_musica()
+        audio.sonido_alerta_jefe()
+        cine = CinematicaGolpeAlien(ship._get_sprite(), ship.lives, ship.max_lives, (ship.x, ship.y))
+        cine_surface = pygame.Surface((GAME_WIDTH, GAME_HEIGHT))
+        while not cine.terminada:
+            for evento in pygame.event.get():
+                if evento.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                if (evento.type == pygame.KEYDOWN and evento.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE, pygame.K_ESCAPE)) \
+                        or evento.type in (pygame.MOUSEBUTTONDOWN, pygame.JOYBUTTONDOWN):
+                    cine.saltar()
+            clock.tick(FPS)
+            cine.update()
+            for ev in cine.eventos:
+                if ev == "carga":
+                    audio.sonido_powerup()
+                elif ev == "golpe":
+                    audio.sonido_explosion()
+                    audio.sonido_impacto()
+                else:
+                    audio.sonido_impacto()
+            cine.eventos.clear()
+            cine.draw(cine_surface)
+            sx = game_offset_x + (random.randint(-cine.temblor, cine.temblor) if cine.temblor else 0)
+            sy = game_offset_y + (random.randint(-cine.temblor, cine.temblor) if cine.temblor else 0)
+            screen.fill((0, 0, 0))
+            screen.blit(cine_surface, (sx, sy))
+            draw_viewport_frame(screen, game_offset_x, game_offset_y, GAME_WIDTH, GAME_HEIGHT, pygame.time.get_ticks())
+            pygame.display.flip()
 
     def _dar_todos_los_buffs():
         """Opcion de AJUSTES "BONUS CON TODOS LOS BUFFS" y de ELEGIR FASE
@@ -871,8 +909,8 @@ def main():
         elif bonus_estado in ("interludio_alien", "interludio_pan"):
             bonus_timer -= 1
             if bonus_timer <= 0:
-                # cada gato con su tema: musica_jefe_gatos (chiptune) para el
-                # Alien y musica_jefe_pan.* (la cancion OIIA si se agrego una
+                # cada gato con su tema: musica_jefe_gatos para el
+                # Alien (despues de la cinematica del golpe) y musica_jefe_pan.* (la cancion OIIA si se agrego una
                 # propia, ver tools/extraer_nyan_video.py) para el Gato Pan
                 if bonus_estado == "interludio_alien":
                     _entrar_gato_alien()
@@ -880,7 +918,7 @@ def main():
                     bosses.append(GatoPanBoss(dificultad))
                     bonus_estado = "pan"
                     audio.reproducir_musica("jefe_pan")
-                audio.sonido_alerta_jefe()
+                    audio.sonido_alerta_jefe()
         elif bonus_estado == "game_over_falso":
             bonus_timer -= 1
             if bonus_timer <= 0:
@@ -939,6 +977,9 @@ def main():
                     cine.saltar()
             clock.tick(FPS)
             cine.update()
+            if cine.en_rescate:
+                # rota la pantalla de GAME OVER, el tripulante llega con su tema
+                audio.reproducir_musica("impostor")
             for ev in cine.eventos:
                 if ev == "disparo":
                     audio.sonido_impacto()
@@ -974,7 +1015,9 @@ def main():
         aliado = TripulanteAliado(ship)
         bonus_estado = "alien"
         bonus_banner = ["¡TRIPULANTE AL RESCATE!", "El Gato Alien perdio su escudo", 150]
-        audio.reproducir_musica("jefe_gatos")
+        # mientras el tripulante pelea a tu lado suena su tema de impostor
+        # (o una cancion propia de Among Us, ver audio._PALABRAS_CANCION_PROPIA)
+        audio.reproducir_musica("impostor")
 
     def _dibujar_banner_bonus(surface):
         if bonus_banner is None:

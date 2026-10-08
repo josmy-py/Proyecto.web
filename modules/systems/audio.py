@@ -100,6 +100,7 @@ def sonido_victoria():
 _PALABRAS_CANCION_PROPIA = {
     "jefe_pan": ("oiia", "spinningcat"),
     "jefe_nyan": ("nyan",),
+    "impostor": ("amongus", "impostor"),
 }
 _EXTENSIONES_PROPIAS = (".ogg", ".mp3", ".wav")
 

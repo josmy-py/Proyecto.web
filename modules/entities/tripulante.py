@@ -13,7 +13,7 @@ invencible te derrota (ver bonus_estado "game_over_falso" en main.py).
 Todo el arte es pixel art dibujado por codigo (como en nyan_boss.py), mas
 detallado que el de los gatos: contorno oscuro de 1 pixel, dos tonos de
 rojo con la "costura" en zigzag, visor con borde/reflejo, mochila y la
-mano con la pistola."""
+mano con la pistola (y la mano sola, vacia, de la cinematica)."""
 
 import math
 import random
@@ -121,6 +121,38 @@ def _arte_tripulante(objeto="pistola", encendido=False):
     return s
 
 
+def _formas_mano(s, color):
+    """Mano de tripulante sola (un mitón redondo con el pulgar arriba),
+    mirando a la izquierda: la palma, el pulgar y el puño de la manga."""
+    pygame.draw.ellipse(s, color, (1, 4, 13, 10))   # palma
+    pygame.draw.ellipse(s, color, (4, 1, 6, 7))     # pulgar
+    s.fill(color, (11, 5, 4, 8))                    # puño de la manga
+
+
+def _arte_mano():
+    """La mano del tripulante, sin nada en ella (para la trompada que rompe
+    el GAME OVER y para cuando asoma por el costado)."""
+    s = pygame.Surface((17, 16), pygame.SRCALPHA)
+    silueta = pygame.Surface((17, 16), pygame.SRCALPHA)
+    _formas_mano(silueta, CONTORNO)
+    for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, -1), (-1, 1), (1, 1)):
+        s.blit(silueta, (dx + 1, dy + 1))
+    capa = pygame.Surface((17, 16), pygame.SRCALPHA)
+    _formas_mano(capa, ROJO)
+    s.blit(capa, (1, 1))
+    # sombra abajo, brillo arriba, la linea del pulgar y la costura del puño
+    for y in range(16):
+        for x in range(17):
+            if tuple(s.get_at((x, y)))[:3] == ROJO and (y >= 12 or (x >= 12 and y >= 10)):
+                s.set_at((x, y), ROJO_OSCURO)
+    s.fill(ROJO_BRILLO, (6, 3, 2, 1))
+    s.fill(ROJO_BRILLO, (3, 7, 3, 1))
+    s.fill(ROJO_BRILLO, (2, 8, 1, 2))
+    s.fill(CONTORNO, (5, 8, 4, 1))
+    s.fill(CONTORNO, (11, 6, 1, 7))
+    return s
+
+
 def _arte_corazon():
     filas = (".XX.XX.", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X...")
     s = pygame.Surface((7, 6), pygame.SRCALPHA)
@@ -144,7 +176,7 @@ def _arte_ventila(abierta):
     return s
 
 
-_ARTES = {"tripulante": _arte_tripulante, "corazon": _arte_corazon,
+_ARTES = {"tripulante": _arte_tripulante, "corazon": _arte_corazon, "mano": _arte_mano,
           "tripulante_control": lambda: _arte_tripulante("control"),
           "tripulante_control_on": lambda: _arte_tripulante("control", True),
           "ventila": lambda: _arte_ventila(False), "ventila_abierta": lambda: _arte_ventila(True)}
@@ -366,6 +398,12 @@ class CinematicaTripulante:
         if self.t > 40:
             self.fin = min(self.fin, self.t + self.FUNDIDO)
 
+    @property
+    def en_rescate(self):
+        """Ya se rompio la pantalla y llega el tripulante (main.py arranca
+        ahi su musica de impostor)."""
+        return self._tr() >= 0
+
     def _tr(self):
         """Cuadros desde que se rompio la pantalla (negativo antes)."""
         return self.t - self.T_ROTURA
@@ -545,11 +583,10 @@ class CinematicaTripulante:
                     pygame.draw.circle(destello, (255, 240, 180, 200), (r, r), r)
                     surface.blit(destello, (int(fx * GAME_WIDTH) - r, int(fy * GAME_HEIGHT) - r))
             if self.t >= self.T_PUNO:
-                # el puño con la pistola atraviesa el centro, cada vez mas grande
+                # el puño (solo la mano) atraviesa el centro, cada vez mas grande
                 p = (self.t - self.T_PUNO) / (self.T_ROTURA - self.T_PUNO)
                 escala = int(6 + p * 8)
-                trip = sprite("tripulante", escala)
-                mano = trip.subsurface((23 * escala, 1 * escala, 12 * escala, 19 * escala))
+                mano = sprite("mano", escala)
                 surface.blit(mano, (GAME_WIDTH // 2 - mano.get_width() // 2, GAME_HEIGHT // 2 - mano.get_height() // 2))
             self._dibujar_pedazos(surface)
             return
@@ -570,7 +607,7 @@ class CinematicaTripulante:
                 nave.fill((gris, gris, gris, 0), special_flags=pygame.BLEND_RGBA_SUB)
             surface.blit(nave, (int(nx) - nave.get_width() // 2, int(ny) - nave.get_height() // 2))
 
-        # a) primero asoma solo la mano (con la pistola) por la derecha
+        # a) primero asoma solo la mano, vacia, por la derecha
         if tr < self.MANO_HASTA:
             if tr < 30:
                 p = 1 - (1 - tr / 30) ** 3
@@ -579,7 +616,7 @@ class CinematicaTripulante:
             else:
                 p = max(0.0, 1 - (tr - 62) / 28)
             escala = 10
-            mano = sprite("tripulante", escala).subsurface((23 * escala, 1 * escala, 12 * escala, 19 * escala))
+            mano = sprite("mano", escala)
             mx = GAME_WIDTH + 20 - p * (GAME_WIDTH * 0.30)
             my = GAME_HEIGHT * 0.45 + (math.sin(tr * 0.35) * 10 if 30 <= tr < 62 else 0)
             surface.blit(mano, (int(mx) - mano.get_width() // 2, int(my) - mano.get_height() // 2))

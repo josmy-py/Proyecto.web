@@ -1110,6 +1110,63 @@ def generar_musica_jefe_mega():
         ganancia=12, melodia=melodia, voz_melodia="gemelas", coro=True, empuje=2.3)
 
 
+def _sinte_impostor(freq, dur):
+    """Campanita de sintetizador fria (pulso finito + seno una octava
+    arriba, con un vibrato que tiembla): la voz "sospechosa" del tema del
+    tripulante."""
+    n = int(SR * dur)
+    t = np.arange(n) / SR
+    vibrato = 1 + 0.006 * np.sin(2 * np.pi * 6.5 * t)
+    fase = np.cumsum(freq * vibrato) / SR
+    pulso = np.where((fase % 1.0) < 0.125, 1.0, -0.15)
+    campana = np.sin(2 * np.pi * 2 * fase)
+    return (pulso * 0.45 + campana * 0.55) * envolvente(n, 0.004, dur * 0.9)
+
+
+def generar_musica_impostor():
+    """El tripulante al rescate: suspenso espacial "de impostor" (tema
+    original, no la musica del juego). Do menor a 116 BPM: un ostinato de
+    sintetizador frio con segundas menores que da desconfianza, golpes de
+    alarma cada 4 compases y metal de medio tiempo que se vuelve doble
+    bombo cuando la pelea arranca de verdad."""
+    bpm = 116
+    tonica = 65.41
+    riff_a = [0, "-", "-", "-", None, None, None, None, 1, "-", "-", "-", None, None, None, None]
+    riff_b = [0, None, 0, 0, None, 0, 1, None, 0, None, 0, 0, 6, "-", 5, "-"]
+    riff_c = [0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 8, "-", 7, "-"]
+    melodia = [(0, 2), (1, 2), (0, 2), (None, 2), (7, 1), (8, 1), (7, 2), (1, 4), (None, 2),
+               (12, 2), (11, 2), (8, 2), (7, 1), (6, 1), (7, 6), (None, 2)]
+    secciones = [(riff_a, [0, 0, 0, 0], "mitad", False),
+                 (riff_b, [0, 0, 1, 0, 0, 0, -2, -1], "rock", True),
+                 (riff_c, [0, 1, 0, -1, 0, 1, 3, -1], "doble", True)]
+    base = _tema_metal(bpm, tonica, secciones, ganancia=10, melodia=melodia,
+                       voz_melodia="guitarra", golpes_bronce=False, empuje=1.8)
+
+    # capa de suspenso encima de todo el tema
+    pulso = 60.0 / bpm
+    compas = pulso * 4
+    capa = np.zeros(len(base))
+    raices = [r for _, rs, _, _ in secciones for r in rs]
+    figura = (0, 12, 1, 12, 0, 7, 1, 8)
+    for c, raiz in enumerate(raices):
+        inicio = c * compas
+        f_raiz = tonica * 4 * 2 ** (raiz / 12)
+        for k, intervalo in enumerate(figura):
+            _poner(capa, _sinte_impostor(f_raiz * 2 ** (intervalo / 12), pulso / 2 * 0.95),
+                   inicio + k * pulso / 2, 0.22)
+        if c % 4 == 0:
+            # golpe de alarma: racimo disonante grave + soplido de ruido
+            for intervalo in (0, 1, 6):
+                _poner(capa, _bronces(f_raiz / 2 * 2 ** (intervalo / 12), pulso * 1.5, brillo=1.3, ataque=0.005),
+                       inicio, 0.16)
+            n = int(SR * pulso)
+            soplido = suavizar(ruido_blanco(pulso, semilla=c), 12) * np.linspace(0, 1, n) ** 2
+            if c:
+                _poner(capa, soplido, inicio - pulso, 0.35)
+    mezcla = base * 0.85 + capa
+    return _ganar_volumen(fundido_de_bucle(mezcla), empuje=2.0)
+
+
 # ----------------------------------------------------------------- ejecucion
 
 SFX = {
@@ -1141,6 +1198,7 @@ MUSICA = {
     # fase de Nyan Cat
     "musica_jefe_gatos": generar_musica_jefe_nyan,
     "musica_jefe_pan": generar_musica_jefe_pan,
+    "musica_impostor": generar_musica_impostor,
     "musica_cuna": generar_musica_cuna,
     "musica_victoria_tecno": generar_musica_victoria_tecno,
     "musica_glitch_epica": generar_musica_glitch_epica,

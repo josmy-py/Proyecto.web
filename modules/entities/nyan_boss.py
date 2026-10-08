@@ -1912,6 +1912,240 @@ class CinematicaGatoDormido:
             surface.blit(velo, (0, 0))
 
 
+# --------------------------------------- cinematica del golpe del Gato Alien
+
+_FILAS_CORAZON = (".XX.XX.", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X...")
+CORAZON_VIVO = (255, 70, 110)
+CORAZON_LUZ = (255, 190, 210)
+CORAZON_VACIO = (70, 40, 60)
+
+
+def _dibujar_corazon(surface, x, y, tam, lleno, blanco=False):
+    """Corazon pixel de 7x6 (cada pixel de `tam`), con contorno."""
+    for fy, fila in enumerate(_FILAS_CORAZON):
+        for fx, c in enumerate(fila):
+            if c == "X":
+                surface.fill(neon.CONTORNO, (x + fx * tam - 2, y + fy * tam - 2, tam + 4, tam + 4))
+    for fy, fila in enumerate(_FILAS_CORAZON):
+        for fx, c in enumerate(fila):
+            if c != "X":
+                continue
+            if blanco:
+                color = WHITE
+            elif not lleno:
+                color = CORAZON_VACIO
+            elif (fx, fy) in ((1, 1), (2, 1), (1, 2)):
+                color = CORAZON_LUZ
+            else:
+                color = CORAZON_VIVO
+            surface.fill(color, (x + fx * tam, y + fy * tam, tam, tam))
+
+
+class CinematicaGolpeAlien:
+    """Antes de la pelea contra el Gato Alien: el plato baja, carga energia
+    verde ("¡Miau! Esto te va a doler."), se tira en picada y le pega de
+    lleno a la nave. Destello, temblor, la nave sale despedida y la barra
+    de corazones se vacia uno por uno hasta dejar UNA sola vida
+    ("¡GOLPE CRITICO!" / "1 VIDA RESTANTE"); el plato vuelve arriba riendose
+    y arranca la pelea.
+
+    nave_pos: donde esta la nave (para que la pelea siga desde ahi).
+    eventos: "carga", "golpe" y "vida" (un corazon perdido) para los
+    sonidos de main.py; temblor: pixeles de sacudida del cuadro."""
+
+    FUNDIDO = 30
+    BAJA_HASTA = 70
+    CARGA_HASTA = 150
+    T_GOLPE = 172
+    DRENA_DESDE = 196
+    PASO_VIDA = 16
+
+    def __init__(self, sprite_nave, vidas, max_vidas, nave_pos):
+        self.sprite_nave = sprite_nave
+        self.vidas = max(1, vidas)
+        self.max_vidas = max(self.vidas, max_vidas, 1)
+        self.nave_pos = nave_pos
+        self.t = 0
+        self.eventos = []
+        self.temblor = 0
+        self.fondo = FondoPixel()
+        self.chispas = []
+        self.anillos = []
+        # cuadro en que se apaga el ultimo corazon (vidas - 1 en total)
+        self.fin_drenado = self.DRENA_DESDE + (self.vidas - 2) * self.PASO_VIDA
+        self.duracion = self.fin_drenado + 170
+        self.fin = self.duracion
+        self.ovni_arriba = (GAME_WIDTH / 2, GAME_HEIGHT * 0.26)
+
+    @property
+    def terminada(self):
+        return self.t >= self.fin
+
+    def saltar(self):
+        if self.t > 30:
+            self.fin = min(self.fin, self.t + self.FUNDIDO)
+
+    def vidas_mostradas(self):
+        """Corazones llenos en la barra: todas hasta el golpe, despues se
+        van apagando de a uno hasta quedar en 1."""
+        if self.t < self.DRENA_DESDE:
+            return self.vidas
+        perdidas = (self.t - self.DRENA_DESDE) // self.PASO_VIDA + 1
+        return max(1, self.vidas - perdidas)
+
+    def _pos_ovni(self):
+        ax, ay = self.ovni_arriba
+        nx, ny = self.nave_pos
+        t = self.t
+        if t < self.BAJA_HASTA:
+            p = 1 - (1 - t / self.BAJA_HASTA) ** 3
+            return ax, -80 + (ay + 80) * p
+        if t < self.CARGA_HASTA:
+            # flota temblando mientras carga (cada vez mas)
+            k = (t - self.BAJA_HASTA) / (self.CARGA_HASTA - self.BAJA_HASTA)
+            return ax + random.uniform(-1, 1) * 6 * k, ay + math.sin(t * 0.12) * 6
+        if t < self.T_GOLPE:
+            # retrocede un poquito y se tira en picada
+            p = (t - self.CARGA_HASTA) / (self.T_GOLPE - self.CARGA_HASTA)
+            if p < 0.3:
+                return ax, ay - 30 * (p / 0.3)
+            q = ((p - 0.3) / 0.7) ** 2
+            return ax + (nx - ax) * q, ay - 30 + (ny - 40 - ay + 30) * q
+        # rebota y vuelve arriba
+        p = min(1.0, (t - self.T_GOLPE) / 60)
+        suave = 1 - (1 - p) ** 3
+        return nx + (ax - nx) * suave, ny - 40 + (ay - ny + 40) * suave - math.sin(math.pi * p) * 60
+
+    def update(self):
+        self.t += 1
+        self.temblor = max(0, self.temblor - 1)
+        self.fondo.update()
+        ox, oy = self._pos_ovni()
+        if self.t == self.BAJA_HASTA:
+            self.eventos.append("carga")
+        if self.BAJA_HASTA <= self.t < self.CARGA_HASTA and self.t % 9 == 0:
+            self.anillos.append([ox, oy + 10, 120.0])
+        for a in self.anillos:
+            a[0], a[1] = ox, oy + 10
+            a[2] -= 4
+        self.anillos = [a for a in self.anillos if a[2] > 10]
+        if self.T_GOLPE - 22 < self.t < self.T_GOLPE:
+            # estela verde de la picada
+            self.chispas.append([ox + random.uniform(-30, 30), oy + random.uniform(-10, 20), 0, -1, 18, ESTRELLA_VERDE])
+        if self.t == self.T_GOLPE:
+            self.eventos.append("golpe")
+            self.temblor = 26
+            nx, ny = self.nave_pos
+            for _ in range(60):
+                a = random.uniform(0, 2 * math.pi)
+                v = random.uniform(2, 11)
+                color = random.choice((WHITE, AMARILLO, ESTRELLA_VERDE, (255, 120, 60)))
+                self.chispas.append([nx, ny, math.cos(a) * v, math.sin(a) * v, random.randint(20, 45), color])
+        if self.DRENA_DESDE <= self.t <= self.fin_drenado and (self.t - self.DRENA_DESDE) % self.PASO_VIDA == 0:
+            self.eventos.append("vida")
+            self.temblor = max(self.temblor, 8)
+        if self.T_GOLPE < self.t < self.fin_drenado + 60 and self.t % 5 == 0:
+            # humo de la nave averiada
+            nx, ny = self._pos_nave()
+            self.chispas.append([nx + random.uniform(-12, 12), ny, random.uniform(-0.4, 0.4), -1.2,
+                                 30, random.choice(((90, 90, 110), (60, 60, 80)))])
+        for c in self.chispas:
+            c[0] += c[2]
+            c[1] += c[3]
+            c[2] *= 0.94
+            c[3] *= 0.94
+            c[4] -= 1
+        self.chispas = [c for c in self.chispas if c[4] > 0]
+
+    def _pos_nave(self):
+        nx, ny = self.nave_pos
+        d = self.t - self.T_GOLPE
+        if d < 0:
+            return nx, ny + math.sin(self.t * 0.08) * 3
+        # sale despedida para abajo y vuelve despacio a su lugar
+        retroceso = 70 * math.exp(-d / 30) * min(1.0, d / 4)
+        return nx + math.sin(d * 0.9) * 8 * math.exp(-d / 25), ny + retroceso
+
+    def draw(self, surface):
+        mundo = pygame.Surface(surface.get_size())
+        self.fondo.draw(mundo)
+        ox, oy = self._pos_ovni()
+        d = self.t - self.T_GOLPE
+
+        # carga: anillos verdes que se cierran sobre el plato
+        for x, y, r in self.anillos:
+            neon.anillo_pixel(mundo, ESTRELLA_VERDE, x, y, r, 8)
+        if self.BAJA_HASTA <= self.t < self.T_GOLPE:
+            k = min(1.0, (self.t - self.BAJA_HASTA) / (self.CARGA_HASTA - self.BAJA_HASTA))
+            brillo = pygame.Surface((240, 240), pygame.SRCALPHA)
+            pygame.draw.circle(brillo, (*OVNI_LUZ, int(40 + 90 * k)), (120, 120), int(40 + 60 * k))
+            mundo.blit(brillo, (int(ox) - 120, int(oy) - 110))
+
+        # la nave (en rojo y titilando despues del golpe)
+        nx, ny = self._pos_nave()
+        if self.sprite_nave is not None:
+            nave = pygame.transform.scale(self.sprite_nave, (self.sprite_nave.get_width() * 2,
+                                                             self.sprite_nave.get_height() * 2))
+            if 0 <= d < 90 and (d // 4) % 2 == 0:
+                nave = nave.copy()
+                nave.fill((255, 60, 60, 0), special_flags=pygame.BLEND_RGBA_MAX)
+            _blit_centrado(mundo, nave, nx, ny)
+
+        ovni = sprite_pixel("ovni", (self.t // 8) % 2, 5, blanco=0 <= d < 6)
+        _blit_centrado(mundo, ovni, ox, oy)
+        for x, y, _, _, vida, color in self.chispas:
+            neon.cuadro_pixel(mundo, color, x, y, 8 if vida > 15 else 4)
+
+        surface.blit(pixelar(mundo, PIXEL_BONUS), (0, 0))
+
+        # impacto: destello blanco y onda
+        if 0 <= d < 14:
+            neon.velo(surface, WHITE, 255 * (1 - d / 14))
+        if 0 <= d < 30:
+            neon.anillo_pixel(surface, WHITE, self.nave_pos[0], self.nave_pos[1], 20 + d * 12, 10)
+
+        # textos nitidos
+        neon.franjas_cine(surface, self.t / 30, neon.VERDE, alto=48)
+        if 20 < self.t < self.BAJA_HASTA + 30 and (self.t // 6) % 4 != 0:
+            neon.titulo(surface, "¡GATO ALIEN!", 52, neon.VERDE, GAME_WIDTH // 2, 110)
+        if self.BAJA_HASTA + 10 < self.t < self.T_GOLPE - 8:
+            neon.globo(surface, "¡Miau! Esto te va a doler.", ox + 40, oy - 60, neon.VERDE, cola_derecha=True, tam=20)
+        if 0 <= d < 18:
+            neon.titulo(surface, "¡PUM!", 80, AMARILLO, GAME_WIDTH // 2, GAME_HEIGHT // 2)
+        if d >= 8:
+            if self.t < self.fin_drenado + 50 and (d // 5) % 3 != 0:
+                neon.titulo(surface, "¡GOLPE CRITICO!", 46, neon.ROJO, GAME_WIDTH // 2, GAME_HEIGHT // 2 - 60)
+            if self.t >= self.fin_drenado + 20 and (self.t // 10) % 3 != 0:
+                neon.cinta(surface, "1 VIDA RESTANTE", neon.ROJO, (GAME_WIDTH // 2, GAME_HEIGHT // 2 + 80), tam=24)
+            self._dibujar_vidas(surface)
+
+        neon.scanlines(surface)
+        restante = self.fin - self.t
+        if restante < self.FUNDIDO:
+            neon.velo(surface, (0, 0, 0), 255 * (1 - max(0, restante) / self.FUNDIDO))
+
+    def _dibujar_vidas(self, surface):
+        """Barra de corazones grande bajo el titulo; el que se apaga en este
+        cuadro destella en blanco y sacude."""
+        tam = 6 if self.max_vidas <= 10 else 4
+        ancho = 7 * tam + 14
+        total = self.max_vidas * ancho - 14
+        x0 = GAME_WIDTH // 2 - total // 2
+        y = GAME_HEIGHT // 2 - 6
+        llenos = self.vidas_mostradas()
+        caja = pygame.Rect(x0 - 24, y - 16, total + 48, 6 * tam + 32)
+        neon.panel(surface, caja, neon.ROJO, self.t, halo=False)
+        recien = (self.t - self.DRENA_DESDE) % self.PASO_VIDA < 6 and self.DRENA_DESDE <= self.t <= self.fin_drenado
+        for i in range(self.max_vidas):
+            x = x0 + i * ancho
+            sacudida = random.randint(-3, 3) if recien and i == llenos else 0
+            _dibujar_corazon(surface, x + sacudida, y + sacudida, tam, i < llenos and i < self.vidas,
+                             blanco=recien and i == llenos)
+        if llenos == 1 and self.t > self.fin_drenado and (self.t // 8) % 2 == 0:
+            # el ultimo corazon late
+            _dibujar_corazon(surface, x0, y, tam, True, blanco=True)
+
+
 # ------------------------------------------- cinematica de la victoria falsa
 
 PALABRAS_GLITCH = (
