@@ -15,7 +15,6 @@ Como los graficos, el audio esta pensado para poder retocarse facil: cambia
 las notas/duraciones de las funciones generar_* y vuelve a correr el script.
 """
 
-import math
 import os
 import wave
 
@@ -254,30 +253,6 @@ def construir_percusion(patron, duracion_slot):
 # a `envolvente()`. Por eso el archivo hace loop limpio: el final ya esta en
 # silencio cuando pygame.mixer.music vuelve a empezar desde el principio.
 
-def generar_musica_juego():
-    """Pista energica para el gameplay: bajo + arpegio + percusion simple."""
-    slot = 0.25  # duracion de una corchea
-    grados_bajo = [0, 0, 3, 3, 4, 4, 2, 2]  # 8 compases de 1s = 8s de loop
-    bajo = construir_patron(grados_bajo, slot * 4, onda_cuadrada, base_freq=110.0,
-                             ataque=0.01, caida=slot * 3.5, volumen=0.5)
-
-    # el arpegio sigue el acorde de cada nota del bajo (root, 3ra, 5ta, 3ra)
-    grados_lead = []
-    for grado in grados_bajo:
-        grados_lead.extend([grado, grado + 2, grado + 4, grado + 2])
-    lead = construir_patron(grados_lead, slot, onda_cuadrada, base_freq=440.0,
-                             ataque=0.005, caida=slot * 0.8, volumen=0.32)
-
-    patron_percusion = ["kick" if i % 4 == 0 else "hat" if i % 4 == 2 else None
-                         for i in range(32)]
-    percusion = construir_percusion(patron_percusion, slot) * 0.4
-
-    n = min(len(bajo), len(lead), len(percusion))
-    mezcla = bajo[:n] + lead[:n] + percusion[:n]
-    mezcla = fundido_de_bucle(mezcla)
-    return normalizar(mezcla, 0.8)
-
-
 def generar_musica_menu():
     """Pista calma y ambiental para el menu: acordes largos, sin percusion."""
     slot = 0.4
@@ -340,181 +315,6 @@ def generar_musica_muerte():
 
     pista = fundido_de_bucle(pista, ms=15)
     return normalizar(pista, 0.9)
-
-
-# ------------------------------------------------------- musica de jefes
-#
-# Un tema propio por jefe (ver modules/systems/audio.py reproducir_musica,
-# llamado con "jefe_<boss_id>" desde main.py al aparecer cada uno) en vez
-# de que siga sonando la musica generica del juego durante toda la pelea.
-# Las cinco comparten el mismo esqueleto ritmico que generar_musica_juego
-# (bajo de 8 notas x 4 slots + capa melodica de 32 notas x 1 slot +
-# percusion de 32 pasos x 1 slot, los tres largos iguales -> loop limpio
-# sin cortar a mitad de compas) pero varian tempo, timbre, acordes y patron
-# de percusion segun el caracter de cada jefe.
-
-def generar_musica_jefe_sentinel():
-    """Centinela Corrupto (oleada 10): mecanico pero con corrupcion
-    digital -bajo y percusion firmes, el lead se corta a silencio al azar
-    como una señal con interferencia, mas una capa de estatica de fondo
-    muy tenue- insinuando que algo anda mal en su sistema antes de pelear
-    con el."""
-    slot = 0.22
-    grados_bajo = [0, 0, 3, 0, 5, 5, 3, 2]
-    bajo = construir_patron(grados_bajo, slot * 4, onda_cuadrada, base_freq=98.0,
-                             ataque=0.008, caida=slot * 3.6, volumen=0.55)
-
-    rng = np.random.default_rng(42)
-    grados_lead = []
-    for grado in grados_bajo:
-        for gn in (grado + 7, grado + 10, grado + 7, grado + 12):
-            grados_lead.append(None if rng.random() < 0.15 else gn)
-    lead = construir_patron(grados_lead, slot, onda_cuadrada, base_freq=392.0,
-                             ataque=0.003, caida=slot * 0.7, volumen=0.3)
-
-    patron_percusion = ["kick" if i % 4 == 0 else "hat" if i % 2 == 0 else None
-                         for i in range(32)]
-    percusion = construir_percusion(patron_percusion, slot) * 0.38
-
-    n = min(len(bajo), len(lead), len(percusion))
-    estatica = suavizar(ruido_blanco(n / SR, semilla=9), 3)[:n] * 0.05
-    mezcla = bajo[:n] + lead[:n] + percusion[:n] + estatica
-    mezcla = fundido_de_bucle(mezcla)
-    return normalizar(mezcla, 0.8)
-
-
-def generar_musica_jefe_dragon():
-    """Vanguardia Autonoma / crucero-calavera (oleada 20): tema militar y
-    contundente -bajo pesado en sierra, acordes en bloque tipo "stab"
-    marcando el compas como una fanfarria de guerra, percusion de marcha
-    mas densa que el resto de jefes tempranos."""
-    slot = 0.2
-    grados_bajo = [0, 0, 0, 3, 5, 5, 3, 0]
-    bajo = construir_patron(grados_bajo, slot * 4, onda_sierra, base_freq=82.41,
-                             ataque=0.005, caida=slot * 3.5, volumen=0.6)
-
-    def acorde_stab(freq, dur):
-        return (onda_cuadrada(freq, dur) * 0.5 +
-                onda_cuadrada(freq * 1.5, dur) * 0.3 +
-                onda_cuadrada(freq * 2.0, dur) * 0.2)
-
-    grados_stab = []
-    for grado in grados_bajo:
-        grados_stab.extend([grado + 12, grado + 15, grado + 12, None])
-    stabs = construir_patron(grados_stab, slot, acorde_stab, base_freq=164.81,
-                              ataque=0.002, caida=slot * 0.55, volumen=0.28)
-
-    patron_percusion = ["kick", "hat", "kick", "hat"] * 8
-    percusion = construir_percusion(patron_percusion, slot) * 0.45
-
-    n = min(len(bajo), len(stabs), len(percusion))
-    mezcla = bajo[:n] + stabs[:n] + percusion[:n]
-    mezcla = fundido_de_bucle(mezcla)
-    return normalizar(mezcla, 0.85)
-
-
-def generar_musica_jefe_titan():
-    """Titan del Vacio (oleada 30): tema lento y pesadisimo para un pulpo
-    mecanico gigante -drone grave sostenido, golpes de percusion muy
-    espaciados (como pisadas o latigazos de tentaculo, no un ritmo rapido)
-    y un lamento agudo disonante muy de fondo (el ojo que te sigue);
-    tempo bastante mas lento que el resto de los jefes."""
-    slot = 0.5
-
-    def drone(freq, dur):
-        return (onda_seno(freq, dur) * 0.6 + onda_seno(freq * 1.01, dur) * 0.25 +
-                onda_seno(freq * 2.0, dur) * 0.15)
-
-    grados_bajo = [0, 0, 0, 0, -3, -3, 0, 0]
-    bajo = construir_patron(grados_bajo, slot * 4, drone, base_freq=55.0,
-                             ataque=0.3, caida=slot * 3.6, volumen=0.7)
-
-    grados_lamento = []
-    for i, grado in enumerate(grados_bajo):
-        grados_lamento.extend([grado + 7 if i % 2 == 0 else grado + 5, None, None, None])
-    lamento = construir_patron(grados_lamento, slot, onda_seno, base_freq=220.0,
-                                ataque=0.15, caida=slot * 0.9, volumen=0.18)
-
-    patron_percusion = [None] * 32
-    patron_percusion[0] = "kick"
-    patron_percusion[16] = "kick"
-    percusion = construir_percusion(patron_percusion, slot) * 0.55
-
-    n = min(len(bajo), len(lamento), len(percusion))
-    mezcla = bajo[:n] + lamento[:n] + percusion[:n]
-    mezcla = fundido_de_bucle(mezcla, ms=40)
-    return normalizar(mezcla, 0.8)
-
-
-def generar_musica_jefe_anomalia():
-    """La Anomalia Final (oleada 40): tema disonante e inestable para una
-    calavera glicheada -voces desafinadas entre si con una leve deriva de
-    tono (tiemblan, no suenan limpias), notas que se cortan a silencio al
-    azar en el lead, y bloques cortos de silencio al azar en la mezcla
-    entera que imitan el glitch visual del propio jefe."""
-    slot = 0.18
-    rng = np.random.default_rng(404)
-
-    def voz_glitch(freq, dur):
-        n = int(SR * dur)
-        t = np.linspace(0, dur, n, endpoint=False)
-        deriva = 1.0 + 0.02 * np.sin(2 * np.pi * 3.0 * t)
-        base = np.sin(2 * np.pi * freq * deriva * t)
-        detune = np.sin(2 * np.pi * freq * 1.03 * t)
-        return base * 0.65 + detune * 0.35
-
-    grados_bajo = [0, 0, 1, 0, -2, -2, 0, 1]
-    bajo = construir_patron(grados_bajo, slot * 4, voz_glitch, base_freq=87.31,
-                             ataque=0.01, caida=slot * 3.5, volumen=0.55)
-
-    grados_lead = []
-    for grado in grados_bajo:
-        for gn in (grado + 12, grado + 11, grado + 12, grado + 15):
-            grados_lead.append(None if rng.random() < 0.22 else gn)
-    lead = construir_patron(grados_lead, slot, voz_glitch, base_freq=349.23,
-                             ataque=0.002, caida=slot * 0.6, volumen=0.3)
-
-    patron_percusion = ["hat" if rng.random() < 0.6 else None for _ in range(32)]
-    patron_percusion[0] = "kick"
-    patron_percusion[16] = "kick"
-    percusion = construir_percusion(patron_percusion, slot) * 0.32
-
-    n = min(len(bajo), len(lead), len(percusion))
-    mezcla = bajo[:n] + lead[:n] + percusion[:n]
-    bloque = int(SR * 0.04)
-    for i in range(0, n, bloque):
-        if rng.random() < 0.05:
-            mezcla[i:i + bloque] *= 0.05
-    mezcla = fundido_de_bucle(mezcla)
-    return normalizar(mezcla, 0.85)
-
-
-def generar_musica_jefe_mega():
-    """Mega-jefe final (oleada 50): el tema mas grande e intenso de
-    todos -bajo pesado en sierra, acordes en bloque de cuatro voces y la
-    percusion mas densa del juego- para la batalla final."""
-    slot = 0.16
-    grados_bajo = [0, 0, 3, 3, 5, 5, 4, 3]
-    bajo = construir_patron(grados_bajo, slot * 4, onda_sierra, base_freq=73.42,
-                             ataque=0.004, caida=slot * 3.4, volumen=0.62)
-
-    def acorde_epico(freq, dur):
-        return (onda_cuadrada(freq, dur) * 0.4 + onda_cuadrada(freq * 1.5, dur) * 0.3 +
-                onda_seno(freq * 2.0, dur) * 0.3)
-
-    grados_stab = []
-    for grado in grados_bajo:
-        grados_stab.extend([grado + 12, grado + 15, grado + 12, grado + 19])
-    stabs = construir_patron(grados_stab, slot, acorde_epico, base_freq=146.83,
-                              ataque=0.002, caida=slot * 0.5, volumen=0.28)
-
-    patron_percusion = ["kick" if i % 3 == 0 else "hat" for i in range(32)]
-    percusion = construir_percusion(patron_percusion, slot) * 0.48
-
-    n = min(len(bajo), len(stabs), len(percusion))
-    mezcla = bajo[:n] + stabs[:n] + percusion[:n]
-    mezcla = fundido_de_bucle(mezcla)
-    return normalizar(mezcla, 0.9)
 
 
 def generar_musica_jefe_nyan():
@@ -939,7 +739,8 @@ def _lead_guitarra(freq, dur, ganancia):
 
 
 def generar_musica_juego_metal(nivel):
-    """nivel 1..4 (el juego elige cual en main._musica_partida): con cada
+    """nivel 0..4 (el juego elige cual en main._musica_partida). El 0 (oleadas
+    1-10) es metal liviano con una melodia de sintetizador arcade. Con cada
     nivel sube el tempo (130 -> 160 BPM) y la distorsion; el 2 suma un
     acorde abierto a mitad de compas, bombo extra, platillo en cada compas
     y guitarra lider en la segunda mitad; el 3 pasa a semicorcheas con
@@ -959,7 +760,7 @@ def generar_musica_juego_metal(nivel):
     afinacion = -2 if nivel >= 4 else 0          # el ultimo nivel baja la afinacion
     base_freq = 82.41 * (2.0 ** (afinacion / 12))  # Mi grave
     raices = [0, 0, 3, -2, 5, 3, 0, -2]            # Mi Mi Sol Re | La Sol Mi Re
-    ganancia = (0, 3, 6, 10, 16)[nivel]
+    ganancia = (2.5, 3, 6, 10, 16)[nivel]
     subdivision = 4 if nivel >= 3 else 2           # corcheas o semicorcheas
 
     bombo, redoble, hat, platillo = _bombo_tecno(0.22), _redoble(), _hat_abierto(0.05), _platillo()
@@ -1015,8 +816,298 @@ def generar_musica_juego_metal(nivel):
                     # segunda voz a la quinta, como las guitarras gemelas del metal
                     _poner(lead, _lead_guitarra(f * 1.5, corchea, 3 + nivel), c * compas + k * corchea, 0.22)
 
+    if nivel == 0:
+        # melodia de sintetizador arcade (pulso angosto) sobre el riff liviano
+        frase = [7, 10, 12, 10, 7, 5, 7, None, 3, 5, 7, 5, 3, 0, 3, None]
+        for c in range(compases):
+            for k in range(8):
+                semi_lead = frase[(c % 2) * 8 + k]
+                if semi_lead is None:
+                    continue
+                f = 329.63 * 2 ** (semi_lead / 12)
+                nota = onda_cuadrada(f, corchea, ancho_pulso=0.25) * envolvente(int(SR * corchea), 0.004, corchea * 0.8)
+                _poner(lead, nota, c * compas + k * corchea, 0.22)
+
     mezcla = guitarra * 0.55 + bajo * 0.5 + bateria * 0.7 + lead
     return _ganar_volumen(fundido_de_bucle(mezcla), empuje=1.5 + 0.2 * nivel)
+
+
+# ------------------------------------------------- jefes: metal arcade
+#
+# Cada jefe de oleada tiene su propio tema de metal con el espiritu de
+# Metal Slug 3: guitarras distorsionadas con riff propio, bateria de rock,
+# bajo, una melodia que se queda en la cabeza (guitarra lider o "metales"
+# de orquesta) y golpes de bronces en los cambios de acorde. Todos estan
+# armados en secciones (riff A -> riff B con melodia -> remate) de unos
+# 25-35 segundos para que no canse el loop, y saturados para que suenen
+# fuerte por encima de los disparos.
+
+def _bronces(freq, dur, brillo=1.0, ataque=0.03):
+    """Seccion de metales (trompetas/trombones): suma de armonicos que se
+    van abriendo en el ataque, con un vibrato leve; dos voces desafinadas
+    para que suene a grupo y no a una sola trompeta."""
+    n = int(SR * dur)
+    t = np.arange(n) / SR
+    apertura = np.minimum(1.0, t / max(ataque, 1e-3))
+    salida = np.zeros(n)
+    for desafino in (0.997, 1.003):
+        fase = 2 * np.pi * freq * desafino * (t + 0.0015 * np.sin(2 * np.pi * 5.5 * t) * np.minimum(1, t / 0.3))
+        for k in range(1, 11):
+            if freq * k > SR / 2.2:
+                break
+            amp = (1.0 / k) * apertura ** (0.6 + 0.5 * k / brillo)
+            salida += amp * np.sin(k * fase)
+    salida = np.tanh(salida * 0.9)
+    return salida * envolvente(n, 0.01, dur * 1.4)
+
+
+def _coro(freq, dur):
+    """Colchon de "voces" (pad de vocales "aaah") para los jefes grandes."""
+    n = int(SR * dur)
+    t = np.arange(n) / SR
+    salida = np.zeros(n)
+    for k, d in enumerate((0.994, 1.0, 1.006, 2.0, 1.5)):
+        fase = 2 * np.pi * freq * d * t + k
+        salida += np.sin(fase) + 0.3 * np.sin(2 * fase) + 0.15 * np.sin(3 * fase)
+    sube = np.minimum(1.0, t / 0.25)
+    baja = np.minimum(1.0, (dur - t) / 0.3)
+    return salida / 5 * sube * np.clip(baja, 0, 1)
+
+
+def _arpegio_glitch(freq, dur, bits=4):
+    """Cuadrada con "bitcrush" (pocos niveles de volumen): el sintetizador
+    roto de la Anomalia."""
+    onda = onda_cuadrada(freq, dur, ancho_pulso=0.3) * 0.6 + onda_sierra(freq * 2, dur) * 0.4
+    niveles = 2 ** bits
+    onda = np.round(onda * niveles) / niveles
+    return onda * envolvente(int(SR * dur), 0.002, dur * 0.7)
+
+
+def _tom(freq, dur=0.3):
+    t = np.arange(int(SR * dur)) / SR
+    f = freq * (1 + 0.6 * np.exp(-t / 0.02))
+    return np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t / 0.12)
+
+
+def _bateria_metal(mezcla, estilo, inicio, compas, kit, relleno=False):
+    """Un compas de bateria. estilo: "rock", "galope", "thrash" (skank),
+    "doble" (doble bombo), "mitad" (medio tiempo pesado), "blast"."""
+    bombo, redoble, hat, platillo, toms = kit
+    pulso = compas / 4
+    semi = pulso / 4
+    if relleno:
+        # redoble de toms bajando para entrar a la seccion siguiente
+        for s in range(16):
+            golpe = redoble if s < 8 else toms[min(2, (s - 8) // 3)]
+            _poner(mezcla, golpe, inicio + s * semi, 0.45 + 0.03 * s)
+        return
+    for b in range(4):
+        t = inicio + b * pulso
+        if estilo == "blast":
+            for s in range(4):
+                _poner(mezcla, bombo, t + s * semi, 0.8)
+                _poner(mezcla, redoble if s % 2 else hat, t + s * semi, 0.5)
+            continue
+        if estilo == "thrash":
+            _poner(mezcla, bombo, t, 0.9)
+            _poner(mezcla, redoble, t + pulso / 2, 0.8)
+            _poner(mezcla, hat, t, 0.3)
+            continue
+        if estilo == "mitad":
+            if b == 0:
+                _poner(mezcla, bombo, t, 1.0)
+                _poner(mezcla, bombo, t + pulso * 0.75, 0.8)
+            if b == 2:
+                _poner(mezcla, redoble, t, 1.0)
+            _poner(mezcla, hat, t, 0.3)
+            continue
+        if estilo == "doble":
+            for s in range(4):
+                _poner(mezcla, bombo, t + s * semi, 0.7)
+        elif estilo == "galope":
+            for s in (0, 2, 3):
+                _poner(mezcla, bombo, t + s * semi, 0.8)
+        elif b in (0, 2):
+            _poner(mezcla, bombo, t, 0.9)
+            if b == 2:
+                _poner(mezcla, bombo, t + pulso / 2, 0.7)
+        if b in (1, 3):
+            _poner(mezcla, redoble, t, 0.85)
+        for s in range(2):
+            _poner(mezcla, hat, t + s * pulso / 2, 0.25)
+
+
+def _tema_metal(bpm, tonica, secciones, ganancia, melodia=None, voz_melodia="guitarra",
+                golpes_bronce=True, coro=False, glitch=False, empuje=2.0):
+    """Arma un tema de jefe.
+    tonica: frecuencia de la cuerda grave (raiz de los acordes).
+    secciones: lista de (riff, raices, estilo_bateria, con_melodia). riff es
+      un compas de 16 semicorcheas: numero = semitono sobre la raiz (golpe
+      de power chord, apagado si es corto), "-" = sostener el anterior,
+      None = silencio. raices: un semitono por compas.
+    melodia: lista de (semitono sobre la tonica x4, duracion en corcheas);
+      suena en las secciones con_melodia, repitiendose.
+    voz_melodia: "guitarra", "bronces" o "gemelas" (dos guitarras en tercera)."""
+    pulso = 60.0 / bpm
+    compas = pulso * 4
+    semi = compas / 16
+    total_compases = sum(len(raices) for _, raices, _, _ in secciones)
+    total = int(SR * compas * total_compases) + 1
+    guitarra, bajo, bateria, arriba, fondo = (np.zeros(total) for _ in range(5))
+    kit = (_bombo_tecno(0.2), _redoble(), _hat_abierto(0.04), _platillo(),
+           [_tom(f) for f in (180, 130, 95)])
+
+    c_global = 0
+    for s_idx, (riff, raices, estilo, con_melodia) in enumerate(secciones):
+        for c_local, raiz in enumerate(raices):
+            inicio = c_global * compas
+            f_raiz = tonica * 2 ** (raiz / 12)
+            # guitarra ritmica y bajo siguiendo el riff
+            k = 0
+            while k < 16:
+                paso = riff[k]
+                largo = 1
+                while k + largo < 16 and riff[k + largo] == "-":
+                    largo += 1
+                if paso is not None and paso != "-":
+                    f = f_raiz * 2 ** (paso / 12)
+                    dur = semi * largo
+                    apagado = largo == 1
+                    _poner(guitarra, _power_chord(f, dur, ganancia, apagado), inicio + k * semi,
+                           0.7 if apagado else 0.9)
+                    nb = int(SR * dur)
+                    nota_bajo = suavizar(onda_seno(f / 2, dur) + 0.5 * onda_sierra(f / 2, dur), 6)
+                    _poner(bajo, nota_bajo * envolvente(nb, 0.003, dur * 0.8), inicio + k * semi, 0.55)
+                k += largo
+            ultimo = c_local == len(raices) - 1
+            ultima_seccion = s_idx == len(secciones) - 1
+            _bateria_metal(bateria, estilo, inicio, compas, kit,
+                           relleno=ultimo and not ultima_seccion and c_local % 4 == 3)
+            if c_local % 4 == 0:
+                _poner(bateria, kit[3], inicio, 0.75)
+            if golpes_bronce and (c_local == 0 or raiz != raices[c_local - 1]):
+                for intervalo in (0, 7, 12, 15):
+                    _poner(arriba, _bronces(f_raiz * 4 * 2 ** (intervalo / 12), pulso * 0.9, ataque=0.015),
+                           inicio, 0.12)
+            if coro:
+                for intervalo in (0, 3, 7):
+                    _poner(fondo, _coro(f_raiz * 4 * 2 ** (intervalo / 12), compas), inicio, 0.18)
+            if glitch:
+                for n_arp in range(16):
+                    if (n_arp * 7 + c_global) % 5 == 0:
+                        continue  # se "cuelga" un paso
+                    intervalo = (0, 3, 7, 10, 12, 10, 7, 3)[n_arp % 8]
+                    _poner(fondo, _arpegio_glitch(f_raiz * 4 * 2 ** (intervalo / 12), semi), inicio + n_arp * semi, 0.2)
+            c_global += 1
+
+        # melodia de la seccion
+        if con_melodia and melodia:
+            t = (c_global - len(raices)) * compas
+            fin = c_global * compas
+            i = 0
+            while t < fin - 1e-6:
+                semitono, corcheas = melodia[i % len(melodia)]
+                dur = min(corcheas * pulso / 2, fin - t)
+                if semitono is not None:
+                    f = tonica * 4 * 2 ** (semitono / 12)
+                    if voz_melodia == "bronces":
+                        _poner(arriba, _bronces(f, dur, brillo=1.4), t, 0.32)
+                        _poner(arriba, _bronces(f / 2, dur, brillo=1.0), t, 0.18)
+                    else:
+                        _poner(arriba, _lead_guitarra(f, dur, 6), t, 0.32)
+                        if voz_melodia == "gemelas":
+                            _poner(arriba, _lead_guitarra(f * 2 ** (4 / 12), dur, 6), t, 0.2)
+                t += dur
+                i += 1
+
+    mezcla = guitarra * 0.55 + bajo * 0.5 + bateria * 0.75 + arriba + fondo
+    return _ganar_volumen(fundido_de_bucle(mezcla), empuje=empuje)
+
+
+# riffs de un compas (16 semicorcheas)
+_RIFF_GALOPE = [0, 0, 0, None, 0, 0, 0, None, 0, 0, 0, None, 3, "-", 5, "-"]
+_RIFF_MARCHA = [0, "-", None, 0, 0, None, 0, None, 0, "-", None, 0, 7, "-", 5, "-"]
+
+
+def generar_musica_jefe_sentinel():
+    """Centinela Corrupto (oleada 10): marcha militar metalera en Mi menor a
+    150 BPM. Galope de guitarras, redoblante de desfile y una fanfarria de
+    bronces que es el "tema" del jefe, como los jefes del ejercito de
+    Morden en Metal Slug."""
+    melodia = [(7, 2), (7, 1), (7, 1), (10, 2), (7, 2), (12, 3), (10, 1), (7, 2), (5, 2),
+               (3, 2), (5, 2), (7, 4), (None, 2), (7, 1), (7, 1), (12, 2), (15, 2), (14, 3),
+               (12, 1), (10, 2), (12, 2), (7, 6), (None, 2)]
+    return _tema_metal(
+        150, 82.41,
+        [(_RIFF_MARCHA, [0, 0, 3, 5], "rock", False),
+         (_RIFF_GALOPE, [0, 0, 3, 5, 0, 0, 8, 7], "galope", True),
+         (_RIFF_MARCHA, [5, 3, 7, 7], "doble", True)],
+        ganancia=8, melodia=melodia, voz_melodia="bronces", empuje=2.0)
+
+
+def generar_musica_jefe_dragon():
+    """Vanguardia Autonoma / dragon (oleada 20): thrash rapido en Re menor a
+    176 BPM, riff en tremolo con cromatismos y guitarras gemelas en la
+    melodia, como persecucion a toda velocidad."""
+    riff = [0, 0, 0, 0, 1, 1, 0, 0, 3, 3, 0, 0, 6, 5, 3, 1]
+    riff_b = [0, 0, 12, 0, 0, 10, 0, 0, 8, 0, 0, 7, 0, 6, 5, 3]
+    melodia = [(12, 1), (15, 1), (17, 1), (15, 1), (12, 2), (10, 2), (12, 1), (15, 1), (17, 1), (20, 1),
+               (19, 4), (17, 1), (15, 1), (13, 1), (12, 1), (10, 2), (12, 2), (8, 2), (7, 2), (12, 4)]
+    return _tema_metal(
+        176, 73.42,
+        [(riff, [0, 0, 0, 0], "thrash", False),
+         (riff_b, [0, 0, -2, -4, 0, 0, 3, 1], "thrash", True),
+         (riff, [5, 5, 3, 1], "blast", True)],
+        ganancia=14, melodia=melodia, voz_melodia="gemelas", empuje=2.2)
+
+
+def generar_musica_jefe_titan():
+    """Titan del Vacio (oleada 30): metal lento y aplastante (doom) a 92 BPM
+    en Do# grave, acordes que suenan largos, coro de fondo y bronces graves
+    como pasos de un gigante."""
+    riff = [0, "-", "-", "-", "-", "-", None, 0, 1, "-", "-", "-", 0, "-", None, None]
+    riff_b = [0, "-", "-", 0, "-", "-", 3, "-", "-", "-", 1, "-", 0, None, 0, 0]
+    melodia = [(0, 4), (3, 2), (1, 2), (0, 6), (None, 2), (7, 4), (8, 2), (7, 2), (3, 6), (None, 2)]
+    return _tema_metal(
+        92, 69.30,
+        [(riff, [0, 0, 1, 0], "mitad", False),
+         (riff_b, [0, 0, -2, 1, 0, 0, -4, -2], "mitad", True),
+         (riff, [0, 1, 0, 0], "doble", True)],
+        ganancia=12, melodia=melodia, voz_melodia="bronces", coro=True, empuje=2.1)
+
+
+def generar_musica_jefe_anomalia():
+    """La Anomalia Final (oleada 40): metal industrial en Fa# menor a 140
+    BPM, chugs sincopados tipo djent, un sintetizador roto que se cuelga y
+    melodia de guitarra lider inquietante."""
+    riff = [0, None, 0, 0, None, 0, None, 0, 0, None, 0, None, 0, 0, 1, None]
+    riff_b = [0, 0, None, 0, None, 0, 0, None, 3, "-", None, 0, 0, None, 6, "-"]
+    melodia = [(12, 2), (13, 2), (12, 1), (10, 1), (8, 2), (7, 4), (None, 2), (12, 1), (15, 1),
+               (18, 2), (17, 2), (13, 2), (12, 6), (None, 2)]
+    return _tema_metal(
+        140, 92.50,
+        [(riff, [0, 0, 0, 1], "doble", False),
+         (riff_b, [0, 0, 1, -1, 0, 0, 3, 1], "rock", True),
+         (riff, [0, 0, 6, 5], "blast", True)],
+        ganancia=16, melodia=melodia, voz_melodia="guitarra", golpes_bronce=False,
+        glitch=True, empuje=2.2)
+
+
+def generar_musica_jefe_mega():
+    """El Coloso (oleada 50, jefe final): himno de metal epico en La menor a
+    166 BPM con doble bombo, coro, bronces y guitarras gemelas; la ultima
+    seccion sube un tono para el gran final."""
+    riff = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, "-", 5, "-"]
+    riff_b = [0, "-", "-", 0, 0, "-", 0, 0, 0, "-", "-", 0, 7, "-", 5, "-"]
+    melodia = [(12, 2), (15, 2), (19, 2), (17, 1), (15, 1), (14, 2), (12, 2), (10, 2), (14, 2),
+               (12, 6), (None, 2), (12, 2), (15, 2), (19, 2), (22, 2), (20, 3), (19, 1), (17, 2),
+               (15, 2), (19, 8)]
+    return _tema_metal(
+        166, 110.0,
+        [(riff, [0, 0, -4, -2], "doble", False),
+         (riff_b, [0, -4, 3, -2, 0, -4, 3, -2], "doble", True),
+         (riff_b, [2, -2, 5, 0, 2, -2, 5, 7], "blast", True)],
+        ganancia=12, melodia=melodia, voz_melodia="gemelas", coro=True, empuje=2.3)
 
 
 # ----------------------------------------------------------------- ejecucion
@@ -1032,7 +1123,7 @@ SFX = {
 }
 
 MUSICA = {
-    "musica_juego": generar_musica_juego,
+    "musica_juego": lambda: generar_musica_juego_metal(0),
     "musica_juego_metal1": lambda: generar_musica_juego_metal(1),
     "musica_juego_metal2": lambda: generar_musica_juego_metal(2),
     "musica_juego_metal3": lambda: generar_musica_juego_metal(3),

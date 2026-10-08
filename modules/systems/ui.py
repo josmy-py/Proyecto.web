@@ -1,7 +1,7 @@
 """
 HUD y pantallas de estado del juego en si (no del menu, ver
 modules/systems/menu.py para eso): la cuenta regresiva inicial, el HUD de
-vida/puntaje/oleada, los chips de buffs activos, la vista previa de camara
+vida/puntaje/oleada, la barra de casco, la vista previa de camara
 y las pantallas de fin de partida (game over / victoria) con sus
 estadisticas."""
 
@@ -9,12 +9,8 @@ import pygame
 import math
 import random
 from modules.constants import (
-    WHITE, ROSA, MENTA, AMARILLO, AZUL, AZUL_CIELO, MELON, LAVANDA, ROSA_CHICLE, ELECTRICO,
-    GAME_WIDTH, GAME_HEIGHT, GLASS_WHITE, GLASS_BLACK, SHADOW, BUFF_TYPE_EXTRA_LIFE,
-    BUFF_TYPE_FAST_SHOOT, BUFF_TYPE_TRIPLE_SHOT, BUFF_TYPE_SHIELD,
-    BUFF_TYPE_PIERCING, BUFF_TYPE_ATTRACT, BUFF_TYPE_DAMAGE_UP,
-    BUFF_TYPE_SPEED_UP, BUFF_TYPE_MAX_LIFE_UP, BUFF_TYPE_RAPID_FIRE,
-    BUFF_TYPE_LIGHTNING,
+    WHITE, ROSA, MENTA, AMARILLO, AZUL, AZUL_CIELO, MELON, LAVANDA, ROSA_CHICLE,
+    GAME_WIDTH, GAME_HEIGHT, GLASS_WHITE, GLASS_BLACK, SHADOW,
 )
 from modules.systems.fonts import get_font, render_text, render_texto_pixelado
 from modules.systems import neon, pixelfx
@@ -301,215 +297,6 @@ class ModernHUD:
         self.health_bar.draw(surface)
 
 
-class BuffChip:
-    """Panel vertical estilo consola de nave para un buff activo: insignia
-    con el icono arriba y una barra de carga vertical que se vacia con el
-    tiempo restante debajo. _get_style()/_get_label() traducen el
-    BUFF_TYPE_* a color/icono/texto; agregar un buff nuevo implica sumarlo
-    ahi. Los buffs "eternos" (permanentes o de clase, ver `everlasting`) se
-    muestran siempre a full con un brillo lento en vez de vaciarse, porque
-    en la practica nunca vencen (ver Ship.apply_buff)."""
-
-    WIDTH = 72
-    HEIGHT = 118
-
-    def __init__(self, buff_type, timer, max_timer, everlasting=False):
-        self.buff_type = buff_type
-        self.timer = timer
-        self.max_timer = max_timer
-        self.everlasting = everlasting
-        self.label_font = get_font(10, bold=True)
-        self.pulse_phase = random.uniform(0, math.pi * 2)
-        self.fade_in = 0.0
-        self.color, self.icon = self._get_style()
-
-    def _get_style(self):
-        mapping = {
-            BUFF_TYPE_EXTRA_LIFE: (ROSA, "heart"),
-            BUFF_TYPE_FAST_SHOOT: (AZUL, "bolt"),
-            BUFF_TYPE_TRIPLE_SHOT: (LAVANDA, "triple"),
-            BUFF_TYPE_SHIELD: (MENTA, "hexagon"),
-            BUFF_TYPE_PIERCING: (MELON, "arrow"),
-            BUFF_TYPE_ATTRACT: (AMARILLO, "magnet"),
-            BUFF_TYPE_DAMAGE_UP: ((255, 80, 80), "sword"),
-            BUFF_TYPE_SPEED_UP: ((80, 255, 80), "speed"),
-            BUFF_TYPE_MAX_LIFE_UP: ((255, 200, 80), "heart_plus"),
-            BUFF_TYPE_RAPID_FIRE: ((255, 120, 255), "rapid"),
-            BUFF_TYPE_LIGHTNING: (ELECTRICO, "lightning_field"),
-        }
-        return mapping.get(self.buff_type, (AMARILLO, "circle"))
-
-    def update(self):
-        self.pulse_phase += 0.05
-        self.fade_in = min(1.0, self.fade_in + 0.08)
-
-    def draw(self, surface, x, y):
-        w, h = self.WIDTH, self.HEIGHT
-        radius = 10
-        pulse = 0.5 + 0.5 * math.sin(self.pulse_phase)
-
-        panel = pygame.Surface((w, h), pygame.SRCALPHA)
-
-        # marco metalico de la consola (mismo glass que el panel de score)
-        pygame.draw.rect(panel, GLASS_BLACK, (0, 0, w, h), border_radius=radius)
-        pygame.draw.rect(panel, GLASS_WHITE, (0, 0, w, h), border_radius=radius)
-        pygame.draw.rect(panel, (*self.color[:3], 45), (2, 2, w - 4, h - 4), border_radius=radius - 1)
-        borde_alpha = int(180 + 60 * pulse) if self.everlasting else 170
-        pygame.draw.rect(panel, (*self.color[:3], min(255, borde_alpha)), (0, 0, w, h), width=2, border_radius=radius)
-
-        # remaches en las esquinas: detalle de panel de nave
-        for rx, ry in ((7, 7), (w - 7, 7), (7, h - 7), (w - 7, h - 7)):
-            pygame.draw.circle(panel, (255, 255, 255, 60), (rx, ry), 1.6)
-
-        # insignia con el icono del buff
-        badge_r = 15
-        badge_cx, badge_cy = w // 2, 20
-        glow_r = int(badge_r * 2.6)
-        glow = pygame.Surface((glow_r * 2, glow_r * 2), pygame.SRCALPHA)
-        glow_alpha = int(90 + 60 * pulse) if self.everlasting else 70
-        pygame.draw.circle(glow, (*self.color[:3], glow_alpha), (glow_r, glow_r), int(glow_r * 0.85))
-        panel.blit(glow, (badge_cx - glow_r, badge_cy - glow_r))
-        pygame.draw.circle(panel, (16, 16, 26), (badge_cx, badge_cy), badge_r)
-        pygame.draw.circle(panel, self.color, (badge_cx, badge_cy), badge_r, 2)
-        self._draw_icon(panel, badge_cx, badge_cy)
-
-        # barra vertical de carga: se vacia de arriba hacia abajo con el
-        # tiempo restante (o se queda a full, con brillo, si es "eterno")
-        bar_w, bar_h = 16, 54
-        bar_x = w // 2 - bar_w // 2
-        bar_y = badge_cy + badge_r + 10
-        pygame.draw.rect(panel, (16, 16, 24), (bar_x, bar_y, bar_w, bar_h), border_radius=4)
-
-        frac = 1.0 if self.everlasting else clamp(self.timer / self.max_timer, 0.0, 1.0) if self.max_timer else 0.0
-        fill_h = int(bar_h * frac)
-        if fill_h > 0:
-            fill_color = self.color
-            if self.everlasting:
-                fill_color = tuple(min(255, int(c * (0.85 + 0.3 * pulse))) for c in self.color[:3])
-            fill_rect = (bar_x, bar_y + (bar_h - fill_h), bar_w, fill_h)
-            pygame.draw.rect(panel, fill_color, fill_rect, border_radius=4)
-            hl_h = max(1, fill_h // 3)
-            hl = pygame.Surface((bar_w - 4, hl_h), pygame.SRCALPHA)
-            for row in range(hl_h):
-                a = int(70 * (1 - row / hl_h))
-                pygame.draw.line(hl, (255, 255, 255, a), (0, row), (bar_w - 5, row))
-            panel.blit(hl, (bar_x + 2, bar_y + (bar_h - fill_h)))
-
-        for marca in (0.25, 0.5, 0.75):
-            my = bar_y + int(bar_h * (1 - marca))
-            pygame.draw.line(panel, (0, 0, 0, 90), (bar_x, my), (bar_x + bar_w, my), 1)
-        pygame.draw.rect(panel, WHITE, (bar_x, bar_y, bar_w, bar_h), width=1, border_radius=4)
-
-        label = self._get_label()
-        label_surf = render_texto_pixelado(self.label_font, label, WHITE)
-        panel.blit(label_surf, (w // 2 - label_surf.get_width() // 2, bar_y + bar_h + 8))
-
-        panel.set_alpha(int(255 * ease_out_cubic(self.fade_in)))
-        surface.blit(panel, (x, y))
-
-    def _draw_icon(self, surface, x, y):
-        if self.icon == "heart":
-            pygame.draw.circle(surface, self.color, (x - 2, y - 2), 3)
-            pygame.draw.circle(surface, self.color, (x + 2, y - 2), 3)
-            pygame.draw.polygon(surface, self.color, [(x - 5, y - 1), (x + 5, y - 5), (x + 5, y + 3), (x - 5, y + 1)])
-        elif self.icon == "bolt":
-            pygame.draw.polygon(surface, self.color, [(x, y - 5), (x + 2, y - 1), (x + 5, y - 1), (x + 1, y + 2), (x + 3, y + 5), (x, y + 2), (x - 3, y + 2), (x, y - 5)])
-        elif self.icon == "triple":
-            pygame.draw.circle(surface, self.color, (x, y - 3), 2)
-            pygame.draw.circle(surface, self.color, (x - 4, y + 3), 2)
-            pygame.draw.circle(surface, self.color, (x + 4, y + 3), 2)
-        elif self.icon == "hexagon":
-            points = []
-            for i in range(6):
-                angle = math.radians(60 * i - 30)
-                points.append((x + 4 * math.cos(angle), y + 4 * math.sin(angle)))
-            pygame.draw.polygon(surface, self.color, points)
-        elif self.icon == "arrow":
-            pygame.draw.polygon(surface, self.color, [(x, y - 5), (x + 5, y + 2), (x + 2, y + 2), (x + 2, y + 5), (x - 2, y + 5), (x - 2, y + 2), (x - 5, y + 2)])
-        elif self.icon == "magnet":
-            pygame.draw.arc(surface, self.color, (x - 5, y - 4, 10, 8), math.pi, 0, 2)
-            pygame.draw.line(surface, self.color, (x - 5, y), (x - 5, y + 4), 2)
-            pygame.draw.line(surface, self.color, (x + 5, y), (x + 5, y + 4), 2)
-            pygame.draw.line(surface, self.color, (x - 2, y + 2), (x - 4, y + 5), 2)
-            pygame.draw.line(surface, self.color, (x + 2, y + 2), (x + 4, y + 5), 2)
-        elif self.icon == "sword":
-            pygame.draw.line(surface, self.color, (x, y - 5), (x, y + 5), 2)
-            pygame.draw.line(surface, self.color, (x - 2, y - 3), (x + 2, y - 3), 2)
-        elif self.icon == "speed":
-            pygame.draw.polygon(surface, self.color, [(x - 3, y - 4), (x + 3, y), (x - 3, y + 4)])
-        elif self.icon == "heart_plus":
-            pygame.draw.circle(surface, self.color, (x - 2, y - 2), 3)
-            pygame.draw.circle(surface, self.color, (x + 2, y - 2), 3)
-            pygame.draw.polygon(surface, self.color, [(x - 5, y - 1), (x + 5, y - 5), (x + 5, y + 3), (x - 5, y + 1)])
-            pygame.draw.line(surface, self.color, (x + 2, y - 4), (x + 5, y - 7), 2)
-            pygame.draw.line(surface, self.color, (x, y - 5), (x, y - 8), 2)
-        elif self.icon == "rapid":
-            pygame.draw.polygon(surface, self.color, [(x, y - 5), (x + 3, y - 1), (x + 6, y - 1), (x + 1, y + 2), (x + 3, y + 5), (x, y + 2), (x - 3, y + 2), (x, y - 5)])
-        elif self.icon == "lightning_field":
-            pygame.draw.circle(surface, self.color, (x, y), 5, 1)
-            pygame.draw.polygon(surface, self.color, [(x, y - 4), (x + 2, y - 1), (x, y - 1), (x + 1, y + 4), (x - 2, y + 1), (x, y + 1), (x, y - 4)])
-        else:
-            pygame.draw.circle(surface, self.color, (x, y), 4)
-
-    def _get_label(self):
-        labels = {
-            BUFF_TYPE_EXTRA_LIFE: "+1",
-            BUFF_TYPE_FAST_SHOOT: "FAST",
-            BUFF_TYPE_TRIPLE_SHOT: "3X",
-            BUFF_TYPE_SHIELD: "DEF",
-            BUFF_TYPE_PIERCING: "PEN",
-            BUFF_TYPE_ATTRACT: "MAG",
-            BUFF_TYPE_DAMAGE_UP: "DMG+",
-            BUFF_TYPE_SPEED_UP: "SPD+",
-            BUFF_TYPE_MAX_LIFE_UP: "MAX+",
-            BUFF_TYPE_RAPID_FIRE: "RAPID",
-            BUFF_TYPE_LIGHTNING: "RAYO",
-        }
-        return labels.get(self.buff_type, "?")
-
-
-class BuffHUD:
-    """Paneles de buff activos en los margenes laterales del area de juego
-    (fuera del viewport), alternando izquierda/derecha para leerse como los
-    paneles de instrumentos a los costados de la ventana principal de una
-    nave. Crea/elimina paneles segun los buffs aparecen o vencen."""
-
-    def __init__(self):
-        self.chips = {}
-
-    def update(self, buffs, class_buffs=None):
-        class_buffs = class_buffs or set()
-        for buff_type, data in buffs.items():
-            everlasting = bool(data.get("permanent", False) or buff_type in class_buffs)
-            if buff_type not in self.chips:
-                self.chips[buff_type] = BuffChip(buff_type, data.get("timer", 0), data.get("max_timer", 1), everlasting)
-            chip = self.chips[buff_type]
-            chip.timer = data.get("timer", 0)
-            chip.max_timer = data.get("max_timer", 1)
-            chip.everlasting = everlasting
-            chip.update()
-
-        expired = [bt for bt in self.chips if bt not in buffs]
-        for bt in expired:
-            del self.chips[bt]
-
-    def draw(self, surface, offset_x=0, offset_y=0):
-        if not self.chips:
-            return
-        slot_w, slot_h, gap = BuffChip.WIDTH, BuffChip.HEIGHT, 16
-        margin_w = offset_x
-        left_x = max(4, (margin_w - slot_w) // 2)
-        right_x = offset_x + GAME_WIDTH + max(4, (margin_w - slot_w) // 2)
-        start_y = offset_y + 12
-
-        for idx, chip in enumerate(self.chips.values()):
-            columna_izq = idx % 2 == 0
-            fila = idx // 2
-            x = left_x if columna_izq else right_x
-            y = start_y + fila * (slot_h + gap)
-            chip.draw(surface, x, y)
-
-
 def draw_hud(surface, score, wave, lives, buffs, font, small_font, hand_active=False, max_hp=3,
              objetivos=0, objetivos_meta=1, jefe_activo=False):
     if not hasattr(draw_hud, 'hud'):
@@ -518,14 +305,6 @@ def draw_hud(surface, score, wave, lives, buffs, font, small_font, hand_active=F
     hud.health_bar.max_hp = max_hp
     hud.update(score, wave, lives, buffs, hand_active, objetivos, objetivos_meta, jefe_activo)
     hud.draw(surface)
-
-
-def draw_buff_hud(surface, buffs, offset_x=0, offset_y=0, class_buffs=None):
-    if not hasattr(draw_buff_hud, 'hud'):
-        draw_buff_hud.hud = BuffHUD()
-    hud = draw_buff_hud.hud
-    hud.update(buffs, class_buffs)
-    hud.draw(surface, offset_x, offset_y)
 
 
 def draw_ship_status_bar(surface, lives, max_lives, offset_x, offset_y, ticks=0):

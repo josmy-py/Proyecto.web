@@ -22,9 +22,7 @@ from modules.constants import (
     PREVIEW_WIDTH, PREVIEW_HEIGHT, FPS,
     WHITE, RED, GREEN, CYAN, ORANGE, DARK_BG, DARKER_BG,
     PURPLE, PINK, ROSA, AMARILLO,
-    AZUL, AZUL_CIELO, ROSA_CHICLE, MENTA, ELECTRICO, BUFF_TYPE_EXTRA_LIFE, BUFF_TYPE_FAST_SHOOT, BUFF_TYPE_TRIPLE_SHOT, BUFF_TYPE_SHIELD,
-    BUFF_TYPE_PIERCING, BUFF_TYPE_ATTRACT, BUFF_TYPE_DAMAGE_UP, BUFF_TYPE_SPEED_UP,
-    BUFF_TYPE_MAX_LIFE_UP, BUFF_TYPE_RAPID_FIRE, BUFF_TYPE_LIGHTNING,
+    AZUL, AZUL_CIELO, ROSA_CHICLE, MENTA, ELECTRICO, BUFF_TYPE_SHIELD,
     SHIP_WIDTH, SHIP_HEIGHT, FINAL_BOSS_SPAWN_WAVE,
     MEGA_BOSS_SPAWN_WAVE, cuota_de_oleada, DIFICULTADES,
     DIFICULTAD_DEFECTO, GAMEPAD_MOVE_SPEED,
@@ -43,7 +41,7 @@ from modules.systems.input import (
     is_fist,
     find_hand_position,
 )
-from modules.systems.ui import draw_hud, draw_countdown, draw_camera_preview, draw_game_over, draw_buff_hud, draw_victory_screen, draw_viewport_frame, draw_ship_status_bar, draw_victory_final
+from modules.systems.ui import draw_hud, draw_countdown, draw_camera_preview, draw_game_over, draw_victory_screen, draw_viewport_frame, draw_ship_status_bar, draw_victory_final
 from modules.core.boss_system import get_boss_for_wave, WaveBoss
 from modules.entities.boss import FinalBoss
 from modules.entities.titan_boss import TitanBoss
@@ -346,8 +344,6 @@ def main():
         nonlocal estado_mejoras, eleccion, ultima_oleada_mejora, mejora_inicial_pendiente
         if hasattr(draw_hud, 'hud'):
             del draw_hud.hud
-        if hasattr(draw_buff_hud, 'hud'):
-            del draw_buff_hud.hud
         ship = Ship(GAME_WIDTH // 2, GAME_HEIGHT - 60, selected_ship_type, selected_skin_id)
         bullets.clear(); asteroids.clear()
         alien_ships.clear(); alien_bullets.clear()
@@ -372,11 +368,11 @@ def main():
         else:
             bonus_directo_pendiente = None
             wave = int(inicio_partida[1:])
-        if inicio_con_buffs:
-            _dar_todos_los_buffs()
         estado_mejoras = EstadoMejoras()
         eleccion = None
         mejoras_extra.clear()
+        if inicio_con_buffs:
+            _dar_todos_los_buffs()
         ultima_oleada_mejora = wave
         mejora_inicial_pendiente = bonus_directo_pendiente is None
         start_time = pygame.time.get_ticks()
@@ -813,24 +809,20 @@ def main():
         audio.reproducir_musica("jefe_gatos")
 
     def _dar_todos_los_buffs():
-        """Opcion de AJUSTES "BONUS CON TODOS LOS BUFFS": aplica cada buff
-        una vez, llena la vida y deja los temporales sin vencimiento para
-        toda la pelea bonus (el escudo igual se rompe tras sus golpes).
-        Tambien lo usa ELEGIR FASE con "TODOS LOS BUFFS" al arrancar; una
-        nave que ya los tiene no los recibe de nuevo (no suma otra vida
-        maxima ni mas daño)."""
+        """Opcion de AJUSTES "BONUS CON TODOS LOS BUFFS" y de ELEGIR FASE
+        "TODOS LOS BUFFS": toma cada carta de mejora hasta su nivel maximo
+        (mismo sistema que las cartas, con el zorrito y los drones incluidos)
+        y llena la vida. Una nave que ya las tiene no las recibe de nuevo."""
         if getattr(ship, "todos_los_buffs", False):
             return
         ship.todos_los_buffs = True
-        for buff in (BUFF_TYPE_MAX_LIFE_UP, BUFF_TYPE_DAMAGE_UP, BUFF_TYPE_SPEED_UP, BUFF_TYPE_RAPID_FIRE,
-                     BUFF_TYPE_FAST_SHOOT, BUFF_TYPE_TRIPLE_SHOT, BUFF_TYPE_SHIELD, BUFF_TYPE_PIERCING,
-                     BUFF_TYPE_ATTRACT, BUFF_TYPE_LIGHTNING, BUFF_TYPE_EXTRA_LIFE):
-            ship.apply_buff(buff)
-            datos = ship.buffs.get(buff)
-            if datos is not None:
-                datos["timer"] = datos["max_timer"] = 99999
-                datos["permanent"] = True
+        for mid, (_, _, _, maximo, _) in MEJORAS.items():
+            if mid == "reparar":
+                continue
+            while estado_mejoras.nivel(mid) < maximo:
+                _aplicar_mejora(mid, silencioso=True)
         ship.lives = ship.max_lives
+        ship.health_deplete_anim = 1.0
 
     def _recompensar_jefe_bonus(boss):
         """Cadena de jefes bonus: Nyan Cat -> Gato Alien -> Gato Pan (el que
@@ -1051,16 +1043,20 @@ def main():
             ship.burst_shots_pending = 0
             audio.sonido_powerup()
 
-    def _aplicar_mejora(mejora_id):
+    def _aplicar_mejora(mejora_id, silencioso=False):
         """La carta elegida: el zorrito se arma aca (la mascota vive en
-        main); el resto lo aplica EstadoMejoras."""
+        main); el resto lo aplica EstadoMejoras. silencioso: sin cartel ni
+        explosion (cuando se dan todas juntas al arrancar)."""
         nonlocal mascota, capsula_mascota, mascota_ofrecida, aviso_mascota
         estado_mejoras.aplicar(mejora_id, ship)
         if mejora_id == "zorrito":
             mascota = ZorritoEspacial(ship)
             mascota_ofrecida = True
             capsula_mascota = None
-            aviso_mascota = ["¡NUEVO COMPAÑERO!", "El Zorrito Espacial se une a tu aventura", 260]
+            if not silencioso:
+                aviso_mascota = ["¡NUEVO COMPAÑERO!", "El Zorrito Espacial se une a tu aventura", 260]
+        if silencioso:
+            return
         nombre, _, _, _, color = MEJORAS[mejora_id]
         explosions.append(Explosion(ship.x, ship.y, color, 30))
         particles.extend([Particle(ship.x, ship.y, color) for _ in range(24)])
@@ -1939,7 +1935,6 @@ def main():
         draw_viewport_frame(screen, game_offset_x, game_offset_y, GAME_WIDTH, GAME_HEIGHT, pygame.time.get_ticks())
 
         if mostrar_hud_margenes:
-            draw_buff_hud(screen, ship.buffs, game_offset_x, game_offset_y, ship.class_buffs)
             draw_ship_status_bar(screen, ship.lives, ship.max_lives, game_offset_x, game_offset_y, pygame.time.get_ticks())
 
         if not game_over and frame_actual is not None:

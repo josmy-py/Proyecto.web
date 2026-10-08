@@ -11,7 +11,7 @@ from modules.constants import WHITE, AZUL, MENTA
 from modules.systems import audio
 from modules.systems.fonts import render_texto_pixelado
 from modules import settings
-from modules.systems import sprites, pixelfx
+from modules.systems import sprites, pixelfx, neon
 from modules.entities.ship import TIPOS_NAVE, ORDEN_NAVES
 from modules.skins import get_skin_colors
 
@@ -78,235 +78,83 @@ class SettingsSlider:
         t = max(0.0, min(1.0, t))
         self.on_change(self.minimo + t * (self.maximo - self.minimo))
 
-    def draw(self, surface, color):
+    def draw(self, surface, color, marcado=False):
+        """Barra de bloques pixel (como la barra de casco del juego)."""
         r = self.rect
         rango = self.maximo - self.minimo
         valor = self.get_value()
         t = (valor - self.minimo) / rango if rango else 0.0
         t = max(0.0, min(1.0, t))
 
-        label_surf = render_texto_pixelado(get_font(14, bold=True), f"{self.label}  {self.formato(valor)}",
-                                           (215, 215, 235))
-        surface.blit(label_surf, (r.x, r.y - 24))
+        etiqueta = neon.texto(14, f"{self.label}  {self.formato(valor)}", WHITE if marcado else (200, 200, 230))
+        surface.blit(etiqueta, (r.x, r.y - 24))
 
-        pygame.draw.rect(surface, (26, 26, 42), r, border_radius=r.height // 2)
-        fill_w = int(r.width * t)
-        if fill_w > 0:
-            pygame.draw.rect(surface, color, (r.x, r.y, fill_w, r.height), border_radius=r.height // 2)
-        pygame.draw.rect(surface, WHITE, r, width=1, border_radius=r.height // 2)
-
-        knob_x = r.x + fill_w
-        pygame.draw.circle(surface, (10, 10, 25), (knob_x, r.centery), r.height // 2 + 5)
-        pygame.draw.circle(surface, WHITE, (knob_x, r.centery), r.height // 2 + 5, 2)
+        bloques = 20
+        ancho = r.width / bloques
+        surface.fill(neon.CONTORNO, r.inflate(8, 8))
+        surface.fill(neon.FONDO, r.inflate(4, 4))
+        llenos = int(round(t * bloques))
+        for k in range(bloques):
+            caja = pygame.Rect(int(r.x + k * ancho) + 1, r.y + 1, int(ancho) - 2, r.height - 2)
+            surface.fill(color if k < llenos else (45, 34, 84), caja)
+            if k < llenos:
+                surface.fill(pixelfx.aclarar(color, 0.45), (caja.x, caja.y, caja.w, 3))
+        if marcado:
+            neon.marco_pixel(surface, r.inflate(14, 14), color, 3)
+        # perilla cuadrada
+        kx = r.x + int(r.width * t)
+        perilla = pygame.Rect(0, 0, 12, r.height + 12)
+        perilla.center = (kx, r.centery)
+        surface.fill(neon.CONTORNO, perilla.inflate(4, 4))
+        surface.fill(WHITE, perilla)
 
 
 class MenuButton:
-    """Boton con hover/press animado, particulas orbitando y ondas de clic
-    (OrbitParticle/Ripple). Se reutiliza tanto en el menu principal como en
-    las pantallas de ajustes y dificultad."""
+    """Boton del menu en el mismo estilo que las cartas de mejora y la
+    pausa (neon.boton): fondo violeta, marco pixel del color del boton y
+    halo cuando esta marcado (mouse encima o elegido con flechas/mando)."""
 
     def __init__(self, x, y, width, height, text, font, color=None):
         self.rect = pygame.Rect(x - width // 2, y - height // 2, width, height)
         self.text = text
         self.font = font
-        self.color = color
+        self.tam = getattr(font, "point_size", 18)
+        self.color = color or neon.CIAN
         self.hovered = False
         self.pressed = False
-        self.press_scale = 1.0
-        self.target_scale = 1.0
-        self.glow_phase = 0
-        self.gradient_offset = 0
-        self.particles = []
-        self.ripples = []
         self.enabled = True
-        self.pulse_phase = 0
-
-        for _ in range(10):
-            self.particles.append(OrbitParticle(
-                self.rect.centerx,
-                self.rect.centery,
-                max(width, height) * 0.75
-            ))
+        self.t = 0
+        self.destello = 0
 
     def update(self, mouse_pos, mouse_pressed):
+        self.t += 1
+        if self.destello > 0:
+            self.destello -= 1
         if not self.enabled:
-            self.target_scale = 1.0
             self.hovered = False
             self.pressed = False
-        else:
-            self.hovered = self.rect.collidepoint(mouse_pos)
-            self.pressed = self.hovered and mouse_pressed[0]
-            self.target_scale = 0.95 if self.pressed else (1.05 if self.hovered else 1.0)
-
-        self.press_scale += (self.target_scale - self.press_scale) * 0.2
-        self.glow_phase += 0.08
-        self.gradient_offset = (self.gradient_offset + 0.5) % 400
-        self.pulse_phase += 0.04
-
-        for p in self.particles:
-            p.update(self.hovered and self.enabled, self.rect.centerx, self.rect.centery)
-
-        self.ripples = [r for r in self.ripples if r.active]
-        for r in self.ripples:
-            r.update()
+            return
+        self.hovered = self.rect.collidepoint(mouse_pos)
+        self.pressed = self.hovered and mouse_pressed[0]
 
     def handle_event(self, event):
         if not self.enabled:
             return False
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if self.hovered:
-                self._spawn_ripple(event.pos)
+                self.destello = 10
                 audio.sonido_boton()
                 return True
         return False
 
-    def _spawn_ripple(self, pos):
-        max_radius = max(self.rect.width, self.rect.height) * 1.5
-        self.ripples.append(Ripple(pos[0], pos[1], max_radius, AZUL))
-
     def draw(self, surface, extra_offset=0, marcado=False):
-        """marcado: elegido con flechas / mando (brilla como en hover)."""
+        """marcado: elegido con flechas / mando (se ve igual que en hover)."""
         if not self.enabled:
-            alpha_factor = 0.4
-        else:
-            alpha_factor = 1.0
-
-        cx, cy = self.rect.center
-        w, h = self.rect.width, self.rect.height
-        scale = self.press_scale
-        draw_w = int(w * scale)
-        draw_h = int(h * scale)
-        draw_x = cx - draw_w // 2 + extra_offset
-        draw_y = cy - draw_h // 2
-
-        shadow_surf = pygame.Surface((draw_w + 8, draw_h + 8), pygame.SRCALPHA)
-        pygame.draw.rect(shadow_surf, (0, 0, 0, 60), (4, 4, draw_w, draw_h), border_radius=draw_h // 2)
-        surface.blit(shadow_surf, (draw_x, draw_y))
-
-        btn_surf = pygame.Surface((draw_w, draw_h), pygame.SRCALPHA)
-
-        bg_grad = pygame.Surface((draw_w, draw_h), pygame.SRCALPHA)
-        offset = int(self.gradient_offset) % draw_w
-        base_c = self.color or AZUL
-        for x_pos in range(draw_w):
-            t = (x_pos + offset) / draw_w
-            r = int(base_c[0] * (0.08 + 0.07 * math.sin(t * math.pi * 2)))
-            g = int(base_c[1] * (0.08 + 0.07 * math.sin(t * math.pi * 2)))
-            b = int(base_c[2] * (0.08 + 0.07 * math.sin(t * math.pi * 2)))
-            pygame.draw.line(bg_grad, (r, g, b, int(alpha_factor * 255)), (x_pos, 0), (x_pos, draw_h))
-        pygame.draw.rect(bg_grad, (0, 0, 0, 0), (0, 0, draw_w, draw_h), border_radius=draw_h // 2)
-        btn_surf.blit(bg_grad, (0, 0))
-
-        pulse = 0.5 + 0.5 * math.sin(self.pulse_phase)
-        glow_intensity = int(20 + 15 * pulse) if not (self.hovered or marcado) else int(40 + 20 * pulse)
-        glow_surf = pygame.Surface((draw_w + 20, draw_h + 20), pygame.SRCALPHA)
-        for i in range(4):
-            ga = max(0, glow_intensity - i * 8)
-            pygame.draw.rect(
-                glow_surf,
-                (*base_c[:3], int(ga * alpha_factor)),
-                (10 - i * 5, 10 - i * 5, draw_w + i * 10, draw_h + i * 10),
-                border_radius=draw_h // 2 + i * 2
-            )
-        surface.blit(glow_surf, (draw_x - 10, draw_y - 10))
-
-        if marcado and self.enabled:
-            # marco del color del boton, bien visible
-            pygame.draw.rect(surface, base_c[:3], (draw_x - 4, draw_y - 4, draw_w + 8, draw_h + 8),
-                             width=3, border_radius=draw_h // 2 + 4)
-
-        border_color = (
-            int(255 * alpha_factor),
-            int(255 * alpha_factor),
-            int(255 * alpha_factor),
-            int(200 * alpha_factor)
-        )
-        pygame.draw.rect(btn_surf, border_color, (0, 0, draw_w, draw_h), width=2, border_radius=draw_h // 2)
-
-        highlight_h = max(1, draw_h // 3)
-        hl_surf = pygame.Surface((draw_w, highlight_h), pygame.SRCALPHA)
-        for row in range(highlight_h):
-            a = int(40 * (1 - row / highlight_h) * alpha_factor)
-            pygame.draw.line(hl_surf, (255, 255, 255, a), (0, row), (draw_w - 1, row))
-        btn_surf.blit(hl_surf, (0, 0))
-
-        max_texto_w = draw_w - 20  # margen para que el texto no toque los bordes redondeados
-        text_surf = render_texto_pixelado(self.font, self.text, WHITE, ancho_maximo=max_texto_w)
-        text_rect = text_surf.get_rect(center=(draw_w // 2, draw_h // 2))
-        btn_surf.blit(text_surf, text_rect)
-
-        surface.blit(btn_surf, (draw_x, draw_y))
-
-        for r in self.ripples:
-            r.draw(surface)
-
-        for p in self.particles:
-            p.draw(surface)
-
-
-class OrbitParticle:
-    """Punto que orbita alrededor de un MenuButton; gira mas rapido y brilla
-    mas fuerte mientras el boton esta en hover."""
-
-    def __init__(self, center_x, center_y, base_radius):
-        self.center_x = center_x
-        self.center_y = center_y
-        self.angle = random.uniform(0, math.pi * 2)
-        self.base_radius = base_radius
-        self.radius = base_radius + random.uniform(-10, 10)
-        self.speed = random.uniform(0.015, 0.035)
-        self.size = random.uniform(1.5, 3.5)
-        self.base_alpha = random.uniform(0.4, 0.9)
-        self.alpha = self.base_alpha
-
-    def update(self, is_hovering, center_x, center_y):
-        self.center_x = center_x
-        self.center_y = center_y
-        self.angle += self.speed * (2.5 if is_hovering else 1.0)
-        self.alpha = self.base_alpha * (1.5 if is_hovering else 1.0)
-
-    def draw(self, surface):
-        x = self.center_x + math.cos(self.angle) * self.radius
-        y = self.center_y + math.sin(self.angle) * self.radius
-        alpha = max(0, min(255, int(self.alpha * 255)))
-        color = (*AZUL[:3], alpha)
-        particle_surf = pygame.Surface((self.size * 2, self.size * 2), pygame.SRCALPHA)
-        pygame.draw.circle(particle_surf, color, (self.size, self.size), self.size)
-        surface.blit(particle_surf, (x - self.size, y - self.size))
-
-
-class Ripple:
-    """Onda expansiva que se dispara al hacer clic en un MenuButton; crece
-    hasta max_radius y se desvanece, luego active pasa a False."""
-
-    def __init__(self, x, y, max_radius, color=AZUL):
-        self.x = x
-        self.y = y
-        self.radius = 0
-        self.max_radius = max_radius
-        self.color = color
-        self.alpha = 180
-        self.active = True
-        self.speed = 8
-
-    def update(self):
-        self.radius += self.speed
-        self.alpha = max(0, 180 * (1 - self.radius / self.max_radius))
-        if self.radius >= self.max_radius:
-            self.active = False
-
-    def draw(self, surface):
-        if not self.active:
+            neon.boton(surface, self.rect, self.text, (70, 70, 95), False, self.t, self.tam)
             return
-        ripple_surf = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
-        pygame.draw.circle(
-            ripple_surf,
-            (*self.color[:3], int(self.alpha)),
-            (self.radius, self.radius),
-            self.radius,
-            width=3
-        )
-        surface.blit(ripple_surf, (self.x - self.radius, self.y - self.radius))
+        activo = marcado or self.hovered
+        color = pixelfx.aclarar(self.color, 0.6) if self.destello else self.color
+        neon.boton(surface, self.rect, self.text, color, activo, self.t, self.tam)
 
 
 # Puntos de partida de "ELEGIR FASE": (id que entiende main.py, etiqueta,
@@ -460,9 +308,12 @@ class MenuScene:
         return mando if self.usando_mando else teclado
 
     def _dibujar_ayuda(self, teclado, mando, y=None):
-        hint = render_texto_pixelado(get_font(13), self._ayuda(teclado, mando), (160, 160, 185))
         y = self.screen_height - 50 if y is None else y
-        self.surface.blit(hint, hint.get_rect(center=(self.screen_width // 2, y)))
+        letras = neon.texto(13, self._ayuda(teclado, mando), (220, 220, 245), bold=False)
+        caja = letras.get_rect(center=(self.screen_width // 2, y)).inflate(24, 10)
+        self.surface.fill(neon.CONTORNO, caja.inflate(4, 4))
+        self.surface.fill(neon.FONDO, caja)
+        self.surface.blit(letras, letras.get_rect(center=caja.center))
 
     def _ir_a_modo_control(self):
         """Pantalla ELEGI COMO JUGAR; si se viene usando el mando ya queda
@@ -823,45 +674,21 @@ class MenuScene:
     def draw(self, surface):
         self.surface.fill((0, 0, 0, 0))
 
-        for star in self.stars:
-            star.draw(self.surface)
-
-        title_surf = render_texto_pixelado(self.title_font, "NAVE VS ASTEROIDES", WHITE)
-        title_rect = title_surf.get_rect(center=(self.screen_width // 2, 56))
-        float_y = math.sin(self.title_phase) * 6
-        glow_alpha = int(80 + 40 * math.sin(self.title_phase * 0.7))
-        glow_surf = pygame.Surface(
-            (title_rect.width + 48, title_rect.height + 48), pygame.SRCALPHA
-        )
-        for i in range(6):
-            offset = i * 4
-            pygame.draw.rect(
-                glow_surf,
-                (*AZUL[:3], max(0, glow_alpha - i * 12)),
-                (24 - offset, 24 - offset,
-                 title_rect.width + offset * 2,
-                 title_rect.height + offset * 2),
-                border_radius=10,
-            )
-        self.surface.blit(
-            glow_surf,
-            (title_rect.x - 24, title_rect.y - 24 + int(float_y)),
-        )
-        self.surface.blit(title_surf, (title_rect.x, title_rect.y + int(float_y)))
+        self._dibujar_piso()
+        float_y = math.sin(self.title_phase) * 5
+        neon.titulo(self.surface, "NAVE VS ASTEROIDES", 52, neon.CIAN, self.screen_width // 2, 56 + float_y)
 
         if self.state == "settings":
-            sub = render_texto_pixelado(self.subtitle_font, "AJUSTES", (200, 200, 220))
-            self.surface.blit(sub, sub.get_rect(center=(self.screen_width // 2, 106)))
+            self._subtitulo("AJUSTES")
             self._draw_settings()
-            surface.blit(self.surface, (0, 0))
+            self._presentar(surface)
             return
 
         if self.state == "control_mode":
             titulo = "NIVEL BONUS: ELEGI COMO JUGAR" if self.partida_bonus else "ELEGI COMO JUGAR"
             if self._etiqueta_inicio():
                 titulo = f"{self._etiqueta_inicio()}: ELEGI COMO JUGAR"
-            sub = render_texto_pixelado(self.subtitle_font, titulo, (200, 200, 220))
-            self.surface.blit(sub, sub.get_rect(center=(self.screen_width // 2, 106)))
+            self._subtitulo(titulo)
             for i, btn in enumerate(self.control_mode_botones):
                 extra = int(math.sin(self.hover_amp * 1.0) * 8) if i == self.control_mode_seleccionada else 0
                 btn.draw(self.surface, extra_offset=extra, marcado=i == self.control_mode_seleccionada)
@@ -870,26 +697,24 @@ class MenuScene:
                 self.surface.blit(aviso, aviso.get_rect(center=(self.screen_width // 2, self.screen_height - 80)))
             self._dibujar_ayuda("Flechas para moverte - ENTER para elegir - ESC para volver",
                                 "Palanca o cruceta para moverte - A para elegir - B para volver")
-            surface.blit(self.surface, (0, 0))
+            self._presentar(surface)
             return
 
         if self.state == "dificultad":
             titulo = "NIVEL BONUS: ELEGI LA DIFICULTAD" if self.partida_bonus else "ELEGI LA DIFICULTAD"
             if self._etiqueta_inicio():
                 titulo = f"{self._etiqueta_inicio()}: ELEGI LA DIFICULTAD"
-            sub = render_texto_pixelado(self.subtitle_font, titulo, (200, 200, 220))
-            self.surface.blit(sub, sub.get_rect(center=(self.screen_width // 2, 106)))
+            self._subtitulo(titulo)
             for i, btn in enumerate(self.dificultad_botones):
                 extra = int(math.sin(self.hover_amp * 1.0) * 8) if i == self.dificultad_seleccionada else 0
                 btn.draw(self.surface, extra_offset=extra, marcado=i == self.dificultad_seleccionada)
             self._dibujar_ayuda("Flechas para moverte - ENTER para elegir - ESC para volver",
                                 "Palanca o cruceta para moverte - A para elegir - B para volver")
-            surface.blit(self.surface, (0, 0))
+            self._presentar(surface)
             return
 
         if self.state == "nave":
-            sub = render_texto_pixelado(self.subtitle_font, "ELEGI TU NAVE", (200, 200, 220))
-            self.surface.blit(sub, sub.get_rect(center=(self.screen_width // 2, 106)))
+            self._subtitulo("ELEGI TU NAVE")
             for i in range(len(ORDEN_NAVES)):
                 if i != self.nave_seleccionada:
                     self._dibujar_carta_nave(i)
@@ -897,12 +722,11 @@ class MenuScene:
             self._dibujar_ayuda("Flechas para moverte - ENTER para despegar - ESC para volver",
                                 "Palanca o cruceta para moverte - A para despegar - B para volver")
             self._dibujar_transicion()
-            surface.blit(self.surface, (0, 0))
+            self._presentar(surface)
             return
 
         if self.state == "fases":
-            sub = render_texto_pixelado(self.subtitle_font, "ELEGI EN QUE FASE EMPEZAR", (200, 200, 220))
-            self.surface.blit(sub, sub.get_rect(center=(self.screen_width // 2, 106)))
+            self._subtitulo("ELEGI EN QUE FASE EMPEZAR")
             for i, btn in enumerate(self.fase_botones):
                 extra = int(math.sin(self.hover_amp * 1.0) * 6) if i == self.fase_seleccionada else 0
                 btn.draw(self.surface, extra_offset=extra, marcado=i == self.fase_seleccionada)
@@ -911,13 +735,10 @@ class MenuScene:
             self.btn_fases_volver.draw(self.surface)
             self._dibujar_ayuda("Flechas para moverte - ENTER para elegir - T = todos los buffs - ESC para volver",
                                 "Palanca o cruceta para moverte - A para elegir - Y = todos los buffs - B para volver")
-            surface.blit(self.surface, (0, 0))
+            self._presentar(surface)
             return
 
-        sub = render_texto_pixelado(self.subtitle_font, "CONTROL POR GESTOS DE MANO", (200, 200, 220))
-        self.surface.blit(
-            sub, sub.get_rect(center=(self.screen_width // 2, 106))
-        )
+        self._subtitulo("CONTROL POR MANO O MANDO")
 
         for i, btn in enumerate(self.buttons):
             extra = 0
@@ -928,6 +749,47 @@ class MenuScene:
                             "Palanca o cruceta para moverte - A para elegir")
 
         self._dibujar_transicion()
+        self._presentar(surface)
+
+    def _subtitulo(self, texto):
+        neon.cinta(self.surface, texto, neon.MAGENTA, (self.screen_width // 2, 108), tam=15)
+
+    def _dibujar_piso(self):
+        """Fondo synthwave: cielo violeta, sol de franjas y piso de grilla
+        neon que avanza (el mismo clima que las cinematicas)."""
+        w, h = self.screen_width, self.screen_height
+        horizonte = int(h * 0.72)
+        for y in range(0, horizonte, 4):
+            k = y / horizonte
+            self.surface.fill((int(8 + 22 * k), int(4 + 6 * k), int(22 + 30 * k), 255), (0, y, w, 4))
+        for star in self.stars:
+            if star.y < horizonte:
+                star.draw(self.surface)
+        # sol de franjas detras del horizonte
+        cx, radio = w // 2, 120
+        for y in range(horizonte - radio, horizonte, 4):
+            dy = horizonte - y
+            if (dy // 6) % 3 == 0 and dy < radio * 0.6:
+                continue
+            medio = int(math.sqrt(max(0, radio * radio - (radio - dy) ** 2)))
+            k = dy / radio
+            color = (255, int(90 + 120 * k), int(160 - 90 * k))
+            self.surface.fill(color, (cx - medio, y, medio * 2, 4))
+        # piso
+        self.surface.fill((14, 6, 30, 255), (0, horizonte, w, h - horizonte))
+        self.surface.fill(neon.MAGENTA, (0, horizonte, w, 3))
+        avance = (self.title_phase * 40) % 1.0
+        for n in range(12):
+            z = (n + avance) / 12
+            y = horizonte + int((h - horizonte) * z * z)
+            self.surface.fill((150, 50, 160), (0, y, w, 2))
+        for k in range(-14, 15):
+            x0 = cx + k * 40
+            x1 = cx + k * 260
+            pygame.draw.line(self.surface, (150, 50, 160), (x0, horizonte), (x1, h), 2)
+
+    def _presentar(self, surface):
+        neon.scanlines(self.surface, 35)
         surface.blit(self.surface, (0, 0))
 
     def _dibujar_transicion(self):
@@ -1016,15 +878,15 @@ class MenuScene:
                 self.surface.fill(neon, (rect.centerx - (5 - k) * 2, ay + k * 2, (5 - k) * 4, 2))
 
     def _draw_settings(self):
-        self.slider_musica.draw(self.surface, AZUL)
-        self.slider_sfx.draw(self.surface, MENTA)
-        self.slider_sensibilidad.draw(self.surface, (255, 200, 100))
+        marcado = self.settings_widgets[self.ajuste_sel]
+        self.slider_musica.draw(self.surface, AZUL, marcado is self.slider_musica)
+        self.slider_sfx.draw(self.surface, MENTA, marcado is self.slider_sfx)
+        self.slider_sensibilidad.draw(self.surface, (255, 200, 100), marcado is self.slider_sensibilidad)
 
         self.btn_silencio.text = f"SILENCIO: {'SI' if audio.esta_silenciado() else 'NO'}"
         self.btn_pantalla.text = f"PANTALLA COMPLETA: {'SI' if settings.get('pantalla_completa') else 'NO'}"
         self.btn_camara.text = f"CAMARA: {settings.get('camera_index')}"
         self.btn_bonus_buffs.text = f"BONUS CON TODOS LOS BUFFS: {'SI' if settings.get('bonus_todos_buffs') else 'NO'}"
-        marcado = self.settings_widgets[self.ajuste_sel]
         for widget in self.settings_widgets:
             if isinstance(widget, MenuButton):
                 extra = int(math.sin(self.hover_amp) * 8) if widget is marcado else 0

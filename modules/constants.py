@@ -6,8 +6,8 @@ proposito, para poder importarse desde cualquier lado sin ciclos."""
 
 SCREEN_WIDTH = 1280
 SCREEN_HEIGHT = 720
-GAME_WIDTH = 960
-GAME_HEIGHT = 640
+GAME_WIDTH = 1120
+GAME_HEIGHT = 660
 PREVIEW_WIDTH = 240
 PREVIEW_HEIGHT = 160
 FPS = 60
