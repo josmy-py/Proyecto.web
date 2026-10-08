@@ -200,15 +200,90 @@ def get_ship_surface(ship_type, body_color, wing_color, width, height):
     if key in _composed_cache:
         return _composed_cache[key]
 
-    surface = _compose_layers("ships", ship_type, body_color, wing_color, width, height)
+    if es_nave_pixel(ship_type):
+        surface = _compose_nave_pixel(ship_type, body_color, wing_color, width, height)
+    else:
+        surface = _compose_layers("ships", ship_type, body_color, wing_color, width, height)
     _composed_cache[key] = surface
     _cap(_composed_cache, _MAX_COMPOSED)
     return surface
 
 
 def get_ship_size(ship_type, base_width, base_height):
+    if es_nave_pixel(ship_type):
+        grilla = load_raw("ships", f"{ship_type}_body.png")
+        return grilla.get_width() * SHIP_PIXEL, grilla.get_height() * SHIP_PIXEL
     scale = SHIP_SCALE.get(ship_type, 1.45)
     return int(base_width * scale), int(base_height * scale)
+
+
+# ---------------------------------------------------------------- naves pixel art
+# Las naves de tools/generate_pixel_ships.py traen una capa "_neon" (lineas
+# que brillan) y una "_glow" (halo suave a 4x). body/wing/neon/detail vienen
+# a la resolucion de la grilla y se agrandan sin suavizar; el halo si se
+# suaviza. Si una clase no tiene "_neon" se usa el camino viejo de arriba.
+
+SHIP_PIXEL = 2          # cada celda de la grilla = SHIP_PIXEL x SHIP_PIXEL en pantalla
+_COLOR_TOBERA = (200, 252, 255)
+
+_nave_pixel_cache = {}
+_toberas_cache = {}
+
+
+def es_nave_pixel(ship_type):
+    if ship_type not in _nave_pixel_cache:
+        _nave_pixel_cache[ship_type] = os.path.isfile(
+            os.path.join(SPRITES_DIR, "ships", f"{ship_type}_neon.png"))
+    return _nave_pixel_cache[ship_type]
+
+
+def color_neon(color):
+    """Color de alas aclarado hacia el blanco: lo que usan las lineas neon."""
+    return tuple(min(255, int(c * 0.45 + 140)) for c in color[:3])
+
+
+def _compose_nave_pixel(ship_type, body_color, wing_color, width, height):
+    canvas = _compose_layers("ships", ship_type, body_color, wing_color,
+                             width, height, pixelado=True)
+    if canvas is None:
+        return None
+    neon = load_raw("ships", f"{ship_type}_neon.png")
+    glow = load_raw("ships", f"{ship_type}_glow.png")
+    tono = color_neon(wing_color)
+    out = pygame.Surface(canvas.get_size(), pygame.SRCALPHA)
+    if glow is not None:
+        out.blit(tint(_scaled(glow, width, height), tono), (0, 0))
+    out.blit(canvas, (0, 0))
+    if neon is not None:
+        out.blit(_scaled_pixelado(tint(neon, tono), width, height), (0, 0))
+        # la capa de detalle (contorno, cabina) va siempre arriba del neon
+        detail = load_raw("ships", f"{ship_type}_detail.png")
+        if detail is not None:
+            out.blit(_scaled_pixelado(detail, width, height), (0, 0))
+    return out
+
+
+def get_ship_nozzles(ship_type):
+    """Puntos de salida de las toberas de una nave pixel art, en pixeles de
+    pantalla relativos al centro del sprite: [(dx, dy), ...]. Se obtienen
+    buscando en la capa de detalle las celdas encendidas que no tienen otra
+    celda encendida debajo (la punta de cada tobera)."""
+    if ship_type in _toberas_cache:
+        return _toberas_cache[ship_type]
+    puntos = []
+    detail = load_raw("ships", f"{ship_type}_detail.png") if es_nave_pixel(ship_type) else None
+    if detail is not None:
+        w, h = detail.get_size()
+
+        def encendida(x, y):
+            return y < h and tuple(detail.get_at((x, y)))[:3] == _COLOR_TOBERA
+
+        for x in range(w):
+            for y in range(h):
+                if encendida(x, y) and not encendida(x, y + 1):
+                    puntos.append(((x + 0.5 - w / 2) * SHIP_PIXEL, (y + 1 - h / 2) * SHIP_PIXEL))
+    _toberas_cache[ship_type] = puntos
+    return puntos
 
 
 def get_enemy_surface(kind, body_color, wing_color, size):

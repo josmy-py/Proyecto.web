@@ -1969,10 +1969,10 @@ def generate_all(verbose=True):
     _ensure_dir(OUT_DIR)
     written = []
 
-    for kind in SHIP_KINDS:
-        layers = build_ship(kind)
-        for layer_name, img in layers.items():
-            written.append(save(img, "ships", f"{kind}_{layer_name}.png"))
+    # Las naves del jugador ahora son pixel art neon y salen de
+    # tools/generate_pixel_ships.py (build_ship queda solo como referencia).
+    import generate_pixel_ships
+    generate_pixel_ships.main()
 
     for i in range(ASTEROID_VARIANTS):
         written.append(save(build_asteroid(1000 + i), "asteroids", f"asteroid_{i}.png"))

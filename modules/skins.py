@@ -7,17 +7,17 @@ nave bonus reciclada (ver BONUS_SHIP_VARIANTS en modules/entities/enemy.py),
 que sortea uno al azar cada vez que aparece."""
 
 from modules.constants import (
-    AZUL, AZUL_CIELO, MELON, ROSA, ROSA_CHICLE, LAVANDA,
+    AZUL, MELON, ROSA, ROSA_CHICLE, LAVANDA,
 )
 
 SHIP_SKINS = {
     "scout": {
         "default": {
             "name": "Explorador",
-            "body_color": AZUL,
-            "wing_color": AZUL_CIELO,
-            "glow_color": (140, 210, 255),
-            "flame_color": AZUL,
+            "body_color": (90, 150, 255),
+            "wing_color": (255, 70, 210),
+            "glow_color": (255, 90, 220),
+            "flame_color": (80, 230, 255),
         },
         "neon": {
             "name": "Neon",

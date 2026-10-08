@@ -241,8 +241,15 @@ class Ship:
             # por defecto) hasta que se regeneren los sprites.
             flame_anchor = cy + h // 3
 
+        toberas = sprites.get_ship_nozzles(self.ship_type) if sprite is not None else []
+        if toberas:
+            self._draw_llamas_pixel(screen, cx, cy, toberas)
+            toberas_ok = True
+        else:
+            toberas_ok = False
+
         flame_phase = self.engine_flame_phase
-        for fi in range(4):
+        for fi in range(0 if toberas_ok else 4):
             fy = flame_anchor + fi * 3
             fw = max(1, 6 - fi * 1 + int(math.sin(flame_phase + fi) * 1.5))
             fh = max(1, 10 - fi * 2 + int(math.sin(flame_phase * 1.3 + fi) * 2.5))
@@ -333,6 +340,26 @@ class Ship:
             }.get(buff_type, AMARILLO)
             bx = cx - 8 + i * 10
             pygame.draw.circle(screen, color, (bx, buff_icon_y), 3)
+
+    def _draw_llamas_pixel(self, screen, cx, cy, toberas):
+        """Llamas en bloques de pixel debajo de cada tobera de la nave pixel
+        art: punta blanca, despues el color neon del motor y una cola que se
+        apaga. El largo late con engine_flame_phase."""
+        p = sprites.SHIP_PIXEL
+        neon = sprites.color_neon(self.flame_color)
+        base = self.flame_color[:3]
+        for i, (dx, dy) in enumerate(toberas):
+            largo = 3 + int(2.4 * (0.5 + 0.5 * math.sin(self.engine_flame_phase + i * 1.7)))
+            x = int(cx + dx - p / 2)
+            for paso in range(largo):
+                if paso == 0:
+                    color = (255, 255, 255)
+                elif paso == 1:
+                    color = neon
+                else:
+                    f = max(0.15, 1.0 - (paso - 1) / largo)
+                    color = (int(base[0] * f), int(base[1] * f), int(base[2] * f))
+                pygame.draw.rect(screen, color, (x, int(cy + dy) + paso * p, p, p))
 
     def _draw_health_bar(self, surface, cx, cy):
         bar_w = 40
