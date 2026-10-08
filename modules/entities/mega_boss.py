@@ -715,6 +715,5 @@ class MegaBoss:
         pixelfx.barra_jefe(screen, cx, y, 200, max(0.0, self.hp / self.max_hp), self.health_deplete_anim,
                            color, temblor)
         crucero = self.phase_name == "cruiser"
-        fase = "CRUCERO DE ASALTO" if crucero else "ESFERA DE COMBATE"
-        etiqueta = render_text(f"{self.name} · {fase}", 11, WHITE if crucero else ROSA)
+        etiqueta = render_text(self.name, 11, WHITE if crucero else ROSA)
         screen.blit(etiqueta, (cx - etiqueta.get_width() // 2, y - 18))

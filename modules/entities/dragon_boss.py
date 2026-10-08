@@ -462,5 +462,5 @@ class DragonBoss:
             color = COLORES_FASE[self.phase][0]
             y_barra = max(14, cy - 100)
             pixelfx.barra_jefe(screen, cx, y_barra, 156, ratio, self.health_deplete_anim, color, temblor)
-            etiqueta = render_text(f"{self.name}  {NOMBRE_MODO[self.phase]}", 11, WHITE if self.phase < 3 else AMARILLO)
+            etiqueta = render_text(self.name, 11, WHITE if self.phase < 3 else AMARILLO)
             screen.blit(etiqueta, (cx - etiqueta.get_width() // 2, y_barra - 18))

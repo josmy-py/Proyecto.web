@@ -225,9 +225,6 @@ class CinematicaEntradaCyber:
         self._dibujar_mundo(mundo)
         surface.blit(pixelar(mundo, PIXEL_BONUS), (0, 0))
         neon.franjas_cine(surface, t / 25, CIAN if self.jefe != "kaiser" else AMARILLO, alto=48)
-        if self.jefe == "netrunner" and 10 <= t < 90:
-            texto = "> conexion entrante desde ???"[:max(0, (t - 10) // 2)]
-            neon.titulo(surface, texto, 26, VERDE_CODIGO, GAME_WIDTH // 2, GAME_HEIGHT // 2, halo=False)
         if self.jefe == "tarantula" and 120 <= t:
             ojos = min(6, (t - 120) // 6 + 1)
             if t < 160:
@@ -238,13 +235,6 @@ class CinematicaEntradaCyber:
             tam = 54 + int(3 * math.sin(t * 0.2))
             color = {"netrunner": CIAN, "tarantula": ROJO, "kaiser": AMARILLO}[self.jefe]
             neon.titulo(surface, self.boss.nombre, tam, color, GAME_WIDTH // 2, GAME_HEIGHT - 150)
-            neon.cinta(surface, self.subtitulo, color, (GAME_WIDTH // 2, GAME_HEIGHT - 100), tam=14)
-        if 190 <= t < 310:
-            if self.jefe == "tarantula":
-                neon.cinta(surface, self.frase, ROJO, (GAME_WIDTH // 2, 100), tam=18)
-            else:
-                neon.globo(surface, self.frase, GAME_WIDTH / 2 + 70, 130,
-                           MAGENTA if self.jefe == "netrunner" else AMARILLO, cola_derecha=False, tam=20)
         neon.scanlines(surface)
         if t < 16:
             neon.velo(surface, NEGRO, int(255 * (1 - t / 16)))

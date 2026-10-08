@@ -686,8 +686,9 @@ class JefeGatoBase:
         self._dibujar_cartel(surface)
 
     def _dibujar_cartel(self, surface):
-        if self.cartel is None or (self.cartel[1] < 20 and self.cartel[1] % 4 < 2):
-            return
+        # el nombre del ataque ya no se muestra (menos texto en pantalla);
+        # self.cartel sigue marcando que hay un especial en curso
+        return
         texto = render_text(self.cartel[0], 22, AMARILLO)
         cx = max(texto.get_width() // 2 + 8, min(GAME_WIDTH - texto.get_width() // 2 - 8, int(self.x)))
         cy = max(60, min(GAME_HEIGHT - 60, int(self.y) + self.alto_sprite // 2 + 12))

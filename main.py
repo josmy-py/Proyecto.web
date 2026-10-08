@@ -850,7 +850,7 @@ def main():
         if jefe == "dimension":
             bosses.append(ParcaDimension(dificultad))
             bonus_estado = "dimension"
-            bonus_banner = ["¡DUELO A MUERTE!", "LA PARCA  -  SU DIMENSION", 170]
+            bonus_banner = ["¡DUELO A MUERTE!", "LA PARCA", 170]
             audio.reproducir_musica("jefe_parca")
         elif jefe in JEFES_HALLOWEEN:
             _entrar_jefe_halloween(jefe)
@@ -862,7 +862,7 @@ def main():
             bosses.append(GatoPanBoss(dificultad))
             _cinematica_entrada_jefe(bosses[-1], "jefe_pan")
             bonus_estado = "pan"
-            bonus_banner = ["¡JEFE BONUS!", "GATO OIIA  -  OIIA OIIA", 170]
+            bonus_banner = ["¡JEFE BONUS!", "GATO OIIA", 170]
             audio.reproducir_musica("jefe_pan")
         else:
             bosses.append(NyanBoss(dificultad))
@@ -1047,7 +1047,7 @@ def main():
             bonus_banner = ["¡SIGUIENTE JEFE!", "GATO ALIEN", 170]
         else:
             bonus_estado = "interludio_pan"
-            bonus_banner = ["¡ULTIMO JEFE!", "GATO OIIA  -  OIIA OIIA", 170]
+            bonus_banner = ["¡ULTIMO JEFE!", "GATO OIIA", 170]
             if aliado is not None:
                 aliado.despedirse()  # se va por una ventila
         audio.sonido_victoria()
@@ -1318,7 +1318,7 @@ def main():
                 b.volverse_vulnerable()
         aliado = TripulanteAliado(ship)
         bonus_estado = "alien"
-        bonus_banner = ["¡TRIPULANTE AL RESCATE!", "El Gato Alien perdio su escudo", 150]
+        bonus_banner = ["¡TRIPULANTE AL RESCATE!", "", 150]
         # mientras el tripulante pelea a tu lado suena su tema de impostor
         # (o una cancion propia de Among Us, ver audio._PALABRAS_CANCION_PROPIA)
         audio.reproducir_musica("impostor")
