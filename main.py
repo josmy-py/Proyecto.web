@@ -1448,15 +1448,73 @@ def main():
         game_victory = False
         paused = False
 
+    # fase del bonus en la que se perdio -> jefe desde el que se sigue
+    CONTINUAR_BONUS = {
+        "victoria_falsa": None, "nyan": "nyan",
+        "interludio_alien": "alien", "alien": "alien", "game_over_falso": "alien",
+        "interludio_pan": "pan", "pan": "pan",
+        "calabaza": "calabaza", "interludio_bruja": "bruja", "bruja": "bruja",
+        "interludio_parca": "parca", "parca": "parca",
+        "netrunner": "netrunner", "interludio_tarantula": "tarantula", "tarantula": "tarantula",
+        "interludio_kaiser": "kaiser", "kaiser": "kaiser",
+    }
+
+    def _punto_de_control():
+        """Desde donde sigue "Intentar de Nuevo": la oleada en la que se
+        perdio ("wN") o el jefe del bonus que se estaba peleando. None (el
+        duelo de la Parca): partida nueva como antes."""
+        if bonus_estado is None:
+            return f"w{wave}"
+        if bonus_estado == "victoria_falsa":
+            return {"halloween": "calabaza", "cyber": "netrunner"}.get(ruta_bonus, "nyan")
+        return CONTINUAR_BONUS.get(bonus_estado)
+
+    def _continuar_desde(punto):
+        """"Intentar de Nuevo" sigue donde te quedaste: la misma oleada (o el
+        mismo jefe del bonus), con la vida llena y todo lo ganado (mejoras,
+        zorrito, puntaje, dificultad). Si se perdio contra un jefe, antes de
+        volver a pelear hay una carta de mejora."""
+        nonlocal inicio_partida, score, dificultad, mascota, mascota_ofrecida
+        nonlocal stats_disparos, stats_aciertos, stats_alienigenas, stats_jefes
+        es_jefe = bool(bosses) or punto in JEFES_BONUS_DIRECTOS or (
+            punto.startswith("w") and (get_boss_for_wave(wave) is not None or wave == MEGA_BOSS_SPAWN_WAVE))
+        niveles = dict(estado_mejoras.niveles)
+        tenia_mascota, ofrecida = mascota is not None, mascota_ofrecida
+        guardado = (score, dificultad, stats_disparos, stats_aciertos, stats_alienigenas, stats_jefes)
+        elegido_en_menu = inicio_partida
+        inicio_partida = punto
+        try:
+            reset_game()
+        finally:
+            inicio_partida = elegido_en_menu
+        score, dificultad, stats_disparos, stats_aciertos, stats_alienigenas, stats_jefes = guardado
+        for mid, nivel in niveles.items():
+            if mid == "reparar":
+                continue
+            while estado_mejoras.nivel(mid) < nivel:
+                _aplicar_mejora(mid, silencioso=True)
+        if tenia_mascota and mascota is None:
+            mascota = ZorritoEspacial(ship)
+        mascota_ofrecida = ofrecida or tenia_mascota
+        ship.lives = ship.max_lives
+        if es_jefe:
+            _pedir_mejora("¡OTRA VEZ CONTRA EL JEFE! ELEGI UNA MEJORA")
+
     def _reintentar():
-        """"Intentar de Nuevo" del GAME OVER. Con la calavera (dos derrotas
-        seguidas) no hay partida nueva: la Parca corta la pantalla, te lleva
-        a su dimension (CinematicaParcaLlega) y empieza el duelo despues de
-        la cuenta regresiva."""
+        """"Intentar de Nuevo" del GAME OVER: sigue desde donde te quedaste
+        (ver _continuar_desde). Con la calavera (dos derrotas seguidas) no:
+        la Parca corta la pantalla, te lleva a su dimension
+        (CinematicaParcaLlega) y empieza el duelo despues de la cuenta
+        regresiva."""
         nonlocal derrotas_seguidas, ruta_bonus, fondo_pixel, bonus_directo_pendiente
         nonlocal mejora_inicial_pendiente, start_time
         if derrotas_seguidas < 2:
-            reset_game()
+            punto = _punto_de_control()
+            if punto is None:
+                reset_game()
+            else:
+                _continuar_desde(punto)
+                mejora_inicial_pendiente = False
             return
         # copia de la pantalla de GAME OVER antes de que reset_game la borre
         captura = pygame.Surface((GAME_WIDTH, GAME_HEIGHT))
@@ -1686,7 +1744,8 @@ def main():
                 ship.target_x = max(0, min(GAME_WIDTH, ship.target_x + axis_x * GAMEPAD_MOVE_SPEED))
                 ship.target_y = max(0, min(GAME_HEIGHT, ship.target_y + axis_y * GAMEPAD_MOVE_SPEED))
 
-        if bonus_directo_pendiente and countdown_val <= 0 and not paused and not game_over:
+        if (bonus_directo_pendiente and countdown_val <= 0 and not paused and not game_over
+                and eleccion is None and not mejoras_extra):
             _iniciar_pelea_bonus(bonus_directo_pendiente)
             bonus_directo_pendiente = None
 
@@ -1702,7 +1761,7 @@ def main():
         # 11, 21...). Si justo hay un jefe o su cartel, espera a que termine.
         if (eleccion is None and not game_over and not dying and not paused and countdown_val <= 0
                 and bonus_estado in (None,) + INTERLUDIOS_BONUS
-                and not bonus_directo_pendiente and not bosses and boss_reward_timer <= 0):
+                and (not bonus_directo_pendiente or mejoras_extra) and not bosses and boss_reward_timer <= 0):
             if mejoras_extra:
                 _abrir_eleccion(mejoras_extra.pop(0))
             elif bonus_estado is not None:
