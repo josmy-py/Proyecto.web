@@ -338,38 +338,89 @@ def draw_camera_preview(surface, preview_surf, preview_rect, timestamp):
     surface.blit(label_surf, (preview_rect.x + 4, preview_rect.y + preview_rect.height + 3))
 
 
+LINEA_BARRA = (34, 22, 70)
+_ETAPAS_CARGA = (
+    (0.25, "CALIBRANDO MOTORES"),
+    (0.50, "CARGANDO CAÑONES"),
+    (0.75, "ESCANEANDO ASTEROIDES"),
+    (1.00, "SINCRONIZANDO CONTROLES"),
+)
+
+
 def draw_countdown(surface, game_w, game_h, countdown_val, countdown_fraction, font, info_font, big_font, control_hint=""):
-    """Pantalla de preparacion antes de que arranque la partida, en pixel
-    art neon: un anillo de bloques que se van apagando con el tiempo
-    restante y el numero grande en el centro, sobre el fondo de estrellas
-    que ya dibujo el llamador. countdown_fraction va de 1.0 (recien
-    empezo) a 0.0 (arranca la partida)."""
+    """Pantalla de carga antes de que arranque la partida, en pixel art
+    neon: una barra de bloques que se llena de 0 a 100 % (de cian a
+    magenta) con el porcentaje grande y lo que se esta "cargando", sobre el
+    fondo de estrellas que ya dibujo el llamador. countdown_fraction va de
+    1.0 (recien empezo) a 0.0 (arranca la partida)."""
     t = pygame.time.get_ticks() // 16
-    cx, cy = game_w // 2, game_h // 2 - 20
-    radio = 84
+    cx = game_w // 2
+    # llega al 100 % un poco antes del final, asi se alcanza a ver el "¡LISTO!"
+    progreso = min(1.0, (1.0 - max(0.0, min(1.0, countdown_fraction))) / 0.85)
+    porcentaje = min(100, int(progreso * 100))
 
-    neon.titulo(surface, "NAVE VS ASTEROIDES", 22, (170, 190, 255), cx, cy - radio - 70, halo=False)
+    neon.titulo(surface, "NAVE VS ASTEROIDES", 40, neon.CIAN, cx, game_h // 2 - 170)
 
-    frac = max(0.0, min(1.0, countdown_fraction))
-    segmentos = 28
-    encendidos = int(round(frac * segmentos))
-    pixelfx.dibujar_halo(surface, neon.CIAN, cx, cy, radio + 40)
-    for i in range(segmentos):
-        a = -math.pi / 2 + 2 * math.pi * i / segmentos
-        x, y = cx + math.cos(a) * radio, cy + math.sin(a) * radio
-        if i < encendidos:
-            color = neon.CIAN if i < encendidos - 1 or (t // 6) % 2 else WHITE
-            neon.cuadro_pixel(surface, neon.CONTORNO, x, y, 14)
-            neon.cuadro_pixel(surface, color, x, y, 10)
+    caja = pygame.Rect(0, 0, 700, 170)
+    caja.center = (cx, game_h // 2 + 10)
+    neon.panel(surface, caja, neon.MAGENTA, t)
+
+    # "CARGANDO..." a la izquierda y el porcentaje grande a la derecha
+    puntos = "." * (1 + (t // 20) % 3)
+    listo = porcentaje >= 100
+    etiqueta = "¡LISTO!" if listo else "CARGANDO" + puntos
+    letras = neon.texto(20, etiqueta, neon.VERDE if listo else WHITE)
+    surface.blit(letras, (caja.x + 34, caja.y + 30))
+    cifra = neon.texto(44, f"{porcentaje}%", WHITE)
+    pixelfx.dibujar_halo(surface, pixelfx.apagar(neon.MAGENTA, 0.35), caja.right - 34 - cifra.get_width() // 2,
+                         caja.y + 46, 70)
+    surface.blit(cifra, (caja.right - 34 - cifra.get_width(), caja.y + 22))
+
+    # barra de bloques
+    bloques = 40
+    ancho_bloque, alto_bloque, hueco = 13, 26, 3
+    total = bloques * (ancho_bloque + hueco) - hueco
+    x0 = cx - total // 2
+    y0 = caja.y + 84
+    marco = pygame.Rect(x0 - 8, y0 - 8, total + 16, alto_bloque + 16)
+    surface.fill(neon.CONTORNO, marco)
+    neon.marco_pixel(surface, marco, pixelfx.apagar(neon.CIAN, 0.7), 3)
+    llenos = progreso * bloques
+    for i in range(bloques):
+        x = x0 + i * (ancho_bloque + hueco)
+        k = i / (bloques - 1)
+        color = tuple(int(a + (b - a) * k) for a, b in zip(neon.CIAN, neon.MAGENTA))
+        if i < int(llenos):
+            # un brillo que recorre la parte llena
+            if abs(i - (t // 2) % (bloques + 12) + 6) < 2:
+                color = pixelfx.aclarar(color, 0.6)
+            surface.fill(color, (x, y0, ancho_bloque, alto_bloque))
+            surface.fill(pixelfx.aclarar(color, 0.5), (x, y0, ancho_bloque, 4))
+            surface.fill(pixelfx.apagar(color, 0.6), (x, y0 + alto_bloque - 4, ancho_bloque, 4))
+        elif i == int(llenos) and not listo:
+            # el bloque que se esta cargando titila
+            parcial = llenos - int(llenos)
+            alto = max(4, int(alto_bloque * parcial) // 2 * 2)
+            surface.fill(LINEA_BARRA, (x, y0, ancho_bloque, alto_bloque))
+            surface.fill(WHITE if (t // 4) % 2 else color, (x, y0 + alto_bloque - alto, ancho_bloque, alto))
         else:
-            neon.cuadro_pixel(surface, (40, 30, 80), x, y, 8)
+            surface.fill(LINEA_BARRA, (x, y0, ancho_bloque, alto_bloque))
+    if 0 < llenos < bloques:
+        punta = x0 + int(llenos) * (ancho_bloque + hueco)
+        pixelfx.dibujar_halo(surface, pixelfx.apagar(WHITE, 0.4), punta, y0 + alto_bloque // 2, 26)
 
-    neon.titulo(surface, str(countdown_val), 86, WHITE, cx, cy + 4)
-    neon.cinta(surface, "PREPARATE", neon.CIAN, (cx, cy + radio + 34), tam=16)
+    # lo que se esta cargando ahora
+    tarea = next(nombre for hasta, nombre in _ETAPAS_CARGA if progreso <= hasta or hasta == 1.0)
+    if listo:
+        tarea = "TODO EN ORDEN, PILOTO"
+    linea = render_texto_pixelado(get_font(14), f"> {tarea}", (150, 160, 200))
+    surface.blit(linea, (x0, y0 + alto_bloque + 16))
 
+    if listo or (t // 15) % 4:
+        neon.cinta(surface, "PREPARATE", neon.CIAN, (cx, caja.bottom + 34), tam=16)
     if control_hint:
         hint = render_texto_pixelado(get_font(14), control_hint, (150, 160, 200))
-        surface.blit(hint, (game_w // 2 - hint.get_width() // 2, cy + radio + 62))
+        surface.blit(hint, (cx - hint.get_width() // 2, caja.bottom + 62))
 
 
 def formatear_tiempo(segundos):

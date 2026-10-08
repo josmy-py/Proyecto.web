@@ -39,6 +39,8 @@ ESC sale del juego.
   que se acercan), Orbita (esferas que giran alrededor de la nave), Recolector
   (una vida cada tantas bajas) y Fenix (renaces una vez al caer), ver
   modules/systems/habilidades.py.
+- Antes de cada partida hay una pantalla de carga neon: una barra de bloques
+  que se llena de 0 a 100 % (ver ui.draw_countdown).
 - Jefes en las oleadas 10, 20, 30 y 40, y el Coloso en la oleada 50.
 - "Intentar de Nuevo" sigue desde donde perdiste (la misma oleada o el mismo
   jefe), con la vida llena y todas tus mejoras. Si perdiste contra un jefe,
