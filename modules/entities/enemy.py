@@ -20,6 +20,10 @@ from modules.skins import get_available_skins, get_skin_colors
 # acido, lejos del azul/magenta de la nave del jugador para leerlos rapido.
 COLORES_ENEMIGO = [(255, 70, 90), (255, 150, 40), (180, 90, 255), (120, 255, 90)]
 
+# Modelos de platillo (ver PLATILLOS en tools/generate_pixel_sprites.py):
+# cada drone sortea uno al aparecer.
+MODELOS_PLATILLO = ("drone", "drone_b", "drone_c", "drone_d")
+
 # Variantes de nave enemiga comun (sprites en assets/sprites/enemies).
 # Mueren de un solo golpe, sin hp propio (ver AlienShip.take_damage).
 ENEMY_VARIANTS = {
@@ -87,6 +91,10 @@ class AlienShip:
             self.wing_color = tuple(int(c * 0.62) for c in self.color[:3])
             self.glow_color = None
             self.max_hp = 1
+            if self.variant == "drone":
+                # varios modelos de platillo que giran sobre si mismos
+                self.diseno = random.choice(MODELOS_PLATILLO)
+                self.giro = random.uniform(1.4, 3.2) * random.choice((-1, 1))
         self.hp = self.max_hp
         self.hit_flash = 0
         self.size = cfg["size"] * (MINIBOSS_SIZE_MULT if self.is_miniboss else 1.0)
@@ -103,7 +111,8 @@ class AlienShip:
         self.bank_phase = random.uniform(0, math.pi * 2)
         self.rotation = 0.0
         self.rot_speed = 0.0
-        self._sprite_key = ("enemy", self.variant, self.color, self.size)
+        self.diseno = getattr(self, "diseno", self.variant)
+        self._sprite_key = ("enemy", self.diseno, self.color, self.size)
 
         self.misil_timer = random.randint(*MINIBOSS_MISIL_RATE) if self.is_miniboss else 0
 
@@ -123,7 +132,10 @@ class AlienShip:
 
         self.bank_phase += 0.05
         base_tilt = 12.0 if self.side == "right" else (-12.0 if self.side == "left" else 0.0)
-        self.rotation = base_tilt + math.sin(self.bank_phase) * 7.0
+        if self.variant == "drone":
+            self.rotation = (self.rotation + self.giro) % 360
+        else:
+            self.rotation = base_tilt + math.sin(self.bank_phase) * 7.0
         self.wave += 1
         self.glow_phase += 0.12
         self.hit_flash = max(0, self.hit_flash - 1)
@@ -241,9 +253,13 @@ class AlienShip:
                 width, height = sprites.tamano_pixel("ships", self.variant, escala)
             sprite = sprites.get_ship_surface(self.variant, self.color, self.wing_color, width, height)
         else:
-            sprite = sprites.get_enemy_surface(self.variant, self.color, self.wing_color, self.size)
+            sprite = sprites.get_enemy_surface(self.diseno, self.color, self.wing_color, self.size)
 
-        if sprite is not None:
+        if self.variant == "drone" and not self.is_bonus:
+            girado = sprites.get_enemy_surface_girado(
+                self.diseno, self.color, self.wing_color, self.size, self.rotation)
+            sprites.blit_centered(screen, girado, cx, cy)
+        elif sprite is not None:
             # Los PNG de assets/sprites/ships tienen el morro hacia ARRIBA
             # (mismo criterio que la nave del jugador); los de
             # assets/sprites/enemies ya vienen dibujados apuntando hacia

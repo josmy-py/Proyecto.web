@@ -20,6 +20,7 @@ sin suavizar (pixeles en bloque, ver sprites.get_ship_surface).
 Uso:  python tools/generate_pixel_sprites.py
 """
 
+import math
 import os
 
 import numpy as np
@@ -228,36 +229,6 @@ ENEMIES = {
 ..............
 ..............
 """,
-    "drone": """
-..............
-..............
-..............
-..........oooo
-........ooNNNN
-.......oNWWWWW
-......oNWwwwww
-.....oNWwwvvvv
-....oNWwwvoooo
-...oNWwwvobbbb
-...oWwwvobBBBB
-..oWwwvobBBddd
-..oWwwvobBdooo
-..oNwwvobBdoRR
-..oNwwvobBdoRh
-..oWwwvobBdoRR
-..oWwwvobBBdoo
-...oWwvvobBBBB
-...oNWwvvobbbb
-....oNWwvvoooo
-.....oNWwwvvvv
-......oNWWwwww
-.......ooNNNNN
-.........ooooo
-..............
-..............
-..............
-..............
-""",
     "gunner": """
 ..............
 ..............
@@ -291,6 +262,114 @@ ENEMIES = {
 }
 
 
+# ---------------------------------------------------------------- platillos
+
+# Modelos de platillo: cada uno cambia la forma del anillo, la cantidad de
+# paneles y luces, el tamaño de la cupula y el tipo de ojo.
+PLATILLOS = {
+    # clasico: anillo ancho, 8 puertos de luz, cupula grande con ojo
+    "drone": dict(paneles=8, puertos=8, cupula=4.9, ojo="punto", pinchos=0, aro=10.0, oval=1.0),
+    # cazador: 4 pinchos hacia afuera, cupula chica con ojo en rendija
+    "drone_b": dict(paneles=6, puertos=4, cupula=3.9, ojo="rendija", pinchos=4, aro=9.4, oval=1.0),
+    # nodriza: ovalado y achatado, muchas luces chicas, triple ojo
+    "drone_c": dict(paneles=12, puertos=12, cupula=4.4, ojo="triple", pinchos=0, aro=10.4, oval=0.78),
+    # sierra: borde dentado de 8 dientes, sin cupula, nucleo de energia
+    "drone_d": dict(paneles=8, puertos=0, cupula=3.4, ojo="nucleo", pinchos=8, aro=8.6, oval=1.0),
+}
+
+
+def _cerca(ang, cada, ancho, desfase=0.0):
+    paso = 360.0 / cada
+    return abs(((ang + desfase + paso / 2) % paso) - paso / 2) < ancho
+
+
+def platillo(nombre, n=30):
+    """Platillo visto desde arriba, armado por distancia y angulo al centro:
+    borde, anillo exterior con paneles y muescas neon, canal con puertos de
+    luz, placa del casco con nervaduras y cupula con ojo."""
+    p = PLATILLOS[nombre]
+    c = (n - 1) / 2.0
+    filas = []
+    for y in range(n):
+        fila = ""
+        for x in range(n):
+            dx = x - c
+            dy = (y - c) / p["oval"]
+            r = math.hypot(dx, dy)
+            ang = math.degrees(math.atan2(dy, dx)) % 360
+            luz = (-dx - dy) / (r + 1e-6)          # 1 arriba-izquierda, -1 abajo-derecha
+            borde = 12.9
+            if p["pinchos"]:
+                # pinchos/dientes que sobresalen del borde
+                if _cerca(ang, p["pinchos"], 7.0 if p["pinchos"] <= 4 else 9.0):
+                    borde = 13.9 if p["pinchos"] > 4 else 14.6
+                elif p["pinchos"] > 4:
+                    borde = 12.2
+            if r > borde + 1.0:
+                ch = "."
+            elif r > borde:
+                ch = "o"
+            elif r > 12.9 and p["pinchos"]:
+                ch = "N" if r > borde - 0.9 and p["pinchos"] <= 4 else "W" if luz > 0 else "v"
+            elif r > p["aro"]:
+                if _cerca(ang, p["paneles"], 3.5, 180.0 / p["paneles"]) and p["aro"] + 0.6 < r < 12.4:
+                    ch = "N"
+                elif _cerca(ang, p["paneles"], 2.2):
+                    ch = "v"
+                elif r > 12.2:
+                    ch = "W" if luz > -0.2 else "w"
+                else:
+                    ch = "W" if luz > 0.45 else "w" if luz > -0.45 else "v"
+            elif r > p["aro"] - 1.0:
+                ch = "E" if p["puertos"] and _cerca(ang, p["puertos"], 4.5, 180.0 / p["puertos"]) else "o"
+            elif r > p["cupula"] + 1.1:
+                if _cerca(ang, 6, 4.0) and r > p["cupula"] + 1.7:
+                    ch = "d"
+                elif r > p["aro"] - 1.7:
+                    ch = "B" if luz > -0.3 else "b"
+                elif r < p["cupula"] + 1.8:
+                    ch = "b" if luz > 0.0 else "d"
+                else:
+                    ch = "B" if luz > 0.5 else "b" if luz > -0.4 else "d"
+            elif r > p["cupula"]:
+                ch = "o"
+            else:
+                ch = _ojo(p["ojo"], dx, dy, r, luz, p["cupula"])
+            fila += ch
+        filas.append(fila)
+    return filas
+
+
+def _ojo(tipo, dx, dy, r, luz, radio):
+    if tipo == "nucleo":
+        return "h" if r < 1.2 else "E" if r < radio - 1.0 else "C"
+    if tipo == "rendija":
+        if abs(dx) < 0.6 and abs(dy) < radio - 1.2:
+            return "R"
+        if abs(dx) < 1.6 and abs(dy) < radio - 1.6:
+            return "o"
+    elif tipo == "triple":
+        for ox in (-2.5, 0.0, 2.5):
+            d = math.hypot(dx - ox, dy)
+            if d < 0.8:
+                return "R"
+            if d < 1.3:
+                return "o"
+    else:
+        if r < 1.5:
+            return "R"
+        if r < 2.4:
+            return "o"
+    if dx < -0.5 and dy < -0.5 and r > radio * 0.6:
+        return "h"
+    return "C" if luz > -0.3 else "c"
+
+
+# Los platillos se arman por codigo (mapa completo, sin espejo).
+for _nombre in PLATILLOS:
+    ENEMIES[_nombre] = platillo(_nombre)
+
+
 def parse(mapa):
     filas = [f for f in mapa.strip("\n").split("\n")]
     ancho = max(len(f) for f in filas)
@@ -303,7 +382,8 @@ def parse(mapa):
 
 
 def build(mapa):
-    grilla = parse(mapa)
+    # un str es media nave a espejar; una lista ya es el mapa completo
+    grilla = parse(mapa) if isinstance(mapa, str) else mapa
     h = len(grilla) + PAD * 2
     w = len(grilla[0]) + PAD * 2
     body = np.zeros((h, w, 4), np.uint8)

@@ -88,7 +88,7 @@ ANOMALY_OJO_CY_FRAC = 0.4824
 ANOMALY_OJO_R_FRAC = 0.06
 
 _MAX_COMPOSED = 160
-_MAX_ROTATIONS = 600
+_MAX_ROTATIONS = 1200
 _ROT_STEP = 6
 
 _raw_cache = {}
@@ -253,24 +253,60 @@ def color_neon(color):
     return tuple(min(255, int(c * 0.45 + 140)) for c in color[:3])
 
 
-def _compose_pixel(folder, kind, body_color, wing_color, width, height, tono):
-    canvas = _compose_layers(folder, kind, body_color, wing_color,
-                             width, height, pixelado=True)
-    if canvas is None:
+def _compose_pixel(folder, kind, body_color, wing_color, width, height, tono, angulo=0):
+    """Arma el sprite a la resolucion de la grilla, lo gira ahi (si angulo)
+    y recien despues lo agranda sin suavizar: asi el giro tambien queda en
+    pixeles grandes y parejos. El halo se gira y se escala suavizado."""
+    body = load_raw(folder, f"{kind}_body.png")
+    wing = load_raw(folder, f"{kind}_wing.png")
+    if body is None and wing is None:
         return None
+    ref = body if body is not None else wing
+    canvas = pygame.Surface(ref.get_size(), pygame.SRCALPHA)
+    if wing is not None:
+        canvas.blit(tint(wing, wing_color), (0, 0))
+    if body is not None:
+        canvas.blit(tint(body, body_color), (0, 0))
     neon = load_raw(folder, f"{kind}_neon.png")
-    glow = load_raw(folder, f"{kind}_glow.png")
-    out = pygame.Surface(canvas.get_size(), pygame.SRCALPHA)
-    if glow is not None:
-        out.blit(tint(_scaled(glow, width, height), tono), (0, 0))
-    out.blit(canvas, (0, 0))
     if neon is not None:
-        out.blit(_scaled_pixelado(tint(neon, tono), width, height), (0, 0))
-        # la capa de detalle (contorno, cabina) va siempre arriba del neon
-        detail = load_raw(folder, f"{kind}_detail.png")
-        if detail is not None:
-            out.blit(_scaled_pixelado(detail, width, height), (0, 0))
+        canvas.blit(tint(neon, tono), (0, 0))
+    detail = load_raw(folder, f"{kind}_detail.png")
+    if detail is not None:
+        canvas.blit(detail, (0, 0))
+
+    factor = max(1, round(width / ref.get_width()))
+    if angulo:
+        canvas = pygame.transform.rotate(canvas, angulo)
+    final = (canvas.get_width() * factor, canvas.get_height() * factor)
+    if not angulo:
+        final = (int(width), int(height))
+
+    out = pygame.Surface(final, pygame.SRCALPHA)
+    glow = load_raw(folder, f"{kind}_glow.png")
+    if glow is not None:
+        if angulo:
+            glow = pygame.transform.rotozoom(glow, angulo, 1.0)
+        out.blit(tint(_scaled(glow, *final), tono), (0, 0))
+    out.blit(_scaled_pixelado(canvas, *final), (0, 0))
     return out
+
+
+def get_enemy_surface_girado(kind, body_color, wing_color, size, angulo):
+    """Como get_enemy_surface() pero girado en la grilla (pasos de _ROT_STEP
+    grados): para los platillos, que giran sin parar."""
+    bucket = int(round(angulo / _ROT_STEP)) * _ROT_STEP % 360
+    if not es_pixel("enemies", kind) or bucket == 0:
+        return get_enemy_surface(kind, body_color, wing_color, size)
+    escala = max(1, round(size * ENEMY_SCALE / 28))
+    w, h = tamano_pixel("enemies", kind, escala)
+    key = ("enemy_giro", kind, _quantize(body_color), _quantize(wing_color), w, bucket)
+    surf = _rotation_cache.get(key)
+    if surf is None:
+        surf = _compose_pixel("enemies", kind, body_color, wing_color, w, h,
+                              color_neon(body_color), bucket)
+        _rotation_cache[key] = surf
+        _cap(_rotation_cache, _MAX_ROTATIONS)
+    return surf
 
 
 def get_ship_nozzles(ship_type):
