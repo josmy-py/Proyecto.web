@@ -3,7 +3,7 @@ Carga, tintado y cacheo de los sprites PNG de assets/sprites.
 
 Los PNG de cuerpo y alas estan en escala de grises: al multiplicarlos por un
 color (BLEND_RGBA_MULT) se obtiene esa pieza pintada de ese color conservando
-el sombreado. Gracias a eso el aspecto (skin) de cada nave, jefe o power-up
+el sombreado. Gracias a eso el aspecto (skin) de cada nave o jefe
 se pinta sin necesidad de tener un PNG por cada combinacion de color posible.
 
 Si falta la carpeta assets/sprites el juego no se cae: todas las funciones
@@ -36,9 +36,8 @@ ASTEROID_VARIANTS = 14
 ENEMY_KINDS = ("fighter", "drone", "gunner")
 
 # body_type del jefe (ver modules/core/boss_system.py) -> prefijo de archivo
-# en assets/sprites/boss/. Los que tienen capa _neon son pixel art de
-# tools/generate_pixel_sprites.py; el resto todavia sale de
-# tools/generate_sprites.py. Un kind que no figura aca se usa tal cual
+# en assets/sprites/boss/ (pixel art de tools/generate_pixel_sprites.py,
+# con capa _neon). Un kind que no figura aca se usa tal cual
 # como prefijo (dragon_a, titan_px, ...).
 BOSS_SPRITE_PREFIX = {
     "saucer": "centinela",
@@ -119,11 +118,9 @@ def _scaled(surface, width, height):
 
 def _scaled_pixelado(surface, width, height):
     """Como _scaled() pero SIN suavizar (pygame.transform.scale, no
-    smoothscale): usado solo por las insignias de power-up, que se
-    generan a proposito a resolucion nativa baja y sin antialiasing (ver
-    build_powerup_body/_detail en tools/generate_sprites.py) para que se
-    vean en pixeles grandes de verdad. Con smoothscale se perderia el
-    borde en bloque del estilo pixel-art."""
+    smoothscale): para el pixel art, que se dibuja a resolucion nativa
+    baja y sin antialiasing. Con smoothscale se perderia el borde en
+    bloque del estilo pixel-art."""
     width = max(1, int(width))
     height = max(1, int(height))
     if surface.get_width() == width and surface.get_height() == height:
@@ -131,7 +128,7 @@ def _scaled_pixelado(surface, width, height):
     return pygame.transform.scale(surface, (width, height))
 
 
-def _compose_layers(folder, kind, body_color, wing_color, width, height, con_ala=True, pixelado=False):
+def _compose_layers(folder, kind, body_color, wing_color, width, height, con_ala=True):
     body = load_raw(folder, f"{kind}_body.png")
     wing = load_raw(folder, f"{kind}_wing.png") if con_ala else None
     detail = load_raw(folder, f"{kind}_detail.png")
@@ -146,13 +143,6 @@ def _compose_layers(folder, kind, body_color, wing_color, width, height, con_ala
         canvas.blit(tint(body, body_color), (0, 0))
     if detail is not None:
         canvas.blit(detail, (0, 0))
-    if pixelado:
-        # sin suavizar (pygame.transform.scale, no smoothscale): el PNG
-        # YA es la grilla nativa chica de un sprite pixel-art (ver
-        # build_dragon_robot en tools/generate_sprites.py) -con
-        # smoothscale se perderia el borde en bloque de los "pixeles"
-        # grandes, mismo criterio que las insignias de power-up.
-        return _scaled_pixelado(canvas, width, height)
     return _scaled(canvas, width, height)
 
 
@@ -382,40 +372,6 @@ def get_mega_boss_surface(phase):
     if es_pixel("boss", kind):
         w, h = tamano_pixel("boss", kind, MEGA_ESCALA)
         surface = _compose_pixel("boss", kind, casco, alas, w, h, color_neon(alas))
-    _composed_cache[key] = surface
-    _cap(_composed_cache, _MAX_COMPOSED)
-    return surface
-
-
-POWERUP_KINDS = (
-    "extra_life", "fast_shoot", "triple_shot", "shield", "piercing", "attract",
-    "damage_up", "speed_up", "max_life_up", "rapid_fire", "lightning_field",
-)
-
-
-def get_powerup_surface(buff_type, color, size):
-    """Insignia pixel-art (marco biselado caqui/negro + letra dorada,
-    tinte propio del bonus solo en el relleno interior; ver
-    tools/generate_sprites.py) escalada a un cuadrado de "size" px con
-    pixelado real (_scaled_pixelado, sin suavizar) en vez del smoothscale
-    que usa el resto de sprites - asi no se pierden los bordes en bloque
-    del estilo retro. None si faltan los PNG (el llamador solo dibuja la
-    etiqueta de texto, sin insignia de respaldo)."""
-    key = ("powerup", buff_type, _quantize(color), int(size))
-    if key in _composed_cache:
-        return _composed_cache[key]
-
-    body = load_raw("powerups", f"{buff_type}_body.png")
-    detail = load_raw("powerups", f"{buff_type}_detail.png")
-    surface = None
-    if body is not None or detail is not None:
-        ref = body if body is not None else detail
-        canvas = pygame.Surface(ref.get_size(), pygame.SRCALPHA)
-        if body is not None:
-            canvas.blit(tint(body, color), (0, 0))
-        if detail is not None:
-            canvas.blit(detail, (0, 0))
-        surface = _scaled_pixelado(canvas, size, size)
     _composed_cache[key] = surface
     _cap(_composed_cache, _MAX_COMPOSED)
     return surface

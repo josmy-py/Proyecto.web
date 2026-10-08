@@ -49,17 +49,13 @@ FIST_CONFIRM_FRAMES = 2
 GAMEPAD_MOVE_SPEED = 10.0
 GAMEPAD_DEADZONE = 0.2
 
-POWERUP_SPAWN_EVERY = 5
-
 # Nave bonus (ver modules/entities/enemy.py: tank/interceptor/bomber
 # reciclan los sprites de assets/sprites/ships que dejo libres quitar la
 # seleccion de clase de nave del jugador). Aparece rara vez a partir de
 # BONUS_SHIP_MIN_WAVE, ya no muere de un solo golpe (ver "hp" en
-# BONUS_SHIP_VARIANTS) y suelta varios power-ups de golpe al ser
-# destruida -menos que antes, para que no se sienta gratuita.
+# BONUS_SHIP_VARIANTS) y al ser destruida da una carta de mejora extra.
 BONUS_SHIP_MIN_WAVE = 3
 BONUS_SHIP_SPAWN_CHANCE = 0.16
-BONUS_SHIP_POWERUP_COUNT = 3
 BONUS_SHIP_SCORE = 300
 
 # De vez en cuando (BONUS_SHIP_MINIBOSS_CHANCE, se sortea aparte de la
@@ -69,7 +65,6 @@ BONUS_SHIP_SCORE = 300
 # ver AlienShip.is_miniboss/AlienMissile en modules/entities/enemy.py),
 # a cambio de una recompensa proporcionalmente mayor.
 BONUS_SHIP_MINIBOSS_CHANCE = 0.14
-BONUS_SHIP_MINIBOSS_POWERUP_MULT = 2.5
 BONUS_SHIP_MINIBOSS_SCORE_MULT = 3.0
 
 DIFICULTADES = {

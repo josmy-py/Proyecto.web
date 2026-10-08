@@ -729,17 +729,6 @@ def draw_victory_screen(surface, game_w, game_h, score, wave, font, big_font, st
     neon.scanlines(surface)
 
 
-def draw_boss_rewards(surface, boss_name, rewards, x, y):
-    if not rewards:
-        return
-    title_surf = render_text(f"RECOMPENSAS: {boss_name}", 16, AMARILLO)
-    surface.blit(title_surf, (x - title_surf.get_width() // 2, y))
-    for i, reward in enumerate(rewards):
-        color = ROSA if i % 2 == 0 else AZUL
-        label_surf = render_text(f"{reward.label} - {reward.description}", 14, color)
-        surface.blit(label_surf, (x - label_surf.get_width() // 2, y + 22 + i * 20))
-
-
 # ------------------------------------------------ pantalla final (jefe bonus)
 
 _ARCOIRIS_FINAL = [(255, 70, 70), (255, 160, 40), (255, 235, 60), (80, 230, 90), (60, 160, 255), (150, 90, 255)]

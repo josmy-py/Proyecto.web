@@ -240,7 +240,7 @@ class ZorritoEspacial:
     def _decir(self, texto, cuadros=70):
         self.frase = (texto, cuadros)
 
-    def update(self, ship, objetivos, balas_enemigas, powerups):
+    def update(self, ship, objetivos, balas_enemigas):
         self.t += 1
         if self.frase is not None:
             texto, vida = self.frase
@@ -259,13 +259,6 @@ class ZorritoEspacial:
         self.y += (objetivo_y - self.y) * 0.14
         if abs(dx) > 0.3:
             self.mira_derecha = dx > 0
-
-        # arrastra power-ups hacia la nave
-        for p in powerups:
-            if math.hypot(p.x - self.x, p.y - self.y) < 220 or math.hypot(p.x - ship.x, p.y - ship.y) < 160:
-                d = math.hypot(ship.x - p.x, ship.y - p.y) or 1
-                p.x += (ship.x - p.x) / d * 3.5
-                p.y += (ship.y - p.y) / d * 3.5
 
         # bloqueo con la cola de una bala que viene a la nave
         if self.timer_bloqueo <= 0:

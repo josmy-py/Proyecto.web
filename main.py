@@ -43,7 +43,7 @@ from modules.systems.input import (
     is_fist,
     find_hand_position,
 )
-from modules.systems.ui import draw_hud, draw_countdown, draw_camera_preview, draw_game_over, draw_buff_hud, draw_victory_screen, draw_boss_rewards, draw_viewport_frame, draw_ship_status_bar, draw_victory_final
+from modules.systems.ui import draw_hud, draw_countdown, draw_camera_preview, draw_game_over, draw_buff_hud, draw_victory_screen, draw_viewport_frame, draw_ship_status_bar, draw_victory_final
 from modules.core.boss_system import get_boss_for_wave, WaveBoss
 from modules.entities.boss import FinalBoss
 from modules.entities.titan_boss import TitanBoss
@@ -183,7 +183,6 @@ def main():
     ship = Ship(GAME_WIDTH // 2, GAME_HEIGHT - 60, selected_ship_type, selected_skin_id)
     bullets = []
     asteroids = []
-    powerups = []
     alien_ships = []
     alien_bullets = []
     bosses = []
@@ -208,7 +207,6 @@ def main():
     last_hand_y = GAME_HEIGHT - 60
     frame_count = 0
     countdown_val = 1
-    last_boss_rewards = []
     boss_reward_timer = 0
     paused = False
     nuevo_record = False
@@ -290,11 +288,11 @@ def main():
     start_countdown = 5
 
     def reset_game():
-        nonlocal ship, bullets, asteroids, powerups, alien_ships, alien_bullets
+        nonlocal ship, bullets, asteroids, alien_ships, alien_bullets
         nonlocal bosses, boss_bullets, explosions, particles, lightning_bolts
         nonlocal score, wave, objetivos_oleada, spawn_timer, asteroid_kills, alien_spawn_timer
         nonlocal game_over, game_victory, dying, death_timer, game_over_selected
-        nonlocal last_boss_rewards, boss_reward_timer, start_time, start_countdown
+        nonlocal boss_reward_timer, start_time, start_countdown
         nonlocal paused, nuevo_record, dificultad
         nonlocal stats_disparos, stats_aciertos, stats_alienigenas, stats_jefes, tiempo_sobrevivido
         nonlocal bonus_estado, bonus_timer, bonus_banner, fondo_pixel, bonus_directo_pendiente, aliado
@@ -305,7 +303,7 @@ def main():
         if hasattr(draw_buff_hud, 'hud'):
             del draw_buff_hud.hud
         ship = Ship(GAME_WIDTH // 2, GAME_HEIGHT - 60, selected_ship_type, selected_skin_id)
-        bullets.clear(); asteroids.clear(); powerups.clear()
+        bullets.clear(); asteroids.clear()
         alien_ships.clear(); alien_bullets.clear()
         bosses.clear(); boss_bullets.clear()
         explosions.clear(); particles.clear(); lightning_bolts.clear()
@@ -313,7 +311,7 @@ def main():
         asteroid_kills = 0; alien_spawn_timer = 0
         game_over = False; game_victory = False
         dying = False; death_timer = 0; game_over_selected = 0
-        last_boss_rewards = []; boss_reward_timer = 0
+        boss_reward_timer = 0
         paused = False; nuevo_record = False
         dificultad = dificultad_base
         stats_disparos = 0; stats_aciertos = 0
@@ -359,8 +357,8 @@ def main():
 
     def _recompensar_jefe(boss):
         """Recompensa comun a cualquier jefe derrotado (WaveBoss, FinalBoss
-        o MegaBoss): entrega los power-ups de su BossDefinition/self.rewards
-        y explosion/particulas de celebracion. Los jefes ya NO dan puntaje
+        o MegaBoss): explosion/particulas de celebracion y, despues del
+        respiro, la carta de mejora. Los jefes ya NO dan puntaje
         directo (solo lo que el jugador ya sumo destruyendo asteroides y
         naves alienigenas en el camino); derrotar al MegaBoss de la oleada
         MEGA_BOSS_SPAWN_WAVE es la unica forma de terminar la partida con
@@ -373,7 +371,7 @@ def main():
         bucle principal) para que la oleada no pueda saltarse el jefe ni
         quedar pegada peleandolo para siempre; derrotarlo es lo unico que la
         mueve."""
-        nonlocal stats_jefes, dificultad, last_boss_rewards, boss_reward_timer
+        nonlocal stats_jefes, dificultad, boss_reward_timer
         nonlocal wave, objetivos_oleada
         if isinstance(boss, JefeGatoBase):
             _recompensar_jefe_bonus(boss)
@@ -381,7 +379,6 @@ def main():
         stats_jefes += 1
         # ya no sueltan power-ups: los buffs salen solo de las cartas de
         # mejora (la de despues del jefe se abre al terminar este respiro)
-        last_boss_rewards = []
         boss_reward_timer = 180
 
         if isinstance(boss, MegaBoss):
@@ -729,7 +726,7 @@ def main():
         Nyan Cat, o directamente el Gato Alien / el Gato Pan si la partida
         se arranco ahi desde ELEGIR FASE."""
         nonlocal bonus_estado, bonus_banner, fondo_pixel
-        bullets.clear(); asteroids.clear(); powerups.clear()
+        bullets.clear(); asteroids.clear()
         alien_ships.clear(); alien_bullets.clear()
         bosses.clear(); boss_bullets.clear()
         explosions.clear(); particles.clear(); lightning_bolts.clear()
@@ -794,7 +791,7 @@ def main():
         gira, OIIA). Entre uno y otro hay una carta de mejora y un
         respiro con cartel; al caer el Gato Pan arranca la victoria de verdad."""
         nonlocal stats_jefes, bonus_estado, bonus_timer, bonus_banner
-        nonlocal last_boss_rewards, boss_reward_timer
+        nonlocal boss_reward_timer
         stats_jefes += 1
         explosions.append(Explosion(boss.x, boss.y, WHITE, 90))
         for color in (ROSA, AMARILLO, MENTA, AZUL_CIELO):
@@ -810,7 +807,6 @@ def main():
             return
         # en vez de soltar ayuda: una carta de mejora en el respiro
         _pedir_mejora("¡GATO VENCIDO! ELEGI UNA MEJORA")
-        last_boss_rewards = []
         boss_reward_timer = 120
         bonus_timer = 180
         if isinstance(boss, NyanBoss):
@@ -958,11 +954,8 @@ def main():
     def _dibujar_mundo(surface, incluir_nitidos=True):
         """Entidades del mundo en el orden de siempre (juego activo, muerte
         y pantallas de fin de partida). incluir_nitidos=False en el entorno
-        pixel: la nave y los power-ups se dibujan aparte, despues de pixelar
+        pixel: la nave y sus companeros se dibujan aparte, despues de pixelar
         (ver _dibujar_nitidos), para que se vean nitidos."""
-        if incluir_nitidos:
-            for p in powerups:
-                p.draw(surface)
         for aship in alien_ships:
             aship.draw(surface)
         for boss in bosses:
@@ -981,10 +974,8 @@ def main():
 
     def _dibujar_nitidos(surface):
         """Lo que en el entorno pixel se dibuja encima del cuadro ya pixelado:
-        los power-ups (buffs), el tripulante aliado (pixel art propio, mas
+        el tripulante aliado (pixel art propio, mas
         detallado que la grilla del entorno) y la nave del jugador."""
-        for p in powerups:
-            p.draw(surface)
         if aliado is not None:
             aliado.draw(surface)
         _dibujar_companeros(surface)
@@ -1424,7 +1415,7 @@ def main():
                     audio.sonido_victoria()
             if mascota is not None:
                 bullets.extend(mascota.update(ship, asteroids + alien_ships + bosses,
-                                              alien_bullets + boss_bullets, powerups))
+                                              alien_bullets + boss_bullets))
             for dron in estado_mejoras.drones:
                 bullets.extend(dron.update(ship, asteroids + alien_ships + bosses))
 
@@ -1640,28 +1631,6 @@ def main():
                     a.active = False
                     break
 
-            for p in powerups[:]:
-                p.update()
-                if not p.active:
-                    powerups.remove(p)
-
-            for p in powerups[:]:
-                dist = math.sqrt((p.x - ship.x) ** 2 + (p.y - ship.y) ** 2)
-                if ship.attract_active and dist < 180:
-                    pdx = ship.x - p.x
-                    pdy = ship.y - p.y
-                    pdist = math.sqrt(pdx * pdx + pdy * pdy)
-                    if pdist > 0:
-                        p.x += (pdx / pdist) * 4
-                        p.y += (pdy / pdist) * 4
-                if dist < p.radius + SHIP_WIDTH // 2:
-                    p.active = False
-                    powerups.remove(p)
-                    ship.apply_buff(p.buff_type)
-                    explosions.append(Explosion(p.x, p.y, p.color, 12))
-                    particles.extend([Particle(p.x, p.y, WHITE) for _ in range(6)])
-                    audio.sonido_powerup()
-
             for e in explosions[:]:
                 e.update()
                 if not e.active:
@@ -1760,9 +1729,6 @@ def main():
             mostrar_hud_margenes = True
             dibujar_hud_mejoras(game_surface, estado_mejoras, frame_count)
 
-            if boss_reward_timer > 0 and last_boss_rewards:
-                draw_boss_rewards(game_surface, "Jefe Derrotado", last_boss_rewards, GAME_WIDTH // 2, GAME_HEIGHT - 60)
-
             if modo_control == "camara":
                 if hand_active:
                     indicator = render_texto_pixelado(small_font, "Mano detectada | Puño = Disparar", GREEN)
@@ -1811,9 +1777,6 @@ def main():
                 game_surface = pixelar(game_surface, PIXEL_BONUS)
                 dibujar_scanlines(game_surface)
                 _dibujar_nitidos(game_surface)
-
-            if boss_reward_timer > 0 and last_boss_rewards:
-                draw_boss_rewards(game_surface, "Jefe Derrotado", last_boss_rewards, GAME_WIDTH // 2, GAME_HEIGHT - 60)
 
             if game_victory:
                 if bonus_estado == "terminado":

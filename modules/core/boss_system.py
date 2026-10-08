@@ -2,7 +2,7 @@
 Jefes de oleada: uno cada 10 oleadas si o si (10, 20, 30, 40) y el
 mega-jefe final en la oleada 50 (constants.MEGA_BOSS_SPAWN_WAVE, ver
 modules/entities/mega_boss.py). BossDefinition describe cada jefe por
-datos (vida, velocidad, patrones, colores, recompensas) y WaveBoss es la
+datos (vida, velocidad, patrones, colores) y WaveBoss es la
 instancia jugable que lee esos datos, asi que agregar un jefe nuevo es
 sumar una BossDefinition a BOSS_DEFINITIONS sin tocar la logica de WaveBoss."""
 
@@ -11,10 +11,7 @@ import random
 import math
 from modules.constants import (
     ROSA, AMARILLO, ROSA_CHICLE, MENTA,
-    GAME_WIDTH, GAME_HEIGHT, BUFF_TYPE_DAMAGE_UP, BUFF_TYPE_SPEED_UP, BUFF_TYPE_MAX_LIFE_UP, BUFF_TYPE_RAPID_FIRE,
-    BUFF_DURATION_DAMAGE_UP, BUFF_DURATION_SPEED_UP, BUFF_DURATION_MAX_LIFE_UP, BUFF_DURATION_RAPID_FIRE,
-    BUFF_TYPE_EXTRA_LIFE, BUFF_TYPE_FAST_SHOOT, BUFF_TYPE_TRIPLE_SHOT, BUFF_TYPE_SHIELD,
-    BUFF_TYPE_PIERCING, BUFF_DURATION_FAST, BUFF_DURATION_TRIPLE, BUFF_DURATION_SHIELD, BUFF_DURATION_PIERCING, FINAL_BOSS_SPAWN_WAVE,
+    GAME_WIDTH, GAME_HEIGHT, FINAL_BOSS_SPAWN_WAVE,
 )
 from modules.systems import pixelfx, sprites
 
@@ -22,11 +19,11 @@ from modules.systems import pixelfx, sprites
 class BossDefinition:
     """Datos fijos de un jefe de oleada: cuando aparece, cuanta vida y
     velocidad tiene, que patrones de ataque puede usar, sus colores (para
-    tintar el sprite) y las BossReward que suelta al morir."""
+    tintar el sprite)."""
 
     def __init__(self, boss_id, name, spawn_wave, max_hp, speed, shoot_rate,
                  attack_patterns, primary_color, secondary_color, glow_color,
-                 rewards, body_type="saucer"):
+                 body_type="saucer"):
         self.boss_id = boss_id
         self.name = name
         self.spawn_wave = spawn_wave
@@ -37,20 +34,7 @@ class BossDefinition:
         self.primary_color = primary_color
         self.secondary_color = secondary_color
         self.glow_color = glow_color
-        self.rewards = rewards
         self.body_type = body_type
-
-
-class BossReward:
-    """Un buff que un jefe reparte al ser derrotado (se muestra en el panel
-    de "Jefe Derrotado" y se entrega como PowerUp; ver draw_boss_rewards en
-    modules/systems/ui.py y su uso en main.py)."""
-
-    def __init__(self, buff_type, label, description, duration=0):
-        self.buff_type = buff_type
-        self.label = label
-        self.description = description
-        self.duration = duration
 
 
 BOSS_DEFINITIONS = [
@@ -65,10 +49,6 @@ BOSS_DEFINITIONS = [
         primary_color=(170, 170, 180),
         secondary_color=(80, 200, 160),
         glow_color=(100, 200, 255, 60),
-        rewards=[
-            BossReward(BUFF_TYPE_SHIELD, "DEF", "Escudo +1 golpe", BUFF_DURATION_SHIELD),
-            BossReward(BUFF_TYPE_EXTRA_LIFE, "+1", "Vida extra", 0),
-        ],
         body_type="saucer",
     ),
     BossDefinition(
@@ -82,10 +62,6 @@ BOSS_DEFINITIONS = [
         primary_color=(220, 100, 80),
         secondary_color=(255, 160, 60),
         glow_color=(255, 120, 60, 70),
-        rewards=[
-            BossReward(BUFF_TYPE_RAPID_FIRE, "RAPID", "Disparo rapido permanente", BUFF_DURATION_RAPID_FIRE),
-            BossReward(BUFF_TYPE_FAST_SHOOT, "FAST", "Cadencia mejorada", BUFF_DURATION_FAST),
-        ],
         body_type="dragon",
     ),
     BossDefinition(
@@ -99,10 +75,6 @@ BOSS_DEFINITIONS = [
         primary_color=(140, 100, 220),
         secondary_color=(200, 160, 255),
         glow_color=(180, 140, 255, 80),
-        rewards=[
-            BossReward(BUFF_TYPE_DAMAGE_UP, "DMG+", "Daño aumentado permanente", BUFF_DURATION_DAMAGE_UP),
-            BossReward(BUFF_TYPE_PIERCING, "PEN", "Balas penetrantes", BUFF_DURATION_PIERCING),
-        ],
         body_type="titan",
     ),
     BossDefinition(
@@ -116,11 +88,6 @@ BOSS_DEFINITIONS = [
         primary_color=(255, 130, 150),
         secondary_color=(100, 220, 180),
         glow_color=(255, 80, 120, 90),
-        rewards=[
-            BossReward(BUFF_TYPE_MAX_LIFE_UP, "MAX+", "Vida maxima +1", BUFF_DURATION_MAX_LIFE_UP),
-            BossReward(BUFF_TYPE_SPEED_UP, "SPD+", "Velocidad permanente", BUFF_DURATION_SPEED_UP),
-            BossReward(BUFF_TYPE_TRIPLE_SHOT, "3X", "Rafaga triple permanente", BUFF_DURATION_TRIPLE),
-        ],
         body_type="anomaly",
     ),
 ]

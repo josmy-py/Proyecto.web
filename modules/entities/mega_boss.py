@@ -34,10 +34,8 @@ import pygame
 
 from modules.constants import (
     GAME_WIDTH, GAME_HEIGHT, WHITE, ROSA,
-    BUFF_TYPE_DAMAGE_UP, BUFF_TYPE_MAX_LIFE_UP, BUFF_TYPE_TRIPLE_SHOT, BUFF_TYPE_RAPID_FIRE,
-    BUFF_DURATION_DAMAGE_UP, BUFF_DURATION_MAX_LIFE_UP, BUFF_DURATION_TRIPLE, BUFF_DURATION_RAPID_FIRE,
 )
-from modules.core.boss_system import BossReward, WaveBossBullet
+from modules.core.boss_system import WaveBossBullet
 from modules.entities.asteroid import Asteroid
 from modules.entities.enemy import AlienShip
 from modules.entities.nyan_boss import ARCOIRIS
@@ -254,13 +252,6 @@ class MegaBoss:
 
         self._ship_x, self._ship_y = GAME_WIDTH / 2, GAME_HEIGHT - 80
         self._ship = None
-
-        self.rewards = [
-            BossReward(BUFF_TYPE_DAMAGE_UP, "DMG+", "Daño aumentado permanente", BUFF_DURATION_DAMAGE_UP),
-            BossReward(BUFF_TYPE_RAPID_FIRE, "RAPID", "Disparo rapido permanente", BUFF_DURATION_RAPID_FIRE),
-            BossReward(BUFF_TYPE_MAX_LIFE_UP, "MAX+", "Vida maxima +1", BUFF_DURATION_MAX_LIFE_UP),
-            BossReward(BUFF_TYPE_TRIPLE_SHOT, "3X", "Rafaga triple permanente", BUFF_DURATION_TRIPLE),
-        ]
 
     # ------------------------------------------------------------- estado
 
