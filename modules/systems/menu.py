@@ -313,7 +313,7 @@ FASES_INICIO = (
     ("w50", "OLEADA 50 - MEGA JEFE", False),
     ("nyan", "BONUS - NYAN CAT", True),
     ("alien", "BONUS - GATO ALIEN", True),
-    ("pan", "BONUS - GATO PAN", True),
+    ("pan", "BONUS - GATO OIIA", True),
 )
 
 

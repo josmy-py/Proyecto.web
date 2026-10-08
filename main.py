@@ -710,7 +710,7 @@ def main():
         elif jefe == "pan":
             bosses.append(GatoPanBoss(dificultad))
             bonus_estado = "pan"
-            bonus_banner = ["¡JEFE BONUS!", "GATO PAN  -  OIIA OIIA", 170]
+            bonus_banner = ["¡JEFE BONUS!", "GATO OIIA  -  OIIA OIIA", 170]
             audio.reproducir_musica("jefe_pan")
         else:
             bosses.append(NyanBoss(dificultad))
@@ -785,7 +785,7 @@ def main():
             bonus_banner = ["¡SIGUIENTE JEFE!", "GATO ALIEN", 170]
         else:
             bonus_estado = "interludio_pan"
-            bonus_banner = ["¡ULTIMO JEFE!", "GATO PAN  -  OIIA OIIA", 170]
+            bonus_banner = ["¡ULTIMO JEFE!", "GATO OIIA  -  OIIA OIIA", 170]
             if aliado is not None:
                 aliado.despedirse()  # se va por una ventila
         audio.sonido_victoria()
@@ -1796,4 +1796,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main()

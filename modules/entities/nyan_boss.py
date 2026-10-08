@@ -63,6 +63,16 @@ ESTRELLA_VERDE = (190, 255, 200)
 ALMOHADON = (255, 160, 210)
 ALMOHADON_BORDE = (190, 80, 150)
 
+# Gato OIIA: atigrado gris con hocico, pecho y patitas blancas, como el del meme
+GATO_CONTORNO = (38, 34, 46)
+GATO_GRIS = (150, 148, 160)
+GATO_GRIS_CLARO = (190, 188, 198)
+GATO_RAYA = (92, 88, 104)
+GATO_BLANCO = (246, 244, 240)
+GATO_ROSA = (255, 158, 178)
+GATO_OJO = (196, 214, 92)
+GATO_PUPILA = (20, 18, 26)
+
 
 # ------------------------------------------------------------------ arte
 
@@ -212,7 +222,119 @@ def _arte_gato_durmiendo(cuadro):
     return s
 
 
-_ARTES = {"nyan": _arte_nyan, "pan": _arte_pan, "ovni": _arte_ovni, "durmiendo": _arte_gato_durmiendo}
+def _oreja(s, pts, rosa=None):
+    pygame.draw.polygon(s, GATO_CONTORNO, pts)
+    hacia = 1 if pts[0][0] < pts[2][0] else -1
+    pygame.draw.polygon(s, GATO_GRIS, [(pts[0][0] + hacia, pts[0][1] - 1), pts[1], pts[2]])
+    if rosa:
+        pygame.draw.polygon(s, GATO_ROSA, rosa)
+
+
+def _arte_oiia_frente(cuadro):
+    """Gato OIIA de frente, sentado y con la boca abierta (cuadro 1: mas
+    abierta, la "A" del canto)."""
+    s = pygame.Surface((25, 34), pygame.SRCALPHA)
+    # cola detras, a la derecha
+    cola = [(19, 31), (23, 27), (23, 21), (21, 18)]
+    pygame.draw.lines(s, GATO_CONTORNO, False, cola, 3)
+    pygame.draw.lines(s, GATO_GRIS, False, cola, 1)
+    # cuerpo sentado con pecho blanco
+    pygame.draw.ellipse(s, GATO_CONTORNO, (3, 15, 19, 19))
+    pygame.draw.ellipse(s, GATO_GRIS, (4, 16, 17, 17))
+    pygame.draw.ellipse(s, GATO_BLANCO, (8, 17, 9, 15))
+    for x in (7, 14):
+        _px(s, GATO_CONTORNO, x - 1, 30, 5, 4)
+        _px(s, GATO_BLANCO, x, 30, 3, 3)
+    ox, oy = 1, 0
+    _oreja(s, [(ox + 1, oy + 7), (ox + 3, oy), (ox + 8, oy + 4)],
+           [(ox + 3, oy + 5), (ox + 4, oy + 2), (ox + 6, oy + 4)])
+    _oreja(s, [(ox + 21, oy + 7), (ox + 19, oy), (ox + 14, oy + 4)],
+           [(ox + 19, oy + 5), (ox + 18, oy + 2), (ox + 16, oy + 4)])
+    pygame.draw.ellipse(s, GATO_CONTORNO, (ox, oy + 3, 23, 16))
+    pygame.draw.ellipse(s, GATO_GRIS, (ox + 1, oy + 4, 21, 14))
+    # rayas atigradas en la frente y los cachetes
+    for x in (9, 11, 13):
+        _px(s, GATO_RAYA, ox + x, oy + 5, 1, 3)
+    _px(s, GATO_RAYA, ox + 2, oy + 10, 3, 1)
+    _px(s, GATO_RAYA, ox + 2, oy + 12, 2, 1)
+    _px(s, GATO_RAYA, ox + 18, oy + 10, 3, 1)
+    _px(s, GATO_RAYA, ox + 19, oy + 12, 2, 1)
+    # hocico blanco
+    pygame.draw.ellipse(s, GATO_BLANCO, (ox + 6, oy + 11, 11, 8))
+    _px(s, GATO_BLANCO, ox + 10, oy + 8, 3, 3)
+    for ex in (5, 14):
+        _px(s, GATO_CONTORNO, ox + ex, oy + 8, 4, 4)
+        _px(s, GATO_OJO, ox + ex + 1, oy + 9, 2, 2)
+        _px(s, GATO_PUPILA, ox + ex + 2, oy + 9, 1, 2)
+        _px(s, GATO_BLANCO, ox + ex + 1, oy + 9)
+    # nariz y boca abierta
+    _px(s, GATO_ROSA, ox + 10, oy + 12, 3, 1)
+    _px(s, GATO_ROSA, ox + 11, oy + 13)
+    abierta = 3 if cuadro % 2 else 2
+    _px(s, GATO_CONTORNO, ox + 10, oy + 14, 3, abierta)
+    _px(s, GATO_ROSA, ox + 11, oy + 13 + abierta)
+    # bigotes
+    _px(s, GATO_BLANCO, ox - 1, oy + 13, 3, 1)
+    _px(s, GATO_BLANCO, ox + 20, oy + 13, 3, 1)
+    return s
+
+
+def _arte_oiia_perfil(cuadro):
+    """Gato OIIA de perfil, mirando a la derecha."""
+    s = pygame.Surface((25, 34), pygame.SRCALPHA)
+    cola = [(8, 31), (3, 30), (1, 25), (2, 19)]
+    pygame.draw.lines(s, GATO_CONTORNO, False, cola, 3)
+    pygame.draw.lines(s, GATO_GRIS, False, cola, 1)
+    pygame.draw.ellipse(s, GATO_CONTORNO, (5, 15, 15, 19))
+    pygame.draw.ellipse(s, GATO_GRIS, (6, 16, 13, 17))
+    pygame.draw.ellipse(s, GATO_BLANCO, (13, 18, 6, 13))
+    for y in (19, 23, 27):
+        _px(s, GATO_RAYA, 7, y, 4, 1)
+    _px(s, GATO_CONTORNO, 14, 30, 5, 4)
+    _px(s, GATO_BLANCO, 15, 30, 3, 3)
+    _oreja(s, [(9, 6), (11, 0), (15, 5)])
+    _px(s, GATO_ROSA, 11, 3, 1, 2)
+    pygame.draw.ellipse(s, GATO_CONTORNO, (6, 3, 17, 15))
+    pygame.draw.ellipse(s, GATO_GRIS, (7, 4, 15, 13))
+    for x in (9, 11):
+        _px(s, GATO_RAYA, x, 5, 1, 3)
+    _px(s, GATO_RAYA, 8, 10, 3, 1)
+    pygame.draw.ellipse(s, GATO_BLANCO, (16, 10, 7, 7))
+    _px(s, GATO_CONTORNO, 16, 8, 4, 4)
+    _px(s, GATO_OJO, 17, 9, 2, 2)
+    _px(s, GATO_PUPILA, 18, 9, 1, 2)
+    _px(s, GATO_ROSA, 22, 11, 2, 1)
+    _px(s, GATO_CONTORNO, 20, 14, 3, 2 + cuadro % 2)
+    _px(s, GATO_BLANCO, 22, 13, 3, 1)
+    return s
+
+
+def _arte_oiia_espalda(cuadro):
+    """Gato OIIA de espaldas: lomo rayado y la cola parada por el medio."""
+    s = pygame.Surface((25, 34), pygame.SRCALPHA)
+    pygame.draw.ellipse(s, GATO_CONTORNO, (3, 15, 19, 19))
+    pygame.draw.ellipse(s, GATO_GRIS, (4, 16, 17, 17))
+    for y in (19, 23, 27):
+        _px(s, GATO_RAYA, 7, y, 11, 1)
+        _px(s, GATO_RAYA, 6, y + 1, 2, 1)
+        _px(s, GATO_RAYA, 17, y + 1, 2, 1)
+    cola = [(12, 33), (12, 29), (14, 25), (14, 21)]
+    pygame.draw.lines(s, GATO_CONTORNO, False, cola, 3)
+    pygame.draw.lines(s, GATO_GRIS_CLARO, False, cola, 1)
+    _oreja(s, [(2, 7), (4, 0), (9, 4)])
+    _oreja(s, [(22, 7), (20, 0), (15, 4)])
+    pygame.draw.ellipse(s, GATO_CONTORNO, (1, 3, 23, 16))
+    pygame.draw.ellipse(s, GATO_GRIS, (2, 4, 21, 14))
+    for x in (6, 9, 12, 15, 18):
+        _px(s, GATO_RAYA, x, 5, 1, 4)
+    _px(s, GATO_RAYA, 7, 11, 11, 1)
+    _px(s, GATO_RAYA, 9, 14, 7, 1)
+    return s
+
+
+_ARTES = {"nyan": _arte_nyan, "pan": _arte_pan, "ovni": _arte_ovni, "durmiendo": _arte_gato_durmiendo,
+          "oiia_frente": _arte_oiia_frente, "oiia_perfil": _arte_oiia_perfil,
+          "oiia_espalda": _arte_oiia_espalda}
 
 # Animaciones propias (opcionales): PNG con transparencia en
 # assets/sprites/bonus/<jefe>/ en orden alfabetico (frame_00.png, ...),
@@ -220,7 +342,7 @@ _ARTES = {"nyan": _arte_nyan, "pan": _arte_pan, "ovni": _arte_ovni, "durmiendo":
 #   "nyan": Nyan Cat volando (se reproducen a TICKS_POR_FRAME)
 #   "pan":  el gato que gira (OIIA): los frames se recorren segun el angulo
 #           de giro, asi que conviene extraer UNA vuelta completa
-# Sin frames se usa el arte dibujado por codigo (_arte_nyan / _arte_pan).
+# Sin frames se usa el arte dibujado por codigo (_arte_nyan / _arte_oiia_*).
 CARPETA_BONUS = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "assets", "sprites", "bonus",
@@ -1015,8 +1137,8 @@ class NyanBoss(JefeGatoBase):
 
 
 class GatoPanBoss(JefeGatoBase):
-    """Ultimo jefe bonus: el Gato Pan gira sin parar sobre su eje vertical
-    (como el gato del meme "OIIA OIIA"), con aceleracion y frenado suaves.
+    """Ultimo jefe bonus: el gato del meme "OIIA OIIA", que gira sin parar
+    sobre su eje vertical con aceleracion y frenado suaves.
       - normal: gira lento, salta de lado a lado soltando un anillo de migas
         al aterrizar y arroja mini Gatos Pan en arco.
       - "OIIA": se planta, acelera el giro al maximo y escupe una espiral de
@@ -1031,10 +1153,11 @@ class GatoPanBoss(JefeGatoBase):
       - CLONES OIIA: se parte en tres (dos copias fantasma) y los tres
         giran escupiendo espirales; solo el del medio recibe daño."""
 
-    nombre = "GATO PAN"
+    nombre = "GATO OIIA"
     hp_base = 1000
     ANCHO_COLUMNA = 80
-    ESCALA = 7
+    # 4 = un pixel del arte por cada pixel del entorno bonus (PIXEL_BONUS)
+    ESCALA = 4
     GIRO_LENTO = 0.07
     GIRO_OIIA = 0.42
     DURACION_OIIA = 170
@@ -1045,7 +1168,7 @@ class GatoPanBoss(JefeGatoBase):
         self.y = -120.0
         self.base_y = 160.0
         self.size = 58
-        self.alto_sprite = 13 * self.ESCALA
+        self.alto_sprite = 34 * self.ESCALA
         self.salto = None
         self.aplastado = 0
         self.timer_salto = 80
@@ -1252,20 +1375,28 @@ class GatoPanBoss(JefeGatoBase):
     def _sprite_girando(self):
         """Sprite segun el angulo de giro. Con frames propios (un video del
         gato girando) elige el frame que corresponde al angulo; sin ellos
-        simula el giro sobre el eje vertical: el ancho se achica con
-        |cos(angulo)| y la imagen se espeja cuando mira "de espaldas"."""
+        muestra el arte de frente, de perfil o de espaldas segun el angulo,
+        con el ancho achicado por |cos(angulo)| para que se note el giro."""
         blanco = self.flash % 2 == 1
         if frames_personalizados("pan"):
             n = len(frames_personalizados("pan"))
             indice = int(self.angulo / (2 * math.pi) * n) % n
             return frame_personalizado("pan", indice, self.alto_sprite, blanco=blanco)
-        coseno = math.cos(self.angulo)
-        base = sprite_pixel("pan", 1 if self.aplastado > 0 else 0, self.ESCALA,
-                            voltear=coseno < 0, blanco=blanco)
-        # nunca menos del 18% del ancho: de perfil se ve el "grosor" del
-        # gato en vez de una linea
-        ancho = max(PIXEL_BONUS, int(base.get_width() * max(0.18, abs(coseno))))
-        return pygame.transform.scale(base, (ancho, base.get_height()))
+        coseno, seno = math.cos(self.angulo), math.sin(self.angulo)
+        boca = (self.t // 10) % 2
+        if abs(coseno) < 0.38:
+            base = sprite_pixel("oiia_perfil", boca, self.ESCALA, voltear=seno < 0, blanco=blanco)
+            factor = 1.0
+        else:
+            vista = "oiia_frente" if coseno > 0 else "oiia_espalda"
+            base = sprite_pixel(vista, boca, self.ESCALA, blanco=blanco)
+            factor = 0.55 + 0.45 * abs(coseno)
+        ancho, alto = base.get_size()
+        if self.aplastado > 0:
+            # al aterrizar se aplasta un poco, como un resorte
+            factor *= 1.12
+            alto = int(alto * 0.86)
+        return pygame.transform.scale(base, (max(PIXEL_BONUS, int(ancho * factor)), alto))
 
     def draw(self, screen, offset_x=0, offset_y=0):
         e = self.especial
@@ -1288,7 +1419,7 @@ class GatoPanBoss(JefeGatoBase):
         if self.salto is not None or self.entrando:
             sombra = pygame.Surface((120, 18), pygame.SRCALPHA)
             pygame.draw.ellipse(sombra, (0, 0, 0, 80), (0, 0, 120, 18))
-            screen.blit(sombra, (int(self.x) - 60 + offset_x, int(self.base_y) + 38 + offset_y))
+            screen.blit(sombra, (int(self.x) - 60 + offset_x, int(self.base_y) + self.alto_sprite // 2 - 8 + offset_y))
         if self._girando_rapido():
             # remolino de lineas alrededor mientras gira rapido
             for i in range(6):
