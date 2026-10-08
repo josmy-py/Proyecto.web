@@ -611,6 +611,12 @@ class Ship:
                 self.health_deplete_anim = prev_lives / self.max_lives
             self.health_shake = 6
             self.invincible_timer = 300
+            if self.lives <= 0 and getattr(self, "fenix", 0) > 0:
+                # carta FENIX: renace una vez con 2 vidas (ver habilidades.py)
+                self.fenix -= 1
+                self.lives = min(2, self.max_lives)
+                self.health_deplete_anim = self.lives / self.max_lives
+                self.fenix_evento = True
             if self.lives <= 0:
                 self.alive = False
             return True

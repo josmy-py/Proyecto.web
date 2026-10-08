@@ -175,6 +175,84 @@ _ICONOS = {
         "...ooooo...",
         "...........",
     ],
+    "misiles": [
+        "....ooo....",
+        "...owwlo...",
+        "...olllo...",
+        "...olcco...",
+        "...olcco...",
+        "..oolccoo..",
+        ".olloccollo",
+        ".oo.oco.oo.",
+        "....owo....",
+        "...owlwo...",
+        "....ooo....",
+    ],
+    "critico": [
+        ".....o.....",
+        "....owo....",
+        "....olo....",
+        "oo.olllo.oo",
+        "owoolwloowo",
+        ".olllwlllo.",
+        "owoolwloowo",
+        "oo.olllo.oo",
+        "....olo....",
+        "....owo....",
+        ".....o.....",
+    ],
+    "nova": [
+        "...ooooo...",
+        "..occccco..",
+        ".oc.....co.",
+        "oc..ooo..co",
+        "oc.owwwo.co",
+        "oc.owwwo.co",
+        "oc.owwwo.co",
+        "oc..ooo..co",
+        ".oc.....co.",
+        "..occccco..",
+        "...ooooo...",
+    ],
+    "orbita": [
+        "oo.......oo",
+        "owo.....owo",
+        ".o..ooo..o.",
+        "...olllo...",
+        "..olcwclo..",
+        "..olwwwlo..",
+        "..olcwclo..",
+        "...olllo...",
+        ".o..ooo..o.",
+        "owo.....owo",
+        "oo.......oo",
+    ],
+    "recolector": [
+        "...........",
+        ".oo.....oo.",
+        "ollo...ollo",
+        "olllo.olllo",
+        "ollllolwllo",
+        "olllllwwwlo",
+        ".ollllwllo.",
+        "..ollllllo.",
+        "...ollllo..",
+        "....ollo...",
+        ".....oo....",
+    ],
+    "fenix": [
+        ".....o.....",
+        "....oco....",
+        "o..ocwco..o",
+        "lo.olwlo.ol",
+        "llooclcooll",
+        ".lllcwclll.",
+        "..ollwllo..",
+        "...olllo...",
+        "...oc.co...",
+        "..oc...co..",
+        "..o.....o..",
+    ],
 }
 
 # id, nombre, texto, rareza, nivel maximo, color del icono
@@ -190,6 +268,13 @@ MEJORAS = {
     "dron": ("DRON ESCOLTA", "Un dron que dispara a tu lado", "rara", 2, (120, 255, 200)),
     "zorrito": ("ZORRITO", "El Zorrito Espacial se une ya", "epica", 1, (245, 132, 42)),
     "reparar": ("REPARAR", "Recupera toda la vida", "comun", 99, (130, 255, 150)),
+    # habilidades con comportamiento propio (ver modules/systems/habilidades.py)
+    "misiles": ("MISILES", "Cada tanto sale un misil que persigue enemigos", "rara", 2, (255, 170, 80)),
+    "critico": ("CRÍTICO", "Algunas balas salen doradas y pegan triple a los jefes", "comun", 3, (255, 210, 70)),
+    "nova": ("NOVA", "Una onda borra las balas que se te acercan", "rara", 2, (150, 230, 255)),
+    "orbita": ("ÓRBITA", "Esferas que giran a tu lado, frenan balas y rompen rocas", "rara", 2, (190, 140, 255)),
+    "recolector": ("RECOLECTOR", "Recuperas una vida cada tantos enemigos destruidos", "comun", 2, (130, 255, 150)),
+    "fenix": ("FÉNIX", "La primera vez que caes, renaces con 2 vidas", "epica", 1, (255, 150, 50)),
 }
 
 
@@ -276,6 +361,8 @@ class EstadoMejoras:
             self.drones.append(DronEscolta(ship, lado))
         elif mejora_id == "reparar":
             ship.lives = ship.max_lives
+        elif mejora_id == "fenix":
+            ship.fenix = getattr(ship, "fenix", 0) + 1
         ship.health_deplete_anim = ship.lives / max(1, ship.max_lives)
 
 

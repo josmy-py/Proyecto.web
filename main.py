@@ -71,6 +71,7 @@ from modules.entities import mascota as mascota_mod
 from modules.entities.mascota import ZorritoEspacial, CapsulaMascota, dibujar_aviso_mascota
 from modules.systems.menu import MenuScene, Star
 from modules.systems.mejoras import EstadoMejoras, SeleccionMejora, dibujar_hud_mejoras, MEJORAS
+from modules.systems.habilidades import Habilidades, marcar_critico
 from modules.systems import audio
 from modules.systems import sprites
 from modules.systems import neon
@@ -333,6 +334,8 @@ def main():
     # arrancar, cada 5 oleadas y despues de cada jefe. Mientras `eleccion`
     # esta abierta el mundo queda congelado y la nave solo mueve el cursor.
     estado_mejoras = EstadoMejoras()
+    # misiles, nova, orbita, recolector y fenix (ver modules/systems/habilidades.py)
+    habilidades = Habilidades()
     eleccion = None
     # cartas extra ganadas (nave bonus, gatos del bonus): titulos en espera
     mejoras_extra = []
@@ -380,7 +383,7 @@ def main():
         nonlocal bonus_estado, bonus_timer, bonus_banner, fondo_pixel, bonus_directo_pendiente, aliado
         nonlocal ruta_bonus, escena_final
         nonlocal mascota, capsula_mascota, mascota_ofrecida, aviso_mascota
-        nonlocal estado_mejoras, eleccion, ultima_oleada_mejora, mejora_inicial_pendiente
+        nonlocal estado_mejoras, eleccion, ultima_oleada_mejora, mejora_inicial_pendiente, habilidades
         if hasattr(draw_hud, 'hud'):
             del draw_hud.hud
         ship = Ship(GAME_WIDTH // 2, GAME_HEIGHT - 60, selected_ship_type, selected_skin_id)
@@ -415,6 +418,7 @@ def main():
             bonus_directo_pendiente = None
             wave = int(inicio_partida[1:])
         estado_mejoras = EstadoMejoras()
+        habilidades = Habilidades()
         eleccion = None
         mejoras_extra.clear()
         if inicio_con_buffs:
@@ -1353,6 +1357,7 @@ def main():
         if incluir_nitidos:
             _dibujar_companeros(surface)
             ship.draw(surface)
+            habilidades.dibujar(surface, estado_mejoras.niveles, ship)
 
     def _dibujar_nitidos(surface):
         """Lo que en el entorno pixel se dibuja encima del cuadro ya pixelado:
@@ -1362,6 +1367,7 @@ def main():
             aliado.draw(surface)
         _dibujar_companeros(surface)
         ship.draw(surface)
+        habilidades.dibujar(surface, estado_mejoras.niveles, ship)
 
     def _dibujar_companeros(surface):
         """Capsula de rescate, Zorrito Espacial y drones escolta (en la
@@ -1786,6 +1792,7 @@ def main():
                 audio.sonido_disparo()
             for b in new_bullets:
                 if b:
+                    marcar_critico(b, estado_mejoras.nivel("critico"))
                     bullets.append(b)
                     stats_disparos += 1
 
@@ -1972,6 +1979,14 @@ def main():
                 # audio.reproducir_musica), asi que es seguro llamarlo
                 # todos los frames sin jefe en pantalla.
                 _musica_partida()
+
+            aviso = habilidades.actualizar(
+                estado_mejoras.niveles, ship, bullets, asteroids, alien_ships, bosses,
+                (alien_bullets, boss_bullets), explosions, Explosion, _golpear_asteroide,
+                asteroid_kills + stats_alienigenas)
+            if aviso is not None:
+                aviso_mascota = [aviso[0], aviso[1], 180]
+                audio.sonido_powerup()
 
             for b in bullets[:]:
                 b.update()

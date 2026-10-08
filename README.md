@@ -34,6 +34,11 @@ ESC sale del juego.
   cada 5 oleadas, despues de cada jefe y al destruir una nave bonus. Cada
   carta ofrece tres opciones (potencia, cadencia, turbo, escudo, triple
   cañon, dron escolta, el Zorrito Espacial, etc.).
+- Cartas con habilidades: Misiles (salen solos y persiguen al enemigo), Critico
+  (balas doradas que pegan triple a los jefes), Nova (una onda borra las balas
+  que se acercan), Orbita (esferas que giran alrededor de la nave), Recolector
+  (una vida cada tantas bajas) y Fenix (renaces una vez al caer), ver
+  modules/systems/habilidades.py.
 - Jefes en las oleadas 10, 20, 30 y 40, y el Coloso en la oleada 50.
 - "Intentar de Nuevo" sigue desde donde perdiste (la misma oleada o el mismo
   jefe), con la vida llena y todas tus mejoras. Si perdiste contra un jefe,
