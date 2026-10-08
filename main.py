@@ -66,7 +66,8 @@ from modules.entities.cyberpunk import (
     FondoCyber, NetrunnerBoss, TarantulaBoss, KaiserBoss, icono_final as icono_cyber,
 )
 from modules.entities.cyberpunk_cine import CinematicaVictoriaCyber, CinematicaEntradaCyber, CinematicaLuna
-from modules.entities.cine_jefes import CinematicaEntradaJefe, CinematicaDerrotaJefe, clave_de, retrato
+from modules.entities.cine_jefes import (CinematicaEntradaJefe, CinematicaDerrotaJefe, CinematicaRenacerColoso,
+                                        clave_de, retrato)
 from modules.entities import mascota as mascota_mod
 from modules.entities.mascota import ZorritoEspacial, CapsulaMascota, dibujar_aviso_mascota
 from modules.systems.menu import MenuScene, Star
@@ -481,19 +482,10 @@ def main():
         boss_reward_timer = 180
 
         if isinstance(boss, MegaBoss):
-            explosions.append(Explosion(boss.x, boss.y, WHITE, 100))
-            particles.extend([Particle(boss.x, boss.y, AMARILLO) for _ in range(80)])
-            particles.extend([Particle(boss.x, boss.y, ORANGE) for _ in range(60)])
-            particles.extend([Particle(boss.x, boss.y, WHITE) for _ in range(40)])
             _cinematica_victoria(boss)
             _iniciar_victoria_falsa()
         else:
-            explosion_color = ROSA if boss.definition.spawn_wave == FINAL_BOSS_SPAWN_WAVE else RED
-            explosion_size = 80 if boss.definition.spawn_wave == FINAL_BOSS_SPAWN_WAVE else 50
-            explosions.append(Explosion(boss.x, boss.y, explosion_color, explosion_size))
-            particle_count = 50 + boss.definition.spawn_wave
-            particles.extend([Particle(boss.x, boss.y, AMARILLO) for _ in range(particle_count)])
-            particles.extend([Particle(boss.x, boss.y, ORANGE) for _ in range(max(0, particle_count - 10))])
+            # la explosion ya paso en su cinematica de derrota: aca no estalla de nuevo
             audio.sonido_victoria()
             dificultad += 0.2
             wave = boss.definition.spawn_wave + 1
@@ -1023,15 +1015,11 @@ def main():
         nonlocal stats_jefes, bonus_estado, bonus_timer, bonus_banner
         nonlocal boss_reward_timer
         stats_jefes += 1
-        explosions.append(Explosion(boss.x, boss.y, WHITE, 90))
-        for color in (ROSA, AMARILLO, MENTA, AZUL_CIELO):
-            particles.extend([Particle(boss.x, boss.y, color) for _ in range(20)])
-        audio.sonido_explosion()
         if isinstance(boss, (GatoPanBoss, ParcaBoss, KaiserBoss)):
-            # un respiro para ver la explosion y despues la cinematica del
-            # gatito durmiendo (ver _actualizar_bonus / _cinematica_gato_durmiendo)
+            # un respiro corto y despues la cinematica final de la ruta
+            # (ver _actualizar_bonus / _cinematica_gato_durmiendo)
             bonus_estado = "final"
-            bonus_timer = 100
+            bonus_timer = 40
             bonus_banner = None
             audio.sonido_victoria()
             return
@@ -1187,6 +1175,17 @@ def main():
                                      pixel=fondo_pixel is not None)
         _correr_cinematica(cine, None, _SONIDOS_CINE_JEFE)
         ship.invincible_timer = max(ship.invincible_timer, 60)
+
+    def _cinematica_renacer_coloso(coloso):
+        """A la mitad de la pelea el Coloso estalla y sus pedazos se unen en
+        la Esfera de Combate (ver CinematicaRenacerColoso); al volver sigue
+        el combate contra la esfera."""
+        cine = CinematicaRenacerColoso(sprites.get_mega_boss_surface("cruiser"),
+                                       sprites.get_mega_boss_surface("sphere"),
+                                       _dibujar_fondo_cine, (coloso.x, coloso.y), pixel=fondo_pixel is not None)
+        _correr_cinematica(cine, None, _SONIDOS_CINE_JEFE)
+        coloso.terminar_renacer()
+        ship.invincible_timer = max(ship.invincible_timer, 120)
 
     def _cinematica_bruja_gigante(bruja):
         """La Bruja Neon se toma una pocion y se vuelve gigante (ver
@@ -1903,6 +1902,8 @@ def main():
 
             for b in bosses[:]:
                 if isinstance(b, MegaBoss):
+                    if b.pide_cinematica == "renacer":
+                        _cinematica_renacer_coloso(b)
                     resultado_jefe = b.update(ship)
                     if resultado_jefe:
                         for rb in resultado_jefe.get("bullets", []):

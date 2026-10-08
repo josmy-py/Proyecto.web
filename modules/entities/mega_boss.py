@@ -12,8 +12,10 @@ grande a la vez, siempre avisado:
     CAÑON DE RIEL: una mira sigue a la nave, se pone roja y queda fija un
     momento antes del disparo pesado.
 
-  A la mitad de la vida el crucero estalla en pedazos que implosionan y
-  forman la ESFERA DE COMBATE:
+  A la mitad de la vida el crucero estalla y sus pedazos se vuelven a unir
+  en la ESFERA DE COMBATE (cine_jefes.CinematicaRenacerColoso; el jefe
+  pide la cinematica con pide_cinematica = "renacer" y main.py llama a
+  terminar_renacer() al volver):
     SUPERLASER: la esfera se acomoda encima de la nave marcando la
     columna, se frena y dispara un rayo de arriba abajo.
     TORRETAS: las cuatro torretas cargan y sueltan una espiral.
@@ -125,7 +127,7 @@ class ColosoLaser:
     def update(self):
         self.t += 1
         self.vida -= 1
-        if self.vida <= 0 or not self.jefe.active or self.jefe.frag_stage is not None:
+        if self.vida <= 0 or not self.jefe.active or self.jefe.renaciendo:
             self.active = False
             return
         y0 = self.jefe.y + PARABOLA[1]
@@ -168,7 +170,7 @@ class ColosoMina:
 
     def update(self):
         self.t += 1
-        if not self.jefe.active or self.jefe.frag_stage is not None:
+        if not self.jefe.active or self.jefe.renaciendo:
             self.active = False
             return
         if self.armada == 0:
@@ -244,9 +246,8 @@ class MegaBoss:
         self.timer_cazas = 360
         self.minas = []
 
-        self.frag_pieces = []
-        self.frag_stage = None
-        self.frag_timer = 0
+        self.renaciendo = False      # esperando la cinematica de la fase 2
+        self.pide_cinematica = None
         self.reform_flash = 0
         self.grieta = []
 
@@ -256,7 +257,7 @@ class MegaBoss:
     # ------------------------------------------------------------- estado
 
     def take_damage(self, amount=1):
-        if self.enter_timer > 0 or self.frag_stage is not None:
+        if self.enter_timer > 0 or self.renaciendo:
             return
         prev = self.hp
         self.hp = max(0, self.hp - amount)
@@ -275,7 +276,9 @@ class MegaBoss:
         self.accion = None
         self.cola = []
         self.cazas = None
-        self._iniciar_fragmentacion()
+        self.minas = []
+        self.renaciendo = True
+        self.pide_cinematica = "renacer"
 
     def _ritmo(self):
         return {1: 1.0, 2: 0.85}[self.phase] / self._dificultad
@@ -301,8 +304,7 @@ class MegaBoss:
                 self.enter_done = True
             return resultado
 
-        if self.frag_stage is not None:
-            self._actualizar_fragmentos()
+        if self.renaciendo:
             return resultado
 
         resultado["bullets"] += self._soltar_cola()
@@ -508,62 +510,18 @@ class MegaBoss:
 
     # ------------------------------------------------ transformacion (fase 2)
 
-    def _iniciar_fragmentacion(self):
-        """El crucero se parte en pedazos de su propio sprite que salen
-        volando y despues implosionan; recien ahi aparece la esfera."""
-        sprite = sprites.get_mega_boss_surface("cruiser")
-        self.frag_pieces = []
-        if sprite is not None:
-            w, h = sprite.get_size()
-            cols, filas = 8, 4
-            pw, ph = w // cols, h // filas
-            for fila in range(filas):
-                for col in range(cols):
-                    rect = pygame.Rect(col * pw, fila * ph, pw if col < cols - 1 else w - col * pw,
-                                       ph if fila < filas - 1 else h - fila * ph)
-                    pieza = sprite.subsurface(rect).copy()
-                    if pygame.mask.from_surface(pieza).count() < 20:
-                        continue
-                    bx, by = rect.centerx - w / 2, rect.centery - h / 2
-                    dist = math.hypot(bx, by) or 1.0
-                    self.frag_pieces.append({'surf': pieza, 'bx': bx, 'by': by,
-                                             'dx': bx / dist, 'dy': by / dist,
-                                             'lejos': random.uniform(70, 130), 'off': 0.0})
-        self.frag_stage = "explota"
-        self.frag_timer = 0
-        self._chispas(self.x, self.y, AMBAR, 40, vel=6)
-
-    def _actualizar_fragmentos(self):
-        self.frag_timer += 1
-        if self.frag_stage == "explota":
-            t = min(1.0, self.frag_timer / 40)
-            for p in self.frag_pieces:
-                p['off'] = p['lejos'] * (1 - (1 - t) ** 2)
-            if self.frag_timer % 6 == 0 and self.frag_pieces:
-                p = random.choice(self.frag_pieces)
-                self._chispas(self.x + p['bx'] + p['dx'] * p['off'], self.y + p['by'] + p['dy'] * p['off'], AMBAR, 6)
-            if self.frag_timer >= 56:
-                self.frag_stage, self.frag_timer = "implota", 0
-            return
-        t = min(1.0, self.frag_timer / 44)
-        for p in self.frag_pieces:
-            p['off'] = p['lejos'] * (1 - t * t)
-        if self.frag_timer % 3 == 0:
-            a = random.uniform(0, 2 * math.pi)
-            self.particles.append({'x': self.x + math.cos(a) * 140, 'y': self.y + math.sin(a) * 140,
-                                   'vx': -math.cos(a) * 5, 'vy': -math.sin(a) * 5,
-                                   'life': 26, 'max_life': 26, 'color': NEON_2})
-        if self.frag_timer >= 44:
-            self.frag_pieces = []
-            self.frag_stage = None
-            self.phase_name = "sphere"
-            self.phase_transition = False
-            self.width = 210
-            self.reform_flash = 18
-            self.timer_accion = 60
-            self.timer_cazas = 300
-            self._chispas(self.x, self.y, NEON_2, 30, vel=7)
-            self._generar_grieta()
+    def terminar_renacer(self):
+        """Despues de la cinematica: ya es la esfera y la pelea sigue."""
+        self.renaciendo = False
+        self.pide_cinematica = None
+        self.phase_name = "sphere"
+        self.phase_transition = False
+        self.width = 210
+        self.reform_flash = 18
+        self.timer_accion = 60
+        self.timer_cazas = 300
+        self._chispas(self.x, self.y, NEON_2, 30, vel=7)
+        self._generar_grieta()
 
     def _generar_grieta(self):
         """Camino de la grieta de arcoiris sobre la esfera (en pixeles de la
@@ -611,17 +569,12 @@ class MegaBoss:
         ox, oy = offset_x, offset_y
         sprite = self._sprite()
 
-        if self.frag_stage is not None:
-            for p in self.frag_pieces:
-                x = cx + p['bx'] + p['dx'] * p['off']
-                y = cy + p['by'] + p['dy'] * p['off']
-                screen.blit(p['surf'], p['surf'].get_rect(center=(int(x), int(y))))
-        elif sprite is not None:
+        if sprite is not None:
             self._dibujar_motores(screen, cx, cy)
             self._dibujar_avisos(screen, cx, cy, ox, oy)
             rect = sprite.get_rect(center=(cx, cy))
             screen.blit(sprite, rect)
-            if self.phase == 1:
+            if self.phase_name == "cruiser":
                 self._dibujar_crucero(screen, cx, cy)
             else:
                 self._dibujar_esfera(screen, cx, cy)

@@ -47,6 +47,11 @@ ESC sale del juego.
   otra al caer (sus ultimas palabras y su pagina del grimorio tachada), ver
   modules/entities/cine_jefes.py. Enter, Espacio, click o un boton del mando
   las adelantan.
+  Los jefes ya no explotan en la pelea: al golpe final salta directo su
+  cinematica de derrota.
+- A la mitad de su vida el Coloso estalla en una cinematica: sus pedazos
+  flotan, un nucleo los atrapa con tentaculos de luz y se unen en la Esfera
+  de Combate; despues sigue el combate.
 - Despues del Coloso sale al azar una de las tres rutas bonus, nunca la misma
   que en la partida anterior: la de los gatos, la de Halloween (un brazo de
   zombi rompe la cinematica): Rey Calabaza, Bruja Neon y La Parca.

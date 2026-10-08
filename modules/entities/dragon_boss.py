@@ -26,7 +26,6 @@ antes de tiempo."""
 import math
 import random
 
-import pygame
 
 from modules.constants import AMARILLO, GAME_WIDTH, GAME_HEIGHT, WHITE
 from modules.core.boss_system import WaveBossBullet
@@ -115,10 +114,6 @@ class DragonBoss:
         self.especial = None
         self.timer_picada = 420
         self._ship = None
-        self.death_state = None
-        self.death_timer = 0
-        self.frag_pieces = []
-        self.frag_timer = 0
 
     # ------------------------------------------------------------ estado
 
@@ -127,7 +122,7 @@ class DragonBoss:
         return (1.6 - 0.2 * (self.phase - 1)) * self._dificultad
 
     def take_damage(self, amount=1):
-        if self.death_state is not None or self.enter_timer > 0:
+        if self.enter_timer > 0:
             return
         prev = self.hp
         self.hp = max(0, self.hp - amount)
@@ -136,7 +131,8 @@ class DragonBoss:
         self.damaged_timer = 6
         self.health_shake = 4
         if self.hp <= 0:
-            self._iniciar_muerte()
+            # sin rugido ni explosion aca: cae en su cinematica (cine_jefes)
+            self.active = False
             return
         ratio = self.hp / self.max_hp
         if (ratio < 0.66 and self.phase == 1) or (ratio < 0.33 and self.phase == 2):
@@ -158,10 +154,6 @@ class DragonBoss:
         if self.health_deplete_anim > self.hp / self.max_hp:
             self.health_deplete_anim = max(self.hp / self.max_hp, self.health_deplete_anim - 0.01)
         self._avanzar_particulas()
-
-        if self.death_state is not None:
-            self._actualizar_muerte()
-            return []
 
         if self.enter_timer > 0:
             self.enter_timer -= 1
@@ -338,52 +330,6 @@ class DragonBoss:
             self.shoot_timer = 40
         return []
 
-    # ------------------------------------------------------------ muerte
-
-    def _iniciar_muerte(self):
-        self.death_state = "rugiendo"
-        self.death_timer = 80
-        self.accion = None
-        self.cola = []
-        self.especial = None
-        self.y = max(self.y, 100)
-
-    def _actualizar_muerte(self):
-        if self.death_state == "rugiendo":
-            self.death_timer -= 1
-            if self.death_timer % 3 == 0:
-                self._chispas(self.x, self.y, 3, 2.5)
-            if self.death_timer <= 0:
-                self._iniciar_explosion()
-            return
-        t = 1.0 - max(0.0, self.frag_timer / 70)
-        for p in self.frag_pieces:
-            p['off'] = 170 * t * t
-            p['ang'] += p['giro']
-        self.frag_timer -= 1
-        if self.frag_timer <= 0:
-            self.frag_pieces = []
-            self.active = False
-
-    def _iniciar_explosion(self):
-        self.death_state = "explotando"
-        sprite = self._sprite(0)
-        w, h = sprite.get_size()
-        cols, filas = 6, 5
-        self.frag_pieces = []
-        for fy in range(filas):
-            for fx in range(cols):
-                rect = pygame.Rect(fx * w // cols, fy * h // filas, w // cols, h // filas)
-                pieza = sprite.subsurface(rect).copy()
-                if pygame.mask.from_surface(pieza).count() < 20:
-                    continue
-                bx, by = rect.centerx - w / 2, rect.centery - h / 2
-                dist = math.hypot(bx, by) or 1.0
-                self.frag_pieces.append({'surf': pieza, 'bx': bx, 'by': by, 'dx': bx / dist, 'dy': by / dist,
-                                         'off': 0.0, 'ang': 0.0, 'giro': random.uniform(-8, 8)})
-        self.frag_timer = 70
-        self._chispas(self.x, self.y, 60, 6.0)
-
     # ------------------------------------------------------------ efectos
 
     def _chispas(self, x, y, n, vel):
@@ -397,7 +343,7 @@ class DragonBoss:
     def _avanzar_particulas(self):
         if self.damaged_timer > 0 and random.random() < 0.5:
             self._chispas(self.x, self.y, 1, 2.0)
-        if self.phase == 3 and self.death_state is None and random.random() < 0.3:
+        if self.phase == 3 and random.random() < 0.3:
             # brasas que se escapan de las grietas
             gx, gy = random.choice(random.choice(_GRIETAS[3]))
             x, y = self._celda(gx, gy)
@@ -429,7 +375,7 @@ class DragonBoss:
         return (self.x + (gx + 3.5) * self.ESCALA - w / 2, self.y + (gy + 3.5) * self.ESCALA - h / 2)
 
     def _dibujar_grietas(self, screen, ox, oy):
-        grietas = _GRIETAS.get(self.phase if self.death_state is None else 3, [])
+        grietas = _GRIETAS.get(self.phase, [])
         brillo = FUEGO_AMARILLO if (self.t // 4) % 3 else FUEGO_ROJO
         for linea in grietas:
             for (x0, y0), (x1, y1) in zip(linea, linea[1:]):
@@ -478,42 +424,28 @@ class DragonBoss:
         if e is not None and e["fase"] == "marca":
             pixelfx.columna_aviso(screen, int(e["x"]) + offset_x, 90, (255, 70, 90), self.t)
 
-        if self.death_state == "explotando":
-            for p in self.frag_pieces:
-                surf = pygame.transform.rotate(p['surf'], p['ang'])
-                k = max(0.0, self.frag_timer / 70)
-                surf.set_alpha(int(255 * k))
-                x = cx + p['bx'] + p['dx'] * p['off']
-                y = cy + p['by'] + p['dy'] * p['off']
-                screen.blit(surf, surf.get_rect(center=(int(x), int(y))))
+        ritmo = 7 if self.phase == 3 else 10
+        sprite = self._sprite((self.t // ritmo) % 2)
+        rect = sprite.get_rect(center=(cx, cy))
+        if self.enter_timer > 0:
+            copia = sprite.copy()
+            copia.set_alpha(int(255 * (1 - self.enter_timer / 90)))
+            screen.blit(copia, rect)
         else:
-            if self.death_state == "rugiendo":
-                cx += random.randint(-4, 4)
-                cy += random.randint(-3, 3)
-            ritmo = 7 if self.phase == 3 else 10
-            sprite = self._sprite((self.t // ritmo) % 2)
-            rect = sprite.get_rect(center=(cx, cy))
-            if self.enter_timer > 0:
-                copia = sprite.copy()
-                copia.set_alpha(int(255 * (1 - self.enter_timer / 90)))
-                screen.blit(copia, rect)
-            else:
-                screen.blit(sprite, rect)
-                self._dibujar_grietas(screen, cx - int(self.x), cy - int(self.y))
-                destello = self.damaged_timer > 3 or (self.phase_transition and (self.phase_timer // 4) % 2 == 0) \
-                    or (self.death_state == "rugiendo" and (self.death_timer // 3) % 2 == 0)
-                if destello:
-                    blanco = pixelfx.silueta_blanca(sprite)
-                    blanco.set_alpha(170)
-                    screen.blit(blanco, rect)
-                # ojos encendidos
-                ojo = (255, 255, 255) if self.death_state else (255, 90, 110)
-                for ox, oy in self.OJOS:
-                    pixelfx.dibujar_halo(screen, ojo, cx + ox, cy + oy, 6)
-                # brasa en la boca
-                pixelfx.dibujar_halo(screen, FUEGO_NARANJA, cx + self.BOCA[0], cy + self.BOCA[1], 7 + (self.t // 5) % 3 * 2)
-                if self.death_state is None:
-                    self._dibujar_aviso(screen, cx, cy)
+            screen.blit(sprite, rect)
+            self._dibujar_grietas(screen, cx - int(self.x), cy - int(self.y))
+            destello = self.damaged_timer > 3 or (self.phase_transition and (self.phase_timer // 4) % 2 == 0)
+            if destello:
+                blanco = pixelfx.silueta_blanca(sprite)
+                blanco.set_alpha(170)
+                screen.blit(blanco, rect)
+            # ojos encendidos
+            ojo = (255, 90, 110)
+            for ox, oy in self.OJOS:
+                pixelfx.dibujar_halo(screen, ojo, cx + ox, cy + oy, 6)
+            # brasa en la boca
+            pixelfx.dibujar_halo(screen, FUEGO_NARANJA, cx + self.BOCA[0], cy + self.BOCA[1], 7 + (self.t // 5) % 3 * 2)
+            self._dibujar_aviso(screen, cx, cy)
 
         for p in self.particles:
             k = p['life'] / p['max_life']
@@ -521,7 +453,7 @@ class DragonBoss:
             lado = 4 if k > 0.5 else 2
             screen.fill(c, (int(p['x']) + offset_x, int(p['y']) + offset_y, lado, lado))
 
-        if self.enter_timer <= 0 and self.death_state is None and (e is None or e["fase"] == "vuelve"):
+        if self.enter_timer <= 0 and (e is None or e["fase"] == "vuelve"):
             temblor = (0, 0)
             if self.health_shake > 0:
                 temblor = (random.randint(-self.health_shake, self.health_shake), 0)

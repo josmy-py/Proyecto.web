@@ -8,6 +8,8 @@ frase al llegar y otra al caer).
   - CinematicaDerrotaJefe: el golpe final congela todo, el jefe dice sus
     ultimas palabras y cae a su manera (estalla, se desvanece, se
     estrella o se duerme); su pagina del grimorio queda tachada.
+  - CinematicaRenacerColoso: a la mitad de su pelea el Coloso estalla y
+    sus pedazos se vuelven a unir en la Esfera de Combate.
 
 Las dos reciben el sprite del jefe (ver retrato) y una funcion que dibuja
 el fondo de la fase, asi sirven igual para los jefes de las oleadas y los
@@ -740,4 +742,278 @@ class CinematicaDerrotaJefe(_CineBase):
                     if k >= 1:
                         neon.titulo(surface, "PÁGINA TACHADA", 18, (255, 120, 120), GAME_WIDTH // 2, y + 82,
                                     halo=False)
+        self._fundidos(surface)
+
+
+# ------------------------------------------------------- renacer del Coloso
+
+class CinematicaRenacerColoso(_CineBase):
+    """A la mitad de la pelea el Coloso no explota y se rearma en el juego:
+    el crucero se sobrecarga y estalla, sus pedazos quedan flotando y un
+    nucleo que late los atrapa con tentaculos de luz; en una especie de
+    simbiosis cada pedazo cambia de forma y se suelda en la ESFERA DE
+    COMBATE (fase 2). Despues sigue el combate (main._cinematica_renacer_coloso)."""
+
+    DURACION = 500
+    T_ZOOM = 24
+    T_ESTALLA = 96
+    T_UNION = 176       # el nucleo empieza a tirar de los pedazos
+    T_LLEGAN = 236      # el ultimo pedazo arranca aca (y tarda DUR_VIAJE)
+    DUR_VIAJE = 110
+    T_ESFERA = 360      # la esfera queda entera
+    T_TITULO = 384
+    VIVO = (90, 255, 210)   # color de los tentaculos (la "simbiosis")
+
+    def __init__(self, crucero, esfera, fondo, pos, pixel=False):
+        super().__init__("coloso", crucero, fondo, pixel)
+        self.k_esfera = escala_presentacion(esfera)
+        self.esfera = _agrandar(esfera, self.k_esfera)
+        self.esfera_blanca = pixelfx.silueta_blanca(self.esfera)
+        self.desde = (max(160, min(GAME_WIDTH - 160, pos[0])), max(90, min(GAME_HEIGHT - 200, pos[1])))
+        self.centro = (GAME_WIDTH / 2, 270)
+        self.x, self.y = self.desde
+        self.zoom = 1.0
+        self.visible = True
+        self.trozos = []
+        self.nucleo = 0.0      # tamaño del nucleo que late (0 = no esta)
+        self.ondas = []
+
+    # pedazos -----------------------------------------------------------
+
+    @staticmethod
+    def _cortar(spr, cols, filas):
+        w, h = spr.get_size()
+        piezas = []
+        for fila in range(filas):
+            for col in range(cols):
+                rect = pygame.Rect(col * w // cols, fila * h // filas,
+                                   (col + 1) * w // cols - col * w // cols,
+                                   (fila + 1) * h // filas - fila * h // filas)
+                pieza = spr.subsurface(rect).copy()
+                if pieza.get_bounding_rect().w == 0:
+                    continue
+                piezas.append((pieza, rect.centerx - w / 2, rect.centery - h / 2))
+        return piezas
+
+    def _estallar(self):
+        """El crucero se parte; a cada pedazo le toca uno de la esfera (en
+        el que se va a convertir) y una hora para empezar a volver."""
+        cx, cy = self.x, self.y
+        del_crucero = self._cortar(self.sprite, 9, 5)
+        de_la_esfera = self._cortar(self.esfera, 7, 7)
+        random.shuffle(de_la_esfera)
+        n = max(len(del_crucero), len(de_la_esfera))
+        for i in range(n):
+            sc = del_crucero[i] if i < len(del_crucero) else None
+            se = de_la_esfera[i] if i < len(de_la_esfera) else None
+            base = sc or del_crucero[i % len(del_crucero)]
+            d = math.hypot(base[1], base[2]) or 1.0
+            v = random.uniform(5, 11)
+            self.trozos.append({
+                "x": cx + base[1], "y": cy + base[2],
+                "vx": base[1] / d * v + random.uniform(-1, 1), "vy": base[2] / d * v + random.uniform(-1, 1),
+                "ang": 0.0, "giro": random.uniform(-6, 6),
+                "crucero": sc[0] if sc else None, "esfera": se[0] if se else None,
+                "dx": se[1] if se else 0.0, "dy": se[2] if se else 0.0,
+                # los de mas afuera vuelven al final: la esfera se arma de adentro hacia afuera
+                "sale": 0, "p": 0.0, "llego": False,
+                "dist": math.hypot(se[1], se[2]) if se else 999.0,
+            })
+        orden = sorted(self.trozos, key=lambda tr: tr["dist"])
+        for i, tr in enumerate(orden):
+            tr["sale"] = self.T_UNION + int((self.T_LLEGAN - self.T_UNION) * i / max(1, len(orden) - 1))
+            tr["x0"] = tr["y0"] = None
+        self.visible = False
+
+    # update ------------------------------------------------------------
+
+    def update(self):
+        self.t += 1
+        t = self.t
+        c, c2 = self.ficha["color"], self.ficha["color2"]
+        self.temblor = max(0, self.temblor - 1)
+        if t <= self.T_ZOOM:
+            e = _ease(t / self.T_ZOOM)
+            self.zoom = 1 + (self.k - 1) * e
+            self.x = self.desde[0] + (self.centro[0] - self.desde[0]) * e
+            self.y = self.desde[1] + (self.centro[1] - self.desde[1]) * e
+        if t == 1:
+            self._sacudir(12, "golpe")
+        if t < self.T_ESTALLA:
+            # sobrecarga: explosiones chicas cada vez mas seguidas
+            if t > self.T_ZOOM and t % max(3, 12 - t // 10) == 0:
+                w, h = self.sprite.get_size()
+                ex, ey = self.x + random.uniform(-w / 2.4, w / 2.4), self.y + random.uniform(-h / 3, h / 3)
+                self.particulas.soltar(ex, ey, (c, (255, 120, 40), WHITE), 12, vel=4, vida=(14, 28))
+                self.temblor = max(self.temblor, 5)
+                if t % 2 == 0:
+                    self.eventos.append("explosion")
+        elif t == self.T_ESTALLA:
+            self._estallar()
+            self._sacudir(26, "golpe")
+            self.eventos.append("explosion")
+            self.particulas.soltar(self.x, self.y, (c, c2, WHITE, (255, 120, 40)), 160, vel=13, vida=(40, 90),
+                                   tam=(4, 10))
+            self.ondas.append([self.x, self.y, 0, WHITE])
+        if t >= self.T_ESTALLA + 30:
+            # el nucleo: primero una chispa que late, despues crece
+            objetivo = 26 if t < self.T_ESFERA else 0
+            self.nucleo += (objetivo - self.nucleo) * 0.05
+            if t == self.T_ESTALLA + 50:
+                self.eventos.append("carga")
+        for tr in self.trozos:
+            if t < tr["sale"]:
+                # flotan y se frenan, girando despacio
+                tr["x"] += tr["vx"]
+                tr["y"] += tr["vy"]
+                tr["vx"] *= 0.93
+                tr["vy"] *= 0.93
+                tr["ang"] += tr["giro"]
+                tr["giro"] *= 0.97
+                # que no se escapen de la pantalla
+                tr["x"] = max(30, min(GAME_WIDTH - 30, tr["x"]))
+                tr["y"] = max(70, min(GAME_HEIGHT - 70, tr["y"]))
+            elif not tr["llego"]:
+                if tr["x0"] is None:
+                    tr["x0"], tr["y0"], tr["ang0"] = tr["x"], tr["y"], tr["ang"] % 360
+                    if tr["ang0"] > 180:
+                        tr["ang0"] -= 360
+                tr["p"] = min(1.0, (t - tr["sale"]) / self.DUR_VIAJE)
+                # un tirón: primero se acercan despacio, despues se sueldan rapido
+                e = tr["p"] ** 2.2
+                tx, ty = self.centro[0] + tr["dx"], self.centro[1] + tr["dy"]
+                curva = math.sin(tr["p"] * math.pi) * 40 * (1 if tr["dx"] >= 0 else -1)
+                tr["x"] = tr["x0"] + (tx - tr["x0"]) * e + curva * (1 - e)
+                tr["y"] = tr["y0"] + (ty - tr["y0"]) * e
+                tr["ang"] = tr["ang0"] * (1 - e)
+                if tr["p"] >= 1.0:
+                    tr["llego"] = True
+                    if tr["esfera"] is not None:
+                        self.particulas.soltar(tx, ty, (self.VIVO, WHITE), 6, vel=3, vida=(10, 22), tam=(3, 6))
+                    if random.random() < 0.18:
+                        self.eventos.append("glitch")
+                elif random.random() < 0.08:
+                    # chispitas que corren por el tentaculo hacia el nucleo
+                    self.particulas.soltar(tr["x"], tr["y"], self.VIVO, 1, vel=1, vida=(14, 24), tam=(3, 5))
+        if t == self.T_ESFERA:
+            self._sacudir(20, "golpe")
+            self.eventos.append("carga")
+            self.ondas.append([self.centro[0], self.centro[1], 0, c2])
+            self.ondas.append([self.centro[0], self.centro[1], -8, self.VIVO])
+            self.particulas.soltar(self.centro[0], self.centro[1], ARCOIRIS + (WHITE,), 90, vel=10, vida=(30, 70))
+        for o in self.ondas:
+            o[2] += 1
+        self.ondas = [o for o in self.ondas if o[2] < 50]
+        self.particulas.update()
+
+    # draw --------------------------------------------------------------
+
+    def _tentaculo(self, mundo, x0, y0, x1, y1, fase, color):
+        """Hilo de cuadraditos que ondula como algo vivo."""
+        largo = math.hypot(x1 - x0, y1 - y0)
+        if largo < 4:
+            return
+        nx, ny = -(y1 - y0) / largo, (x1 - x0) / largo
+        pasos = max(4, int(largo / 7))
+        for i in range(pasos + 1):
+            k = i / pasos
+            onda = math.sin(k * 7 + fase) * 10 * math.sin(k * math.pi)
+            x = x0 + (x1 - x0) * k + nx * onda
+            y = y0 + (y1 - y0) * k + ny * onda
+            neon.cuadro_pixel(mundo, color if i % 3 else WHITE, x, y, 4 if 0.15 < k < 0.85 else 6)
+
+    def draw(self, surface):
+        t = self.t
+        f = self.ficha
+        c, c2 = f["color"], f["color2"]
+        mundo = pygame.Surface(surface.get_size())
+        self.fondo(mundo)
+        neon.velo(mundo, NEGRO, 90 if t < self.T_ESTALLA else 130)
+        cx, cy = self.centro
+
+        if self.visible:
+            spr = self.sprite if t > self.T_ZOOM else _agrandar(self.sprite_juego, self.zoom)
+            x = self.x + (random.randint(-4, 4) if t > self.T_ZOOM else 0)
+            pixelfx.dibujar_halo(mundo, _oscuro((255, 120, 40), 0.25 + 0.3 * t / self.T_ESTALLA), x, self.y,
+                                 spr.get_width() * 0.55)
+            _blit_centrado(mundo, spr, x, self.y)
+            if (t // 3) % 4 == 0 or t > self.T_ESTALLA - 16:
+                blanca = pixelfx.silueta_blanca(spr)
+                blanca.set_alpha(120 + int(135 * min(1.0, t / self.T_ESTALLA)))
+                _blit_centrado(mundo, blanca, x, self.y)
+
+        if self.nucleo > 1 and t < self.T_ESFERA:
+            late = 1 + 0.25 * math.sin(t * 0.25)
+            pixelfx.dibujar_halo(mundo, _oscuro(c2, 0.6), cx, cy, self.nucleo * 3 * late)
+            neon.cuadro_pixel(mundo, c2, cx, cy, self.nucleo * late)
+            neon.cuadro_pixel(mundo, WHITE, cx, cy, self.nucleo * 0.45 * late)
+
+        # tentaculos del nucleo a cada pedazo que todavia no se soldo
+        if self.T_UNION - 30 <= t < self.T_ESFERA:
+            for i, tr in enumerate(self.trozos):
+                if tr["llego"] or t < tr["sale"] - 30:
+                    continue
+                color = self.VIVO if i % 2 else c2
+                self._tentaculo(mundo, cx, cy, tr["x"], tr["y"], t * 0.2 + i, color)
+
+        # pedazos: el del crucero se va convirtiendo en el de la esfera
+        for tr in self.trozos:
+            if t >= self.T_ESFERA:
+                break
+            p = tr["p"]
+            for surf, alfa in ((tr["crucero"], 1 - p), (tr["esfera"], p)):
+                if surf is None or alfa <= 0.02:
+                    continue
+                pieza = surf
+                if tr["ang"]:
+                    pieza = pygame.transform.rotate(pieza, tr["ang"])
+                if alfa < 0.98:
+                    pieza = pieza.copy()
+                    pieza.set_alpha(int(255 * alfa))
+                _blit_centrado(mundo, pieza, tr["x"], tr["y"])
+            if 0.6 < p < 1.0 and (t // 2) % 2 == 0 and tr["esfera"] is not None:
+                blanca = pixelfx.silueta_blanca(tr["esfera"])
+                blanca.set_alpha(110)
+                _blit_centrado(mundo, blanca, tr["x"], tr["y"])
+
+        if t >= self.T_ESFERA:
+            late = 1 + 0.04 * math.sin(t * 0.15)
+            pixelfx.dibujar_halo(mundo, _oscuro(c2, 0.45), cx, cy, self.esfera.get_width() * 0.62 * late)
+            _blit_centrado(mundo, self.esfera, cx, cy)
+            k = (t - self.T_ESFERA) / 24
+            if k < 1:
+                blanca = self.esfera_blanca.copy()
+                blanca.set_alpha(int(255 * (1 - k)))
+                _blit_centrado(mundo, blanca, cx, cy)
+
+        for x, y, edad, color in self.ondas:
+            if edad > 0:
+                neon.anillo_pixel(mundo, pixelfx.apagar(color, 1 - edad / 50), x, y, 30 + edad * 11, tam=6)
+        self.particulas.draw(mundo)
+        surface.blit(pixelar(mundo, PIXEL_BONUS) if self.pixel else mundo, (0, 0))
+
+        neon.franjas_cine(surface, t / 20, c2, alto=48)
+        if t < self.T_ESTALLA:
+            if (t // 8) % 2 == 0:
+                neon.cinta(surface, "¡NÚCLEO CRÍTICO!", (255, 70, 90), (GAME_WIDTH // 2, GAME_HEIGHT - 110), tam=20)
+            if t > 30:
+                frase = "¿Crees que esto se acabó?"
+                self._globo(surface, frase[:max(1, (t - 30) // 2)], self.x + 120,
+                            self.y - self.sprite.get_height() / 2 + 10, c)
+        elif self.T_UNION - 20 <= t < self.T_ESFERA:
+            if (t // 10) % 4:
+                neon.cinta(surface, "SIMBIOSIS", self.VIVO, (GAME_WIDTH // 2, 80), tam=18)
+        if self.T_ESTALLA <= t < self.T_ESTALLA + 12:
+            neon.velo(surface, WHITE, 255 * (1 - (t - self.T_ESTALLA) / 12))
+        if self.T_ESFERA <= t < self.T_ESFERA + 8:
+            neon.velo(surface, WHITE, 200 * (1 - (t - self.T_ESFERA) / 8))
+        if t >= self.T_TITULO:
+            y = GAME_HEIGHT - 120
+            neon.cinta(surface, "FASE 2", c, (GAME_WIDTH // 2, y - 44), tam=16)
+            if (t - self.T_TITULO) < 6 or (t // 5) % 6:
+                neon.titulo(surface, "ESFERA DE COMBATE", 40, c2, GAME_WIDTH // 2, y)
+            if t >= self.T_TITULO + 20:
+                frase = "Lo que es parte de mí nunca muere del todo."
+                self._globo(surface, frase[:max(1, (t - self.T_TITULO - 20) // 2)], cx + 110,
+                            cy - self.esfera.get_height() / 2 + 6, c2)
         self._fundidos(surface)
