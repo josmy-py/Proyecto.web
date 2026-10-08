@@ -20,9 +20,14 @@ from modules.skins import get_available_skins, get_skin_colors
 # acido, lejos del azul/magenta de la nave del jugador para leerlos rapido.
 COLORES_ENEMIGO = [(255, 70, 90), (255, 150, 40), (180, 90, 255), (120, 255, 90)]
 
-# Modelos de platillo (ver PLATILLOS en tools/generate_pixel_sprites.py):
-# cada drone sortea uno al aparecer.
+# Modelos de dibujo de cada enemigo comun (ver ENEMIES y PLATILLOS en
+# tools/generate_pixel_sprites.py): cada nave sortea uno al aparecer.
 MODELOS_PLATILLO = ("drone", "drone_b", "drone_c", "drone_d")
+MODELOS_ENEMIGO = {
+    "fighter": ("fighter", "fighter_b", "fighter_c"),
+    "drone": MODELOS_PLATILLO,
+    "gunner": ("gunner", "gunner_b", "gunner_c"),
+}
 
 # Variantes de nave enemiga comun (sprites en assets/sprites/enemies).
 # Mueren de un solo golpe, sin hp propio (ver AlienShip.take_damage).
@@ -91,9 +96,9 @@ class AlienShip:
             self.wing_color = tuple(int(c * 0.62) for c in self.color[:3])
             self.glow_color = None
             self.max_hp = 1
+            self.diseno = random.choice(MODELOS_ENEMIGO[self.variant])
             if self.variant == "drone":
-                # varios modelos de platillo que giran sobre si mismos
-                self.diseno = random.choice(MODELOS_PLATILLO)
+                # los platillos giran sobre si mismos
                 self.giro = random.uniform(1.4, 3.2) * random.choice((-1, 1))
         self.hp = self.max_hp
         self.hit_flash = 0
