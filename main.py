@@ -409,11 +409,10 @@ def main():
         # y Ship.draw() se saltaria la nave en todos los cuadros.
         ship.invincible_timer = 0
 
-        display_w = sprites.MEGA_BOSS_DISPLAY_W if boss.phase == 1 else int(sprites.MEGA_BOSS_DISPLAY_W * 0.72)
-        display_h = round(display_w * sprites.MEGA_SPRITE_H / sprites.MEGA_SPRITE_W)
-        sprite_actual = sprites.get_mega_boss_surface(boss.phase_name, display_w, display_h)
+        sprite_actual = sprites.get_mega_boss_surface(boss.phase_name)
         pedazos = []
         if sprite_actual is not None:
+            display_w, display_h = sprite_actual.get_size()
             cols, filas = 10, 8
             pw, ph = display_w / cols, display_h / filas
             for fila in range(filas):

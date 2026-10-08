@@ -359,50 +359,29 @@ def get_boss_surface(body_color, wing_color, width=BOSS_DISPLAY_W, height=BOSS_D
     return surface
 
 
-# Geometria del mega-jefe (oleada 50, ver modules/entities/mega_boss.py).
-# A diferencia de los demas jefes no es tintable (colores finales ya
-# horneados en el PNG por tools/generate_sprites.py): es un jefe unico, no
-# una nave de skin variable. Estas fracciones deben coincidir con las
-# MEGA_* de ese script.
-MEGA_SPRITE_W, MEGA_SPRITE_H = 380, 210
-MEGA_BOSS_DISPLAY_W = 300
-MEGA_BOSS_DISPLAY_H = round(MEGA_BOSS_DISPLAY_W * MEGA_SPRITE_H / MEGA_SPRITE_W)
-MEGA_SPHERE_DISH_X_FRAC = 0.419
-MEGA_SPHERE_DISH_Y_FRAC = 0.335
-MEGA_SPHERE_DISH_R_FRAC = 0.076
-
-# Puntos fijos del crucero (fase 1): luces de navegacion que parpadean y
-# centro de la bahia de hangar, para la animacion de largada de cazas (ver
-# mega_boss.py). Deben coincidir con las MEGA_CRUISER_* de
-# tools/generate_sprites.py.
-MEGA_CRUISER_PROA_X_FRAC = 0.968
-MEGA_CRUISER_PROA_Y_FRAC = 0.580
-MEGA_CRUISER_BABOR_X_FRAC = 0.047
-MEGA_CRUISER_BABOR_Y_FRAC = 0.523
-MEGA_CRUISER_ESTRIBOR_X_FRAC = 0.047
-MEGA_CRUISER_ESTRIBOR_Y_FRAC = 0.637
-MEGA_CRUISER_BALIZA_X_FRAC = 0.463
-MEGA_CRUISER_BALIZA_Y_FRAC = 0.047
-MEGA_CRUISER_HANGAR_X_FRAC = 0.447
-MEGA_CRUISER_HANGAR_Y_FRAC = 0.780
-
-_MEGA_BOSS_FILE = {"cruiser": "mega_cruiser.png", "sphere": "mega_sphere.png"}
+# Coloso Estelar (oleada 50, ver modules/entities/mega_boss.py): pixel art
+# de tools/generate_pixel_sprites.py con colores fijos por fase.
+MEGA_FASES = {
+    "cruiser": ("coloso_crucero", (140, 150, 175), (70, 110, 170)),
+    "sphere": ("coloso_esfera", (150, 140, 165), (170, 50, 90)),
+}
+MEGA_ESCALA = 3
 
 
-def get_mega_boss_surface(phase, width=MEGA_BOSS_DISPLAY_W, height=MEGA_BOSS_DISPLAY_H):
-    """Sprite del mega-jefe para la fase pedida ("cruiser" o "sphere"), ya
-    escalado. A diferencia de get_boss_surface no tiñe nada: son colores
-    finales horneados en el PNG. None si falta el archivo (dibujo
-    vectorial de respaldo en mega_boss.py)."""
-    filename = _MEGA_BOSS_FILE.get(phase)
-    if filename is None:
+def get_mega_boss_surface(phase):
+    """Sprite del Coloso para la fase pedida ("cruiser" o "sphere") a su
+    tamaño de juego. None si faltan los PNG."""
+    datos = MEGA_FASES.get(phase)
+    if datos is None:
         return None
-    key = ("mega_boss", phase, int(width), int(height))
+    kind, casco, alas = datos
+    key = ("mega_boss", phase)
     if key in _composed_cache:
         return _composed_cache[key]
-
-    raw = load_raw("boss", filename)
-    surface = _scaled(raw, width, height) if raw is not None else None
+    surface = None
+    if es_pixel("boss", kind):
+        w, h = tamano_pixel("boss", kind, MEGA_ESCALA)
+        surface = _compose_pixel("boss", kind, casco, alas, w, h, color_neon(alas))
     _composed_cache[key] = surface
     _cap(_composed_cache, _MAX_COMPOSED)
     return surface

@@ -840,8 +840,150 @@ if __name__ == "__main__":
         print(f)
 
 
-JEFES = {"centinela": centinela(), "dragon_a": dragon(0), "dragon_b": dragon(1), "titan_px": titan(),
-         "anomalia_px": anomalia()}
+CRUCERO_W, CRUCERO_H = 100, 50
+
+
+def coloso_crucero():
+    """Coloso Estelar, fase 1: acorazado visto desde arriba con la proa
+    hacia abajo. Toberas arriba, alas con troneras (las prende el juego),
+    bahias de hangar a los lados del casco y el cañon de riel en la proa."""
+    img = Image.new("L", (CRUCERO_W, CRUCERO_H), 0)
+    d = ImageDraw.Draw(img)
+    c = CRUCERO_W // 2
+
+    def P(pts, ch):
+        d.polygon(pts, fill=_CH.index(ch))
+
+    def R(caja, ch):
+        d.rectangle(caja, fill=_CH.index(ch))
+
+    def L(pts, ch, ancho=1):
+        d.line(pts, fill=_CH.index(ch), width=ancho)
+
+    def E(caja, ch):
+        d.ellipse(caja, fill=_CH.index(ch))
+
+    # alas en flecha (capa de ala)
+    P([(c - 15, 12), (c - 44, 20), (c - 49, 26), (c - 46, 30), (c - 16, 31)], "w")
+    P([(c - 15, 12), (c - 44, 20), (c - 46, 23), (c - 16, 18)], "W")
+    P([(c - 46, 28), (c - 16, 29), (c - 16, 31), (c - 46, 30)], "v")
+    L([(c - 18, 22), (c - 42, 25)], "u")
+    L([(c - 30, 17), (c - 30, 29)], "u")
+    # gondola de la punta del ala
+    R([c - 50, 19, c - 45, 32], "d")
+    R([c - 49, 19, c - 47, 31], "b")
+    L([(c - 48, 17), (c - 48, 19)], "x")
+    d.point((c - 48, 33), fill=_CH.index("G"))
+    # troneras del borde de ataque (las enciende el juego)
+    for x in (c - 42, c - 36, c - 30, c - 24):
+        R([x, 29, x + 1, 30], "e")
+    # neon a lo largo del ala
+    L([(c - 17, 16), (c - 43, 22)], "N")
+    # casco central
+    P([(c - 11, 1), (c - 15, 6), (c - 17, 14), (c - 17, 32), (c - 11, 41), (c - 4, 47), (c, 47), (c, 1)], "d")
+    P([(c - 10, 2), (c - 14, 7), (c - 15, 14), (c - 15, 31), (c - 10, 39), (c - 4, 45), (c, 45), (c, 2)], "b")
+    P([(c - 8, 3), (c - 11, 8), (c - 11, 28), (c - 6, 36), (c, 38), (c, 3)], "B")
+    # biseles del casco y costuras sueltas
+    L([(c - 14, 8), (c - 16, 14), (c - 16, 30), (c - 11, 38)], "x")
+    L([(c - 11, 10), (c - 1, 10)], "d")
+    L([(c - 11, 27), (c - 6, 27)], "d")
+    L([(c - 6, 4), (c - 6, 14)], "d")
+    L([(c - 9, 30), (c - 9, 36)], "d")
+    # toberas de popa
+    for x in (c - 13, c - 8):
+        R([x, 0, x + 3, 3], "e")
+        R([x + 1, 0, x + 2, 1], "E")
+    # silos de misiles
+    for x, y in ((c - 12, 12), (c - 12, 15), (c - 9, 12), (c - 9, 15)):
+        R([x, y, x + 1, y + 1], "x")
+    # bahia de hangar
+    R([c - 17, 28, c - 12, 35], "x")
+    R([c - 16, 29, c - 13, 34], "e")
+    L([(c - 16, 28), (c - 13, 28)], "N")
+    # puente de mando
+    R([c - 5, 16, c - 1, 25], "d")
+    R([c - 4, 17, c - 1, 24], "W")
+    R([c - 3, 19, c - 1, 21], "c")
+    d.point((c - 3, 19), fill=_CH.index("h"))
+    d.point((c - 2, 19), fill=_CH.index("C"))
+    # lineas neon del lomo
+    L([(c - 11, 8), (c - 15, 14)], "N")
+    L([(c - 15, 20), (c - 15, 26)], "N")
+    L([(c - 1, 27), (c - 1, 34)], "N")
+    L([(c - 1, 5), (c - 1, 14)], "N")
+    # cañon de riel en la proa
+    R([c - 2, 36, c - 1, 49], "x")
+    R([c - 1, 37, c - 1, 48], "e")
+    d.point((c - 1, 49), fill=_CH.index("E"))
+    R([c - 3, 38, c - 3, 41], "d")
+    return _contorno(_espejar(img))
+
+
+ESFERA_W, ESFERA_H = 64, 64
+
+
+def coloso_esfera():
+    """Coloso Estelar, fase 2: esfera de combate blindada con una trinchera
+    neon en el ecuador, cuatro torretas y la parabola del superlaser abajo
+    (el juego dibuja la carga ahi)."""
+    img = Image.new("L", (ESFERA_W, ESFERA_H), 0)
+    d = ImageDraw.Draw(img)
+    c = ESFERA_W // 2
+
+    def E(caja, ch):
+        d.ellipse(caja, fill=_CH.index(ch))
+
+    def R(caja, ch):
+        d.rectangle(caja, fill=_CH.index(ch))
+
+    def L(pts, ch, ancho=1):
+        d.line(pts, fill=_CH.index(ch), width=ancho)
+
+    # torretas (detras de la esfera, asoman en diagonal)
+    for y in (12, 46):
+        R([2, y, 9, y + 5], "v")
+        R([3, y + 1, 8, y + 4], "w")
+        R([0, y + 2, 3, y + 3], "u")
+        d.point((5, y + 2), fill=_CH.index("N"))
+    # cuerpo
+    E([3, 2, 60, 61], "d")
+    E([4, 3, 59, 59], "b")
+    E([10, 5, 50, 38], "B")
+    E([14, 8, 52, 30], "b")
+    E([12, 6, 44, 22], "B")
+    # placas curvas
+    d.arc([12, 3, 52, 60], 100, 260, fill=_CH.index("d"))
+    d.arc([22, 3, 42, 60], 100, 260, fill=_CH.index("d"))
+    d.arc([3, 10, 60, 30], 190, 350, fill=_CH.index("d"))
+    d.arc([3, 34, 60, 56], 10, 170, fill=_CH.index("x"))
+    # trinchera del ecuador
+    R([5, 29, c - 1, 33], "x")
+    R([5, 30, c - 1, 32], "u")
+    for x in range(7, c, 4):
+        d.point((x, 31), fill=_CH.index("N"))
+    # sensor de la corona
+    R([c - 3, 2, c - 1, 5], "x")
+    R([c - 2, 3, c - 1, 4], "C")
+    # parabola del superlaser
+    E([c - 10, 37, c + 9, 55], "x")
+    E([c - 9, 38, c + 8, 54], "v")
+    E([c - 7, 40, c + 6, 52], "u")
+    E([c - 4, 43, c + 3, 49], "x")
+    E([c - 2, 45, c + 1, 47], "e")
+    d.arc([c - 9, 38, c + 8, 54], 120, 240, fill=_CH.index("N"))
+    d.point((10, 26), fill=_CH.index("G"))
+    return _contorno(_espejar(img))
+
+
+JEFES = {
+    "centinela": centinela(),
+    "dragon_a": dragon(0),
+    "dragon_b": dragon(1),
+    "titan_px": titan(),
+    "anomalia_px": anomalia(),
+    "coloso_crucero": coloso_crucero(),
+    "coloso_esfera": coloso_esfera(),
+}
 
 
 def parse(mapa):
