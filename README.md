@@ -37,6 +37,9 @@ ESC sale del juego.
 - Jefes en las oleadas 10, 20, 30 y 40, y el Coloso en la oleada 50.
 - Despues del Coloso viene la fase bonus de los gatos o, a veces (un brazo de
   zombi rompe la cinematica), la ruta de Halloween: Rey Calabaza, Bruja Neon y La Parca.
+- Si perdes dos veces seguidas aparece una calavera en "Intentar de Nuevo": al
+  elegirlo, la Parca te lleva a su dimension para un duelo a muerte. Si te
+  gana, conquista la galaxia.
 
 ## Estructura
 

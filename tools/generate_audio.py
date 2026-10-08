@@ -1291,6 +1291,34 @@ def generar_musica_fin_halloween():
     return normalizar(fundido_de_bucle(mezcla), pico=0.9)
 
 
+
+def generar_musica_dimension_parca():
+    """La dimension de la Parca (cinematicas del desafio): Do# menor muy
+    lento, un zumbido grave que late como un corazon, coro de "aaah",
+    organo en acordes y campanadas cada dos compases."""
+    bpm, tonica = 60, 69.30
+    pulso = 60.0 / bpm
+    compas = pulso * 4
+    acordes = [(0, 3, 7), (0, 3, 7), (-4, 0, 3), (-2, 1, 5), (0, 3, 7), (1, 5, 8), (-5, -1, 2), (-1, 2, 7)]
+    largo = int(SR * compas * len(acordes))
+    t = np.arange(largo) / SR
+    mezcla = 0.25 * np.sin(2 * np.pi * tonica / 2 * t) * (1 + 0.3 * np.sin(2 * np.pi * 0.25 * t))
+    mezcla += 0.12 * np.tanh(3 * np.sin(2 * np.pi * tonica * t))
+    latido = deslizar_frecuencia(90, 40, 0.18) * envolvente(int(SR * 0.18), 0.002, 0.12)
+    for c, acorde in enumerate(acordes):
+        inicio = c * compas
+        for nota in acorde:
+            f = tonica * 4 * 2 ** (nota / 12)
+            _poner(mezcla, _coro(f, compas), inicio, 0.22)
+            _poner(mezcla, _organo(f / 2, compas), inicio, 0.12)
+        for k in range(4):
+            _poner(mezcla, latido, inicio + k * pulso, 0.7)
+            _poner(mezcla, latido, inicio + k * pulso + 0.22, 0.45)
+        if c % 2 == 0:
+            _poner(mezcla, _campana(tonica * 2 * 2 ** (acorde[0] / 12), 3.5), inicio, 0.4)
+    return _ganar_volumen(fundido_de_bucle(mezcla, ms=200), empuje=1.6, pico=0.9)
+
+
 # ----------------------------------------------------------------- ejecucion
 
 SFX = {
@@ -1327,6 +1355,7 @@ MUSICA = {
     "musica_jefe_bruja": generar_musica_jefe_bruja,
     "musica_jefe_parca": generar_musica_jefe_parca,
     "musica_fin_halloween": generar_musica_fin_halloween,
+    "musica_dimension_parca": generar_musica_dimension_parca,
     "musica_cuna": generar_musica_cuna,
     "musica_victoria_tecno": generar_musica_victoria_tecno,
     "musica_glitch_epica": generar_musica_glitch_epica,

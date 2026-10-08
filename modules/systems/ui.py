@@ -411,7 +411,48 @@ def _pantalla_final(surface, game_w, game_h, color):
     return caja
 
 
-def draw_game_over(surface, game_w, game_h, score, wave, font, big_font, buttons=None, selected=0, stats=None):
+_CALAVERA_BOTON = (
+    "..XXXXX..",
+    ".XXXXXXX.",
+    "XXXXXXXXX",
+    "XOOXXXOOX",
+    "XOOXXXOOX",
+    "XXXXOXXXX",
+    ".XXXXXXX.",
+    "..X.X.X..",
+    "..XXXXX..",
+)
+
+
+def _dibujar_calavera_boton(surface, cx, cy, t):
+    """Calavera que late sobre "Intentar de Nuevo": aviso de que, si
+    reintentas, te espera la Parca."""
+    pulso = 0.5 + 0.5 * math.sin(t * 0.12)
+    escala = 3 + (1 if pulso > 0.75 else 0)
+    ojo = (255, int(40 + 150 * pulso), 60)
+    w, h = len(_CALAVERA_BOTON[0]) * escala, len(_CALAVERA_BOTON) * escala
+    x0, y0 = cx - w // 2, cy - h // 2
+    brillo = pygame.Surface((w + 24, h + 24), pygame.SRCALPHA)
+    pygame.draw.ellipse(brillo, (255, 40, 70, int(50 + 70 * pulso)), brillo.get_rect())
+    surface.blit(brillo, (x0 - 12, y0 - 12))
+    for fy, fila in enumerate(_CALAVERA_BOTON):
+        for fx, c in enumerate(fila):
+            if c == ".":
+                continue
+            color = (235, 230, 220) if c == "X" else ojo
+            surface.fill(color, (x0 + fx * escala, y0 + fy * escala, escala, escala))
+    for fy, fila in enumerate(_CALAVERA_BOTON):
+        for fx, c in enumerate(fila):
+            if c != ".":
+                continue
+            vecinos = [(fx + dx, fy + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))]
+            if any(0 <= vx < len(fila) and 0 <= vy < len(_CALAVERA_BOTON) and _CALAVERA_BOTON[vy][vx] != "."
+                   for vx, vy in vecinos):
+                surface.fill((40, 0, 10), (x0 + fx * escala, y0 + fy * escala, escala, escala))
+
+
+def draw_game_over(surface, game_w, game_h, score, wave, font, big_font, buttons=None, selected=0, stats=None,
+                   calavera=False):
     caja = _pantalla_final(surface, game_w, game_h, neon.ROJO)
     neon.titulo(surface, "GAME OVER", 50, (255, 110, 140), game_w // 2, caja.y + 40)
     sc_text = render_texto_pixelado(font, f"Puntuacion Final: {score}", WHITE)
@@ -429,7 +470,11 @@ def draw_game_over(surface, game_w, game_h, score, wave, font, big_font, buttons
         y = game_h // 2 + 30
         t = pygame.time.get_ticks() // 16
         for i, (label, color) in enumerate(buttons):
+            if calavera and i == 1:
+                color = (255, 50, 70)
             neon.boton(surface, (base_x + i * spacing, y, btn_w, btn_h), label, color, i == selected, t)
+        if calavera and len(buttons) > 1:
+            _dibujar_calavera_boton(surface, base_x + spacing + btn_w - 2, y - 4, t)
     neon.scanlines(surface)
 
 

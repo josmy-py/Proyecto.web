@@ -57,6 +57,10 @@ from modules.entities.halloween import (
     PROB_HALLOWEEN, FondoHalloween, ReyCalabazaBoss, BrujaBoss, ParcaBoss,
     CinematicaVictoriaHalloween, CinematicaFinHalloween, icono_final as icono_halloween,
 )
+from modules.entities.parca_dimension import (
+    FondoDimension, ParcaDimension, CinematicaParcaLlega, CinematicaParcaConquista, CinematicaParcaVencida,
+    icono_calavera,
+)
 from modules.entities import mascota as mascota_mod
 from modules.entities.mascota import ZorritoEspacial, CapsulaMascota, dibujar_aviso_mascota
 from modules.systems.menu import MenuScene, Star
@@ -294,6 +298,12 @@ def main():
     # "gatos" (Nyan -> Alien -> OIIA) o "halloween" (Calabaza -> Bruja -> Parca)
     ruta_bonus = "gatos"
     aliado = None
+    # El desafio de la Parca (ver modules/entities/parca_dimension.py): con
+    # dos derrotas seguidas (reintentando, sin pasar por el menu) sale una
+    # calavera en "Intentar de Nuevo"; si se elige, la Parca te lleva a su
+    # dimension a un duelo (ruta_bonus "dimension", bonus_estado "dimension").
+    # No se reinicia en reset_game: cuenta entre partidas.
+    derrotas_seguidas = 0
 
     # Mascota de mitad de partida (ver modules/entities/mascota.py): al
     # llegar a MASCOTA_OLEADA baja una capsula con el Zorrito Espacial; al
@@ -403,7 +413,11 @@ def main():
 
     def terminar_partida(victoria):
         """Marca fin de partida (derrota o victoria) y registra el record."""
-        nonlocal game_over, game_victory, nuevo_record, tiempo_sobrevivido
+        nonlocal game_over, game_victory, nuevo_record, tiempo_sobrevivido, derrotas_seguidas
+        if victoria:
+            derrotas_seguidas = 0
+        elif bonus_estado != "dimension":  # perder el duelo no cuenta
+            derrotas_seguidas += 1
         game_over = True
         game_victory = victoria
         tiempo_sobrevivido = max(0.0, (pygame.time.get_ticks() - start_time) / 1000.0 - start_countdown)
@@ -798,10 +812,19 @@ def main():
         ship.x = ship.target_x = GAME_WIDTH // 2
         ship.y = ship.target_y = GAME_HEIGHT - 60
         ship.invincible_timer = 90
-        fondo_pixel = FondoHalloween() if jefe in JEFES_HALLOWEEN else FondoPixel()
-        if settings.get("bonus_todos_buffs"):
+        if jefe == "dimension":
+            fondo_pixel = FondoDimension()
+        else:
+            fondo_pixel = FondoHalloween() if jefe in JEFES_HALLOWEEN else FondoPixel()
+        if settings.get("bonus_todos_buffs") or jefe == "dimension":
+            # al duelo se llega sin haber jugado: con todas las mejoras
             _dar_todos_los_buffs()
-        if jefe in JEFES_HALLOWEEN:
+        if jefe == "dimension":
+            bosses.append(ParcaDimension(dificultad))
+            bonus_estado = "dimension"
+            bonus_banner = ["¡DUELO A MUERTE!", "LA PARCA  -  SU DIMENSION", 170]
+            audio.reproducir_musica("jefe_parca")
+        elif jefe in JEFES_HALLOWEEN:
             _entrar_jefe_halloween(jefe)
         elif jefe == "alien":
             _entrar_gato_alien()
@@ -1010,12 +1033,46 @@ def main():
         elif bonus_estado == "final":
             bonus_timer -= 1
             if bonus_timer <= 0 and not dying and not game_over:
-                if ruta_bonus == "halloween":
+                if ruta_bonus == "dimension":
+                    _correr_cinematica(CinematicaParcaVencida(ship._get_sprite()), "fin_halloween",
+                                       {"grieta": (audio.sonido_impacto,),
+                                        "libre": (audio.sonido_explosion, audio.sonido_victoria)})
+                elif ruta_bonus == "halloween":
                     _cinematica_fin_halloween()
                 else:
                     _cinematica_gato_durmiendo()
                 bonus_estado = "terminado"
                 terminar_partida(True)
+
+    def _correr_cinematica(cine, musica, sonidos):
+        """Mini-bucle comun de las cinematicas del desafio de la Parca:
+        `sonidos` lleva cada evento de la cinematica a los sonidos que
+        dispara; Enter/Espacio/click/boton del mando la adelantan."""
+        bullets.clear(); boss_bullets.clear(); alien_bullets.clear()
+        if musica:
+            audio.reproducir_musica(musica)
+        cine_surface = pygame.Surface((GAME_WIDTH, GAME_HEIGHT))
+        while not cine.terminada:
+            for evento in pygame.event.get():
+                if evento.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                if (evento.type == pygame.KEYDOWN and evento.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE, pygame.K_ESCAPE)) \
+                        or evento.type in (pygame.MOUSEBUTTONDOWN, pygame.JOYBUTTONDOWN):
+                    cine.saltar()
+            clock.tick(FPS)
+            cine.update()
+            for ev in cine.eventos:
+                for sonido in sonidos.get(ev, ()):
+                    sonido()
+            cine.eventos.clear()
+            cine.draw(cine_surface)
+            sx = game_offset_x + (random.randint(-cine.temblor, cine.temblor) if cine.temblor else 0)
+            sy = game_offset_y + (random.randint(-cine.temblor, cine.temblor) if cine.temblor else 0)
+            screen.fill((0, 0, 0))
+            screen.blit(cine_surface, (sx, sy))
+            draw_viewport_frame(screen, game_offset_x, game_offset_y, GAME_WIDTH, GAME_HEIGHT, pygame.time.get_ticks())
+            pygame.display.flip()
 
     def _cinematica_fin_halloween():
         """Final de la ruta de Halloween ("¡FELIZ HALLOWEEN!", ver
@@ -1244,7 +1301,8 @@ def main():
             audio.reanudar_musica()
 
     def _volver_al_menu():
-        nonlocal game_over, game_victory, paused
+        nonlocal game_over, game_victory, paused, derrotas_seguidas
+        derrotas_seguidas = 0
         if paused:
             audio.reanudar_musica()
         menu_scene.active = True
@@ -1254,6 +1312,33 @@ def main():
         game_over = False
         game_victory = False
         paused = False
+
+    def _reintentar():
+        """"Intentar de Nuevo" del GAME OVER. Con la calavera (dos derrotas
+        seguidas) no hay partida nueva: la Parca corta la pantalla, te lleva
+        a su dimension (CinematicaParcaLlega) y empieza el duelo despues de
+        la cuenta regresiva."""
+        nonlocal derrotas_seguidas, ruta_bonus, fondo_pixel, bonus_directo_pendiente
+        nonlocal mejora_inicial_pendiente, start_time
+        if derrotas_seguidas < 2:
+            reset_game()
+            return
+        # copia de la pantalla de GAME OVER antes de que reset_game la borre
+        captura = pygame.Surface((GAME_WIDTH, GAME_HEIGHT))
+        zona = pygame.Rect(game_offset_x, game_offset_y, GAME_WIDTH, GAME_HEIGHT).clip(screen.get_rect())
+        if zona.w > 0 and zona.h > 0:
+            captura.blit(screen.subsurface(zona), (zona.x - game_offset_x, zona.y - game_offset_y))
+        reset_game()
+        derrotas_seguidas = 0
+        golpe = (audio.sonido_explosion, audio.sonido_impacto)
+        _correr_cinematica(CinematicaParcaLlega(captura, ship._get_sprite()), "dimension_parca",
+                           {"corte": golpe, "portal": golpe, "llegada": golpe, "duelo": golpe,
+                            "risa": (audio.sonido_alerta_jefe,)})
+        ruta_bonus = "dimension"
+        fondo_pixel = FondoDimension()
+        bonus_directo_pendiente = "dimension"
+        mejora_inicial_pendiente = False
+        start_time = pygame.time.get_ticks()
 
     def _rects_pausa():
         return [pygame.Rect(GAME_WIDTH // 2 - 130, GAME_HEIGHT // 2 - 4 + i * 58, 260, 44)
@@ -1356,9 +1441,9 @@ def main():
                         if GOButtons[game_over_selected][0].startswith("Volver"):
                             _volver_al_menu()
                         else:
-                            reset_game()
+                            _reintentar()
                     elif event.key == pygame.K_r:
-                        reset_game()
+                        _reintentar()
                 elif game_over and game_victory:
                     if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_r):
                         _volver_al_menu()
@@ -1523,6 +1608,12 @@ def main():
                     # muestre 0:00 (terminar_partida lo recalcula al final)
                     tiempo_sobrevivido = max(0.0, (pygame.time.get_ticks() - start_time) / 1000.0 - start_countdown)
                 else:
+                    if bonus_estado == "dimension":
+                        # perdiste el duelo: la Parca conquista la galaxia
+                        _correr_cinematica(CinematicaParcaConquista(), "dimension_parca",
+                                           {"risa": (audio.sonido_alerta_jefe,),
+                                            "planeta": (audio.sonido_explosion, audio.sonido_impacto)})
+                        derrotas_seguidas = 0
                     terminar_partida(False)
 
         if not game_over and countdown_val <= 0 and not paused and not congelado_bonus and eleccion is None:
@@ -2048,7 +2139,12 @@ def main():
 
             if game_victory:
                 if bonus_estado == "terminado":
-                    if ruta_bonus == "halloween":
+                    if ruta_bonus == "dimension":
+                        draw_victory_final(game_surface, GAME_WIDTH, GAME_HEIGHT, score, wave, stats_actuales(),
+                                           f"Récord: {progress.puntaje_maximo()}", nuevo_record, frame_count,
+                                           icono=icono_calavera(), zetas=False,
+                                           mensaje="Venciste a la Parca en su propia dimension")
+                    elif ruta_bonus == "halloween":
                         draw_victory_final(game_surface, GAME_WIDTH, GAME_HEIGHT, score, wave, stats_actuales(),
                                            f"Récord: {progress.puntaje_maximo()}", nuevo_record, frame_count,
                                            icono=icono_halloween(), zetas=False,
@@ -2061,7 +2157,8 @@ def main():
                 else:
                     draw_victory_screen(game_surface, GAME_WIDTH, GAME_HEIGHT, score, wave, font, big_font, stats=stats_actuales())
             else:
-                draw_game_over(game_surface, GAME_WIDTH, GAME_HEIGHT, score, wave, font, big_font, GOButtons, game_over_selected, stats=stats_actuales())
+                draw_game_over(game_surface, GAME_WIDTH, GAME_HEIGHT, score, wave, font, big_font, GOButtons, game_over_selected,
+                               stats=stats_actuales(), calavera=derrotas_seguidas >= 2)
 
             if bonus_estado != "terminado":  # la pantalla final ya trae su record
                 texto_record = f"Récord: {progress.puntaje_maximo()}"
@@ -2084,14 +2181,9 @@ def main():
                         game_over_selected = i
                     if r.collidepoint(mouse_pos) and mouse_pressed[0]:
                         if i == 0:
-                            menu_scene.active = True
-                            menu_scene.transitioning_out = False
-                            menu_scene.transition_alpha = 255
-                            menu_scene.state = "main"
-                            game_over = False
-                            paused = False
+                            _volver_al_menu()
                         else:
-                            reset_game()
+                            _reintentar()
 
         screen.fill(DARKER_BG)
         for estrella in estrellas_fondo:
