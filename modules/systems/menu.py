@@ -164,7 +164,8 @@ class MenuButton:
         max_radius = max(self.rect.width, self.rect.height) * 1.5
         self.ripples.append(Ripple(pos[0], pos[1], max_radius, AZUL))
 
-    def draw(self, surface, extra_offset=0):
+    def draw(self, surface, extra_offset=0, marcado=False):
+        """marcado: elegido con flechas / mando (brilla como en hover)."""
         if not self.enabled:
             alpha_factor = 0.4
         else:
@@ -197,7 +198,7 @@ class MenuButton:
         btn_surf.blit(bg_grad, (0, 0))
 
         pulse = 0.5 + 0.5 * math.sin(self.pulse_phase)
-        glow_intensity = int(20 + 15 * pulse) if not self.hovered else int(40 + 20 * pulse)
+        glow_intensity = int(20 + 15 * pulse) if not (self.hovered or marcado) else int(40 + 20 * pulse)
         glow_surf = pygame.Surface((draw_w + 20, draw_h + 20), pygame.SRCALPHA)
         for i in range(4):
             ga = max(0, glow_intensity - i * 8)
@@ -208,6 +209,11 @@ class MenuButton:
                 border_radius=draw_h // 2 + i * 2
             )
         surface.blit(glow_surf, (draw_x - 10, draw_y - 10))
+
+        if marcado and self.enabled:
+            # marco del color del boton, bien visible
+            pygame.draw.rect(surface, base_c[:3], (draw_x - 4, draw_y - 4, draw_w + 8, draw_h + 8),
+                             width=3, border_radius=draw_h // 2 + 4)
 
         border_color = (
             int(255 * alpha_factor),
@@ -417,6 +423,11 @@ class MenuScene:
                                  self.btn_bonus_buffs, self.btn_bonus, self.btn_volver]
         # True cuando se entro al flujo de partida desde "JUGAR NIVEL BONUS"
         self.partida_bonus = False
+        # widget de AJUSTES marcado con flechas / mando
+        self.ajuste_sel = 0
+        # main.py lo pone en True cuando lo ultimo que se toco fue el mando
+        # (cambia los textos de ayuda y preselecciona MANDO al elegir control)
+        self.usando_mando = False
 
         dif_btn_w, dif_btn_h, dif_gap = 240, 56, 24
         dif_total_h = 3 * dif_btn_h + 2 * dif_gap
@@ -444,6 +455,21 @@ class MenuScene:
         self.nave_seleccionada = 0
         self.dificultad_elegida = "normal"
         self.nave_t = 0
+
+    def _ayuda(self, teclado, mando):
+        return mando if self.usando_mando else teclado
+
+    def _dibujar_ayuda(self, teclado, mando, y=None):
+        hint = render_texto_pixelado(get_font(13), self._ayuda(teclado, mando), (160, 160, 185))
+        y = self.screen_height - 50 if y is None else y
+        self.surface.blit(hint, hint.get_rect(center=(self.screen_width // 2, y)))
+
+    def _ir_a_modo_control(self):
+        """Pantalla ELEGI COMO JUGAR; si se viene usando el mando ya queda
+        marcado MANDO."""
+        self.state = "control_mode"
+        hay_mando = pygame.joystick.get_count() > 0
+        self.control_mode_seleccionada = 1 if (self.usando_mando and hay_mando) else 0
 
     def _cambiar_volumen_musica(self, valor):
         audio.set_volumen_musica(valor)
@@ -478,6 +504,10 @@ class MenuScene:
             self.btn_bonus_buffs.update(mouse_pos, mouse_pressed)
             self.btn_bonus.update(mouse_pos, mouse_pressed)
             self.btn_volver.update(mouse_pos, mouse_pressed)
+            for i, w in enumerate(self.settings_widgets):
+                if isinstance(w, MenuButton) and w.hovered:
+                    self.ajuste_sel = i
+            self.hover_amp += 0.12
             self.title_phase += 0.025
             return
 
@@ -561,9 +591,28 @@ class MenuScene:
 
     def _handle_settings_event(self, event):
         mouse_pos = event.pos if hasattr(event, 'pos') else pygame.mouse.get_pos()
-        if event.type == pygame.KEYDOWN and event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
-            self.exit_settings()
-            audio.sonido_boton()
+        if event.type == pygame.KEYDOWN:
+            if event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
+                self.exit_settings()
+                audio.sonido_boton()
+                return None
+            total = len(self.settings_widgets)
+            widget = self.settings_widgets[self.ajuste_sel]
+            if event.key == pygame.K_UP:
+                self.ajuste_sel = (self.ajuste_sel - 1) % total
+                self.hover_amp = 0.0
+                return None
+            if event.key == pygame.K_DOWN:
+                self.ajuste_sel = (self.ajuste_sel + 1) % total
+                self.hover_amp = 0.0
+                return None
+            if event.key in (pygame.K_LEFT, pygame.K_RIGHT) and isinstance(widget, SettingsSlider):
+                paso = (widget.maximo - widget.minimo) * 0.05 * (1 if event.key == pygame.K_RIGHT else -1)
+                widget.on_change(max(widget.minimo, min(widget.maximo, widget.get_value() + paso)))
+                return None
+            if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE) and isinstance(widget, MenuButton):
+                audio.sonido_boton()
+                return self._activar_ajuste(widget)
             return None
         if self.slider_musica.handle_event(event, mouse_pos):
             return None
@@ -571,29 +620,33 @@ class MenuScene:
             return None
         if self.slider_sensibilidad.handle_event(event, mouse_pos):
             return None
-        if self.btn_silencio.handle_event(event):
+        for widget in self.settings_widgets:
+            if isinstance(widget, MenuButton) and widget.handle_event(event):
+                return self._activar_ajuste(widget)
+        return None
+
+    def _activar_ajuste(self, widget):
+        if widget is self.btn_silencio:
             silenciado = audio.alternar_silencio()
             settings.set_valor("silenciado", silenciado)
             return None
-        if self.btn_pantalla.handle_event(event):
+        if widget is self.btn_pantalla:
             nueva = not settings.get("pantalla_completa")
             settings.set_valor("pantalla_completa", nueva)
             return "TOGGLE_FULLSCREEN"
-        if self.btn_camara.handle_event(event):
+        if widget is self.btn_camara:
             nuevo_indice = (settings.get("camera_index") + 1) % 4
             settings.set_valor("camera_index", nuevo_indice)
             return "CHANGE_CAMERA"
-        if self.btn_bonus_buffs.handle_event(event):
+        if widget is self.btn_bonus_buffs:
             settings.set_valor("bonus_todos_buffs", not settings.get("bonus_todos_buffs"))
             return None
-        if self.btn_bonus.handle_event(event):
+        if widget is self.btn_bonus:
             self.partida_bonus = True
-            self.state = "control_mode"
-            self.control_mode_seleccionada = 0
+            self._ir_a_modo_control()
             return None
-        if self.btn_volver.handle_event(event):
+        if widget is self.btn_volver:
             self.exit_settings()
-            return None
         return None
 
     def _handle_control_mode_event(self, event):
@@ -655,8 +708,7 @@ class MenuScene:
     def _elegir_fase(self, indice):
         self.inicio_elegido = FASES_INICIO[indice][0]
         self.partida_bonus = False
-        self.state = "control_mode"
-        self.control_mode_seleccionada = 0
+        self._ir_a_modo_control()
         return None
 
     def _etiqueta_inicio(self):
@@ -751,14 +803,14 @@ class MenuScene:
         if label == "JUGAR":
             self.partida_bonus = False
             self.inicio_elegido = None
-            self.state = "control_mode"
-            self.control_mode_seleccionada = 0
+            self._ir_a_modo_control()
             return None
         if label == "ELEGIR FASE":
             self.state = "fases"
             return None
         if label == "AJUSTES":
             self.state = "settings"
+            self.ajuste_sel = 0
             return None
         if label == "SALIR":
             return "QUIT"
@@ -812,12 +864,12 @@ class MenuScene:
             self.surface.blit(sub, sub.get_rect(center=(self.screen_width // 2, 106)))
             for i, btn in enumerate(self.control_mode_botones):
                 extra = int(math.sin(self.hover_amp * 1.0) * 8) if i == self.control_mode_seleccionada else 0
-                btn.draw(self.surface, extra_offset=extra)
+                btn.draw(self.surface, extra_offset=extra, marcado=i == self.control_mode_seleccionada)
             if not self.control_mode_botones[1].enabled:
                 aviso = render_texto_pixelado(get_font(13), "Conecta un mando para habilitar esta opcion", (220, 140, 140))
                 self.surface.blit(aviso, aviso.get_rect(center=(self.screen_width // 2, self.screen_height - 80)))
-            hint = render_texto_pixelado(get_font(13), "ESC para volver", (160, 160, 185))
-            self.surface.blit(hint, hint.get_rect(center=(self.screen_width // 2, self.screen_height - 50)))
+            self._dibujar_ayuda("Flechas para moverte - ENTER para elegir - ESC para volver",
+                                "Palanca o cruceta para moverte - A para elegir - B para volver")
             surface.blit(self.surface, (0, 0))
             return
 
@@ -829,9 +881,9 @@ class MenuScene:
             self.surface.blit(sub, sub.get_rect(center=(self.screen_width // 2, 106)))
             for i, btn in enumerate(self.dificultad_botones):
                 extra = int(math.sin(self.hover_amp * 1.0) * 8) if i == self.dificultad_seleccionada else 0
-                btn.draw(self.surface, extra_offset=extra)
-            hint = render_texto_pixelado(get_font(13), "ESC para volver", (160, 160, 185))
-            self.surface.blit(hint, hint.get_rect(center=(self.screen_width // 2, self.screen_height - 50)))
+                btn.draw(self.surface, extra_offset=extra, marcado=i == self.dificultad_seleccionada)
+            self._dibujar_ayuda("Flechas para moverte - ENTER para elegir - ESC para volver",
+                                "Palanca o cruceta para moverte - A para elegir - B para volver")
             surface.blit(self.surface, (0, 0))
             return
 
@@ -842,9 +894,8 @@ class MenuScene:
                 if i != self.nave_seleccionada:
                     self._dibujar_carta_nave(i)
             self._dibujar_carta_nave(self.nave_seleccionada)
-            hint = render_texto_pixelado(get_font(13), "Flechas para moverte - ENTER para despegar - ESC para volver",
-                                         (160, 160, 185))
-            self.surface.blit(hint, hint.get_rect(center=(self.screen_width // 2, self.screen_height - 50)))
+            self._dibujar_ayuda("Flechas para moverte - ENTER para despegar - ESC para volver",
+                                "Palanca o cruceta para moverte - A para despegar - B para volver")
             self._dibujar_transicion()
             surface.blit(self.surface, (0, 0))
             return
@@ -854,13 +905,12 @@ class MenuScene:
             self.surface.blit(sub, sub.get_rect(center=(self.screen_width // 2, 106)))
             for i, btn in enumerate(self.fase_botones):
                 extra = int(math.sin(self.hover_amp * 1.0) * 6) if i == self.fase_seleccionada else 0
-                btn.draw(self.surface, extra_offset=extra)
+                btn.draw(self.surface, extra_offset=extra, marcado=i == self.fase_seleccionada)
             self.btn_fases_buffs.text = f"TODOS LOS BUFFS: {'SI' if settings.get('fase_todos_buffs') else 'NO'}"
             self.btn_fases_buffs.draw(self.surface)
             self.btn_fases_volver.draw(self.surface)
-            hint = render_texto_pixelado(get_font(13), "Flechas para moverte - ENTER para elegir - T = todos los buffs - ESC para volver",
-                                         (160, 160, 185))
-            self.surface.blit(hint, hint.get_rect(center=(self.screen_width // 2, self.screen_height - 50)))
+            self._dibujar_ayuda("Flechas para moverte - ENTER para elegir - T = todos los buffs - ESC para volver",
+                                "Palanca o cruceta para moverte - A para elegir - Y = todos los buffs - B para volver")
             surface.blit(self.surface, (0, 0))
             return
 
@@ -873,7 +923,9 @@ class MenuScene:
             extra = 0
             if i == self.selected:
                 extra = int(math.sin(self.hover_amp * 1.0) * 8)
-            btn.draw(self.surface, extra_offset=extra)
+            btn.draw(self.surface, extra_offset=extra, marcado=i == self.selected)
+        self._dibujar_ayuda("Flechas para moverte - ENTER para elegir",
+                            "Palanca o cruceta para moverte - A para elegir")
 
         self._dibujar_transicion()
         surface.blit(self.surface, (0, 0))
@@ -972,13 +1024,18 @@ class MenuScene:
         self.btn_pantalla.text = f"PANTALLA COMPLETA: {'SI' if settings.get('pantalla_completa') else 'NO'}"
         self.btn_camara.text = f"CAMARA: {settings.get('camera_index')}"
         self.btn_bonus_buffs.text = f"BONUS CON TODOS LOS BUFFS: {'SI' if settings.get('bonus_todos_buffs') else 'NO'}"
-        self.btn_silencio.draw(self.surface)
-        self.btn_pantalla.draw(self.surface)
-        self.btn_camara.draw(self.surface)
-        self.btn_bonus_buffs.draw(self.surface)
-        self.btn_bonus.draw(self.surface)
-        self.btn_volver.draw(self.surface)
+        marcado = self.settings_widgets[self.ajuste_sel]
+        for widget in self.settings_widgets:
+            if isinstance(widget, MenuButton):
+                extra = int(math.sin(self.hover_amp) * 8) if widget is marcado else 0
+                widget.draw(self.surface, extra_offset=extra, marcado=widget is marcado)
+        # flechita neon a la izquierda de lo marcado
+        r = marcado.rect
+        ay = r.centery if isinstance(marcado, MenuButton) else r.y - 16
+        ax = r.x - 26 + int(math.sin(self.hover_amp) * 3)
+        for k in range(5):
+            self.surface.fill((255, 120, 230), (ax + k * 2, ay - (5 - k) * 2, 2, (5 - k) * 4))
 
-        hint = render_texto_pixelado(get_font(13), "ESC para volver", (160, 160, 185))
-        self.surface.blit(hint, hint.get_rect(center=(self.screen_width // 2, self.screen_height - 30)))
-
+        self._dibujar_ayuda("Flechas para moverte - IZQ/DER cambia el valor - ENTER para elegir - ESC para volver",
+                            "Palanca o cruceta para moverte - IZQ/DER cambia el valor - A para elegir - B para volver",
+                            self.screen_height - 30)

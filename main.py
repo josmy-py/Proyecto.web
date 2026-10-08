@@ -72,12 +72,22 @@ MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'models', 
 _RGB_SURF = None
 
 
+# Botones del mando en los menus (numeracion de SDL: A/Cruz = 0,
+# B/Circulo = 1, Y/Triangulo = 3). La palanca izquierda y la cruceta
+# hacen de flechas.
+BOTON_ACEPTAR = 0
+BOTON_VOLVER = 1
+BOTON_Y = 3
+PALANCA_MARCA = 0.6    # inclinacion que cuenta como una flecha
+PALANCA_SUELTA = 0.35  # por debajo de esto la palanca vuelve al centro
+
+
 def _botones_pausa(joystick):
-    """Botones que pausan con el mando: START/OPTIONS segun el modelo
-    (los numeros cambian entre Xbox, PlayStation y mandos genericos)."""
+    """Boton START (el de las tres rayitas) segun el modelo de mando: los
+    numeros cambian entre Xbox, PlayStation y mandos genericos."""
     nombre = joystick.get_name().lower() if joystick is not None else ""
     if "xbox" in nombre or "xinput" in nombre:
-        return (6, 7)  # BACK / START
+        return (7,)  # START / MENU
     if any(k in nombre for k in ("ps4", "ps5", "dualsense", "dualshock", "wireless controller", "playstation")):
         return (6, 9)  # OPTIONS (SDL nuevo / DirectInput)
     return (9,)  # START de los mandos genericos
@@ -152,7 +162,41 @@ def main():
     cap = None
     hand_detector = None
     joystick = None
+    if pygame.joystick.get_count() > 0:
+        joystick = pygame.joystick.Joystick(0)
+        joystick.init()
     modo_control = "camara"
+    palanca_menu = {0: 0, 1: 0}
+
+    def _teclas_de_mando(event):
+        """Flechas / ENTER / retroceso equivalentes a un evento del mando,
+        para manejar los menus igual que con el teclado."""
+        if event.type == pygame.JOYHATMOTION:
+            hx, hy = event.value
+            teclas = []
+            if hx:
+                teclas.append(pygame.K_RIGHT if hx > 0 else pygame.K_LEFT)
+            if hy:
+                teclas.append(pygame.K_UP if hy > 0 else pygame.K_DOWN)
+            return teclas
+        if event.type == pygame.JOYAXISMOTION and event.axis in palanca_menu:
+            antes = palanca_menu[event.axis]
+            if abs(event.value) >= PALANCA_MARCA:
+                ahora = 1 if event.value > 0 else -1
+            elif abs(event.value) < PALANCA_SUELTA:
+                ahora = 0
+            else:
+                ahora = antes
+            palanca_menu[event.axis] = ahora
+            if ahora == antes or ahora == 0:
+                return []
+            if event.axis == 0:
+                return [pygame.K_RIGHT if ahora > 0 else pygame.K_LEFT]
+            return [pygame.K_DOWN if ahora > 0 else pygame.K_UP]
+        if event.type == pygame.JOYBUTTONDOWN:
+            return {BOTON_ACEPTAR: [pygame.K_RETURN], BOTON_VOLVER: [pygame.K_BACKSPACE],
+                    BOTON_Y: [pygame.K_t]}.get(event.button, [])
+        return []
 
     def activar_modo_camara():
         nonlocal cap, hand_detector
@@ -209,6 +253,8 @@ def main():
     countdown_val = 1
     boss_reward_timer = 0
     paused = False
+    pausa_sel = 0
+    PAUSA_OPCIONES = ("CONTINUAR", "VOLVER AL MENU")
     nuevo_record = False
     dificultad_base = DIFICULTADES[DIFICULTAD_DEFECTO]
     dificultad = dificultad_base
@@ -1040,6 +1086,38 @@ def main():
             "jefes": stats_jefes,
         }
 
+    def _alternar_pausa():
+        nonlocal paused, pausa_sel
+        paused = not paused
+        pausa_sel = 0
+        if paused:
+            audio.pausar_musica()
+        else:
+            audio.reanudar_musica()
+
+    def _volver_al_menu():
+        nonlocal game_over, game_victory, paused
+        if paused:
+            audio.reanudar_musica()
+        menu_scene.active = True
+        menu_scene.transitioning_out = False
+        menu_scene.transition_alpha = 255
+        menu_scene.state = "main"
+        game_over = False
+        game_victory = False
+        paused = False
+
+    def _rects_pausa():
+        return [pygame.Rect(GAME_WIDTH // 2 - 130, GAME_HEIGHT // 2 - 4 + i * 58, 260, 44)
+                for i in range(len(PAUSA_OPCIONES))]
+
+    def _elegir_pausa(i):
+        audio.sonido_boton()
+        if PAUSA_OPCIONES[i] == "CONTINUAR":
+            _alternar_pausa()
+        else:
+            _volver_al_menu()
+
     running = True
     while running:
         frame_count += 1
@@ -1048,22 +1126,65 @@ def main():
         mouse_pos = pygame.mouse.get_pos()
         mouse_pressed = pygame.mouse.get_pressed()
 
+        eventos = []
         for event in pygame.event.get():
+            eventos.append(event)
+            if event.type == pygame.JOYDEVICEADDED and joystick is None:
+                joystick = pygame.joystick.Joystick(event.device_index)
+                joystick.init()
+            elif event.type == pygame.JOYDEVICEREMOVED and joystick is not None \
+                    and event.instance_id == joystick.get_instance_id():
+                joystick = None
+            if event.type in (pygame.JOYBUTTONDOWN, pygame.JOYHATMOTION):
+                menu_scene.usando_mando = True
+            elif event.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
+                menu_scene.usando_mando = False
+            # en los menus, la pausa y el fin de partida el mando hace de
+            # flechas / ENTER / retroceso; en la eleccion de mejora solo la
+            # cruceta (la palanca ya mueve la nave por encima de las cartas)
+            teclas = _teclas_de_mando(event)
+            if teclas and (menu_scene.active or paused or game_over or
+                           (eleccion is not None and event.type == pygame.JOYHATMOTION)):
+                eventos.extend(pygame.event.Event(pygame.KEYDOWN, key=k, mod=0, unicode="", scancode=0)
+                               for k in teclas)
+
+        for event in eventos:
             if event.type == pygame.QUIT:
                 running = False
             if event.type == pygame.JOYBUTTONDOWN and modo_control == "mando":
                 if event.button in _botones_pausa(joystick):
                     if not menu_scene.active and not game_over and bonus_estado not in congelados_bonus:
-                        paused = not paused
-                        if paused:
-                            audio.pausar_musica()
-                        else:
-                            audio.reanudar_musica()
+                        _alternar_pausa()
                 elif not menu_scene.active and not game_over and not paused and countdown_val <= 0:
                     ship.queue_shot()
+            if paused and not menu_scene.active:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_UP:
+                        pausa_sel = (pausa_sel - 1) % len(PAUSA_OPCIONES)
+                        audio.sonido_boton()
+                    elif event.key == pygame.K_DOWN:
+                        pausa_sel = (pausa_sel + 1) % len(PAUSA_OPCIONES)
+                        audio.sonido_boton()
+                    elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+                        _elegir_pausa(pausa_sel)
+                        continue
+                    elif event.key == pygame.K_BACKSPACE:
+                        _elegir_pausa(0)
+                        continue
+                elif event.type in (pygame.MOUSEMOTION, pygame.MOUSEBUTTONDOWN):
+                    punto = (event.pos[0] - game_offset_x, event.pos[1] - game_offset_y)
+                    for i, r in enumerate(_rects_pausa()):
+                        if r.collidepoint(punto):
+                            pausa_sel = i
+                            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                                _elegir_pausa(i)
+                            break
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    running = False
+                    if menu_scene.active and menu_scene.state != "main":
+                        pass  # ESC vuelve atras en los submenus (lo maneja el menu)
+                    else:
+                        running = False
                 if event.key == pygame.K_F11:
                     fullscreen = not fullscreen
                     screen = pygame.display.set_mode(
@@ -1077,11 +1198,7 @@ def main():
                     # "volver al menu" desde la victoria falsa: la rompe ya
                     bonus_timer = min(bonus_timer, 1)
                 if event.key == pygame.K_p and not menu_scene.active and not game_over and bonus_estado not in congelados_bonus:
-                    paused = not paused
-                    if paused:
-                        audio.pausar_musica()
-                    else:
-                        audio.reanudar_musica()
+                    _alternar_pausa()
                 if game_over and not game_victory:
                     if event.key == pygame.K_LEFT:
                         game_over_selected = max(0, game_over_selected - 1)
@@ -1089,25 +1206,14 @@ def main():
                         game_over_selected = min(len(GOButtons) - 1, game_over_selected + 1)
                     elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
                         if GOButtons[game_over_selected][0].startswith("Volver"):
-                            menu_scene.active = True
-                            menu_scene.transitioning_out = False
-                            menu_scene.transition_alpha = 255
-                            menu_scene.state = "main"
-                            game_over = False
-                            paused = False
+                            _volver_al_menu()
                         else:
                             reset_game()
                     elif event.key == pygame.K_r:
                         reset_game()
                 elif game_over and game_victory:
                     if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_r):
-                        menu_scene.active = True
-                        menu_scene.transitioning_out = False
-                        menu_scene.transition_alpha = 255
-                        menu_scene.state = "main"
-                        game_over = False
-                        game_victory = False
-                        paused = False
+                        _volver_al_menu()
 
             if eleccion is not None and not menu_scene.active and not paused:
                 eleccion.handle_event(event, game_offset_x, game_offset_y)
@@ -1746,12 +1852,18 @@ def main():
 
             if paused:
                 neon.velo(game_surface, (6, 2, 20), 150)
-                caja = pygame.Rect(0, 0, 420, 170)
-                caja.center = (GAME_WIDTH // 2, GAME_HEIGHT // 2)
+                caja = pygame.Rect(0, 0, 440, 300)
+                caja.center = (GAME_WIDTH // 2, GAME_HEIGHT // 2 + 10)
                 neon.panel(game_surface, caja, neon.MAGENTA, frame_count)
-                neon.titulo(game_surface, "PAUSA", 52, (255, 150, 235), caja.centerx, caja.y + 62)
-                ayuda = "START para continuar" if modo_control == "mando" else "P para continuar"
-                neon.cinta(game_surface, ayuda, neon.MAGENTA, (caja.centerx, caja.bottom - 36), tam=15)
+                neon.titulo(game_surface, "PAUSA", 52, (255, 150, 235), caja.centerx, caja.y + 54)
+                for i, r in enumerate(_rects_pausa()):
+                    color = neon.VERDE if PAUSA_OPCIONES[i] == "CONTINUAR" else neon.CIAN
+                    neon.boton(game_surface, r, PAUSA_OPCIONES[i], color, i == pausa_sel, frame_count)
+                if menu_scene.usando_mando:
+                    ayuda = "A elegir - B o START continuar"
+                else:
+                    ayuda = "ENTER elegir - P continuar"
+                neon.cinta(game_surface, ayuda, neon.MAGENTA, (caja.centerx, caja.bottom - 26), tam=14)
                 neon.scanlines(game_surface)
 
         if dying:
