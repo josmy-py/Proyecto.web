@@ -35,7 +35,8 @@ ESC sale del juego.
   carta ofrece tres opciones (potencia, cadencia, turbo, escudo, triple
   cañon, dron escolta, el Zorrito Espacial, etc.).
 - Jefes en las oleadas 10, 20, 30 y 40, y el Coloso en la oleada 50.
-- Despues del Coloso viene la fase bonus de los gatos.
+- Despues del Coloso viene la fase bonus de los gatos o, a veces (un brazo de
+  zombi rompe la cinematica), la ruta de Halloween: Rey Calabaza, Bruja Neon y La Parca.
 
 ## Estructura
 

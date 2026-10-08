@@ -171,7 +171,11 @@ FASES_INICIO = (
     ("nyan", "BONUS - NYAN CAT", True),
     ("alien", "BONUS - GATO ALIEN", True),
     ("pan", "BONUS - GATO OIIA", True),
+    ("calabaza", "HALLOWEEN - REY CALABAZA", True),
+    ("bruja", "HALLOWEEN - BRUJA NEON", True),
+    ("parca", "HALLOWEEN - LA PARCA", True),
 )
+FASES_HALLOWEEN = ("calabaza", "bruja", "parca")
 
 
 class MenuScene:
@@ -228,13 +232,16 @@ class MenuScene:
             MenuButton(cx, start_y + 3 * (btn_h + gap), btn_w, btn_h, "SALIR", self.button_font, (220, 80, 80)),
         ]
 
-        # ELEGIR FASE: grilla de 2 columnas x 5 filas + VOLVER
+        # ELEGIR FASE: grilla de 3 columnas x 5 filas + VOLVER
         fase_font = get_font(17, bold=True)
         self.fase_botones = []
-        for i, (_, etiqueta, es_bonus) in enumerate(FASES_INICIO):
+        for i, (fase_id, etiqueta, es_bonus) in enumerate(FASES_INICIO):
             col, fila = i // 5, i % 5
-            color = (255, 110, 200) if es_bonus else (100, 150, 255)
-            self.fase_botones.append(MenuButton(cx - 200 + col * 400, 190 + fila * 66, 360, 50, etiqueta, fase_font, color))
+            if fase_id in FASES_HALLOWEEN:
+                color = (255, 140, 40)
+            else:
+                color = (255, 110, 200) if es_bonus else (100, 150, 255)
+            self.fase_botones.append(MenuButton(cx - 400 + col * 400, 190 + fila * 66, 370, 50, etiqueta, fase_font, color))
         self.btn_fases_buffs = MenuButton(cx, 522, 340, 44, "TODOS LOS BUFFS: NO", get_font(16, bold=True), (255, 200, 90))
         self.btn_fases_volver = MenuButton(cx, 582, 200, 44, "VOLVER", get_font(16, bold=True), (90, 90, 115))
         self.fase_seleccionada = 0
@@ -532,8 +539,12 @@ class MenuScene:
                 self.fase_seleccionada = (self.fase_seleccionada - 1) % total
             elif event.key == pygame.K_DOWN:
                 self.fase_seleccionada = (self.fase_seleccionada + 1) % total
-            elif event.key in (pygame.K_LEFT, pygame.K_RIGHT):
-                self.fase_seleccionada = (self.fase_seleccionada + 5) % total
+            elif event.key == pygame.K_RIGHT:
+                i = self.fase_seleccionada
+                self.fase_seleccionada = i + 5 if i + 5 < total else i % 5
+            elif event.key == pygame.K_LEFT:
+                i = self.fase_seleccionada
+                self.fase_seleccionada = i - 5 if i >= 5 else max(range(i, total, 5))
             elif event.key == pygame.K_t:
                 self._alternar_buffs_fase()
             elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):

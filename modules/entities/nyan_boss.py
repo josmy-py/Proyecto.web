@@ -2175,6 +2175,12 @@ class CinematicaVictoriaFalsa:
 
     DURACION_NORMAL = 360
     DURACION_GLITCH = 300
+    # palabras, colores y paneles del glitch (la ruta de Halloween los
+    # cambia a mitad de camino, ver halloween.CinematicaVictoriaHalloween)
+    PALABRAS = PALABRAS_GLITCH
+    COLORES = _COLORES_GLITCH
+    COLORES_PANEL = (neon.MAGENTA, neon.CIAN, neon.ROJO)
+    TITULO_COLOR = WHITE
 
     def __init__(self, captura):
         self.captura = captura
@@ -2211,15 +2217,19 @@ class CinematicaVictoriaFalsa:
         nuevas = int(tasa) + (1 if random.random() < tasa - int(tasa) else 0)
         for _ in range(nuevas):
             self.palabras.append({
-                'texto': random.choice(PALABRAS_GLITCH),
+                'texto': random.choice(self.PALABRAS),
                 'x': random.uniform(0, GAME_WIDTH), 'y': random.uniform(0, GAME_HEIGHT),
                 'tam': random.choice((16, 20, 26, 34, 44)) + int(20 * p * random.random()),
-                'color': random.choice(_COLORES_GLITCH),
+                'color': random.choice(self.COLORES),
                 'vida': random.randint(12, 40), 'vida_max': 40,
             })
         for w in self.palabras:
             w['vida'] -= 1
         self.palabras = [w for w in self.palabras if w['vida'] > 0]
+
+    def _dibujar_extra(self, surface, p):
+        """Encima del glitch, antes de las scanlines (lo usa la ruta de
+        Halloween para el brazo)."""
 
     def _texto_glitch(self, surface, texto, tam, color, cx, cy, separacion):
         fuente = get_font(tam, bold=True)
@@ -2252,10 +2262,11 @@ class CinematicaVictoriaFalsa:
         if (p > 0.4 and (self.t // 5) % 3 == 0) or p > 0.82:
             caja = pygame.Rect(0, 0, 760, 120)
             caja.center = (GAME_WIDTH // 2 + random.randint(-4, 4), GAME_HEIGHT // 2)
-            neon.panel(surface, caja, random.choice((neon.MAGENTA, neon.CIAN, neon.ROJO)), self.t, halo=False)
-            self._texto_glitch(surface, "NEW BOSS READY", 72, WHITE,
+            neon.panel(surface, caja, random.choice(self.COLORES_PANEL), self.t, halo=False)
+            self._texto_glitch(surface, "NEW BOSS READY", 72, self.TITULO_COLOR,
                                GAME_WIDTH // 2 + random.randint(-6, 6), GAME_HEIGHT // 2 + random.randint(-4, 4),
                                4 + int(8 * p))
+        self._dibujar_extra(surface, p)
 
         neon.scanlines(surface, 60 if p > 0 else 40)
         restante = self.DURACION_NORMAL + self.DURACION_GLITCH - self.t

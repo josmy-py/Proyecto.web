@@ -53,6 +53,10 @@ from modules.entities.nyan_boss import (
     CinematicaGatoDormido, CinematicaVictoriaFalsa, CinematicaGolpeAlien, sprite_pixel,
 )
 from modules.entities.tripulante import TripulanteAliado, CinematicaTripulante
+from modules.entities.halloween import (
+    PROB_HALLOWEEN, FondoHalloween, ReyCalabazaBoss, BrujaBoss, ParcaBoss,
+    CinematicaVictoriaHalloween, CinematicaFinHalloween, icono_final as icono_halloween,
+)
 from modules.entities import mascota as mascota_mod
 from modules.entities.mascota import ZorritoEspacial, CapsulaMascota, dibujar_aviso_mascota
 from modules.systems.menu import MenuScene, Star
@@ -279,8 +283,16 @@ def main():
     #   "pan" -> pelea contra el Gato Pan (gira, "OIIA OIIA")
     #   "final" -> cayo el Gato Pan: cinematica del gatito durmiendo y la victoria de verdad
     #   "terminado" -> victoria real mostrada (sigue el entorno pixel)
+    # Ruta secreta de Halloween (ver modules/entities/halloween.py; a veces
+    # la victoria falsa la elige en vez de la de los gatos, ver ruta_bonus):
+    #   "calabaza" -> "interludio_bruja" -> "bruja" -> "interludio_parca"
+    #   -> "parca" -> "final" (cinematica de Halloween) -> "terminado"
     GAME_OVER_FALSO_FRAMES = 170
     congelados_bonus = ("victoria_falsa", "game_over_falso")
+    INTERLUDIOS_BONUS = ("interludio_alien", "interludio_pan", "interludio_bruja", "interludio_parca")
+    JEFES_HALLOWEEN = ("calabaza", "bruja", "parca")
+    # "gatos" (Nyan -> Alien -> OIIA) o "halloween" (Calabaza -> Bruja -> Parca)
+    ruta_bonus = "gatos"
     aliado = None
 
     # Mascota de mitad de partida (ver modules/entities/mascota.py): al
@@ -307,7 +319,7 @@ def main():
     # "pan" entran directo a ese jefe del bonus al terminar la cuenta
     # regresiva (sin la partida normal ni la victoria falsa; AJUSTES > "JUGAR
     # NIVEL BONUS" equivale a "nyan"). "Intentar de nuevo" lo respeta.
-    JEFES_BONUS_DIRECTOS = ("nyan", "alien", "pan")
+    JEFES_BONUS_DIRECTOS = ("nyan", "alien", "pan", "calabaza", "bruja", "parca")
     inicio_partida = "w1"
     # ELEGIR FASE con "TODOS LOS BUFFS": la nave arranca con todo (ver
     # _dar_todos_los_buffs)
@@ -340,6 +352,7 @@ def main():
         nonlocal paused, nuevo_record, dificultad
         nonlocal stats_disparos, stats_aciertos, stats_alienigenas, stats_jefes, tiempo_sobrevivido
         nonlocal bonus_estado, bonus_timer, bonus_banner, fondo_pixel, bonus_directo_pendiente, aliado
+        nonlocal ruta_bonus
         nonlocal mascota, capsula_mascota, mascota_ofrecida, aviso_mascota
         nonlocal estado_mejoras, eleccion, ultima_oleada_mejora, mejora_inicial_pendiente
         if hasattr(draw_hud, 'hud'):
@@ -361,10 +374,11 @@ def main():
         bonus_estado = None; bonus_timer = 0; bonus_banner = None; fondo_pixel = None
         aliado = None
         mascota = None; capsula_mascota = None; mascota_ofrecida = False; aviso_mascota = None
+        ruta_bonus = "halloween" if inicio_partida in JEFES_HALLOWEEN else "gatos"
         if inicio_partida in JEFES_BONUS_DIRECTOS:
             bonus_directo_pendiente = inicio_partida
             # la cuenta regresiva ya se ve sobre el cielo pixel del bonus
-            fondo_pixel = FondoPixel()
+            fondo_pixel = FondoHalloween() if ruta_bonus == "halloween" else FondoPixel()
         else:
             bonus_directo_pendiente = None
             wave = int(inicio_partida[1:])
@@ -715,8 +729,10 @@ def main():
         """La pantalla de VICTORIA de siempre con techno de fondo; a los 6 s
         la musica se vuelve epica y todo se rompe en glitch con "NEW BOSS
         READY" y compañia (ver CinematicaVictoriaFalsa). Enter salta la
-        parte tranquila; el glitch se ve entero."""
-        nonlocal tiempo_sobrevivido
+        parte tranquila; el glitch se ve entero. Con probabilidad
+        PROB_HALLOWEEN un brazo de zombi rompe el glitch y la ruta pasa a
+        ser la de Halloween (ver CinematicaVictoriaHalloween)."""
+        nonlocal tiempo_sobrevivido, ruta_bonus
         # el tiempo de verdad en la pantalla trampa (terminar_partida lo
         # recalcula al final de todo)
         tiempo_sobrevivido = max(0.0, (pygame.time.get_ticks() - start_time) / 1000.0 - start_countdown)
@@ -736,7 +752,11 @@ def main():
         audio.sonido_victoria()
         # mas fuerte que el resto de la musica (sin tocar el ajuste guardado)
         audio.reproducir_musica("victoria_tecno", ganancia=1.7)
-        cine = CinematicaVictoriaFalsa(captura)
+        ruta_bonus = "halloween" if random.random() < PROB_HALLOWEEN else "gatos"
+        if ruta_bonus == "halloween":
+            cine = CinematicaVictoriaHalloween(captura)
+        else:
+            cine = CinematicaVictoriaFalsa(captura)
         cine_surface = pygame.Surface((GAME_WIDTH, GAME_HEIGHT))
         while not cine.terminada:
             for evento in pygame.event.get():
@@ -751,6 +771,9 @@ def main():
             for ev in cine.eventos:
                 if ev == "epica":
                     audio.reproducir_musica("glitch_epica", loop=False, ganancia=1.7)
+                elif ev in ("brazo", "agarra"):
+                    audio.sonido_explosion()
+                    audio.sonido_impacto()
                 else:
                     audio.sonido_impacto()
             cine.eventos.clear()
@@ -775,10 +798,12 @@ def main():
         ship.x = ship.target_x = GAME_WIDTH // 2
         ship.y = ship.target_y = GAME_HEIGHT - 60
         ship.invincible_timer = 90
-        fondo_pixel = FondoPixel()
+        fondo_pixel = FondoHalloween() if jefe in JEFES_HALLOWEEN else FondoPixel()
         if settings.get("bonus_todos_buffs"):
             _dar_todos_los_buffs()
-        if jefe == "alien":
+        if jefe in JEFES_HALLOWEEN:
+            _entrar_jefe_halloween(jefe)
+        elif jefe == "alien":
             _entrar_gato_alien()
         elif jefe == "pan":
             bosses.append(GatoPanBoss(dificultad))
@@ -791,6 +816,20 @@ def main():
             bonus_banner = ["¡JEFE BONUS!", "NYAN CAT", 170]
             audio.reproducir_musica("jefe_nyan")
         audio.sonido_alerta_jefe()
+
+    def _entrar_jefe_halloween(jefe):
+        """Hace entrar a un jefe de la ruta de Halloween con su cartel y su
+        tema (musica_jefe_calabaza / _bruja / _parca)."""
+        nonlocal bonus_estado, bonus_banner
+        clase, titulo = {
+            "calabaza": (ReyCalabazaBoss, "¡JEFE DE HALLOWEEN!"),
+            "bruja": (BrujaBoss, "¡SIGUIENTE JEFE!"),
+            "parca": (ParcaBoss, "¡ULTIMO JEFE!"),
+        }[jefe]
+        bosses.append(clase(dificultad))
+        bonus_estado = jefe
+        bonus_banner = [titulo, clase.nombre, 170]
+        audio.reproducir_musica(f"jefe_{jefe}")
 
     def _entrar_gato_alien():
         """El Gato Alien entra INVENCIBLE: antes de la pelea, la cinematica
@@ -895,8 +934,9 @@ def main():
 
     def _recompensar_jefe_bonus(boss):
         """Cadena de jefes bonus: Nyan Cat -> Gato Alien -> Gato Pan (el que
-        gira, OIIA). Entre uno y otro hay una carta de mejora y un
-        respiro con cartel; al caer el Gato Pan arranca la victoria de verdad."""
+        gira, OIIA), o en la ruta de Halloween Rey Calabaza -> Bruja ->
+        Parca. Entre uno y otro hay una carta de mejora y un respiro con
+        cartel; al caer el ultimo arranca la victoria de verdad."""
         nonlocal stats_jefes, bonus_estado, bonus_timer, bonus_banner
         nonlocal boss_reward_timer
         stats_jefes += 1
@@ -904,7 +944,7 @@ def main():
         for color in (ROSA, AMARILLO, MENTA, AZUL_CIELO):
             particles.extend([Particle(boss.x, boss.y, color) for _ in range(20)])
         audio.sonido_explosion()
-        if isinstance(boss, GatoPanBoss):
+        if isinstance(boss, (GatoPanBoss, ParcaBoss)):
             # un respiro para ver la explosion y despues la cinematica del
             # gatito durmiendo (ver _actualizar_bonus / _cinematica_gato_durmiendo)
             bonus_estado = "final"
@@ -913,10 +953,19 @@ def main():
             audio.sonido_victoria()
             return
         # en vez de soltar ayuda: una carta de mejora en el respiro
-        _pedir_mejora("¡GATO VENCIDO! ELEGI UNA MEJORA")
+        if ruta_bonus == "halloween":
+            _pedir_mejora("¡JEFE VENCIDO! ELEGI UNA MEJORA")
+        else:
+            _pedir_mejora("¡GATO VENCIDO! ELEGI UNA MEJORA")
         boss_reward_timer = 120
         bonus_timer = 180
-        if isinstance(boss, NyanBoss):
+        if isinstance(boss, ReyCalabazaBoss):
+            bonus_estado = "interludio_bruja"
+            bonus_banner = ["¡SIGUIENTE JEFE!", BrujaBoss.nombre, 170]
+        elif isinstance(boss, BrujaBoss):
+            bonus_estado = "interludio_parca"
+            bonus_banner = ["¡ULTIMO JEFE!", ParcaBoss.nombre, 170]
+        elif isinstance(boss, NyanBoss):
             bonus_estado = "interludio_alien"
             bonus_banner = ["¡SIGUIENTE JEFE!", "GATO ALIEN", 170]
         else:
@@ -936,10 +985,13 @@ def main():
                 bonus_banner = None
         if bonus_estado == "victoria_falsa":
             _cinematica_victoria_falsa()
-            _iniciar_pelea_bonus()
-        elif bonus_estado in ("interludio_alien", "interludio_pan"):
+            _iniciar_pelea_bonus("calabaza" if ruta_bonus == "halloween" else "nyan")
+        elif bonus_estado in INTERLUDIOS_BONUS:
             bonus_timer -= 1
-            if bonus_timer <= 0:
+            if bonus_timer <= 0 and bonus_estado in ("interludio_bruja", "interludio_parca"):
+                _entrar_jefe_halloween(bonus_estado.split("_")[1])
+                audio.sonido_alerta_jefe()
+            elif bonus_timer <= 0:
                 # cada gato con su tema: musica_jefe_gatos para el
                 # Alien (despues de la cinematica del golpe) y musica_jefe_pan.* (la cancion OIIA si se agrego una
                 # propia, ver tools/extraer_nyan_video.py) para el Gato Pan
@@ -958,9 +1010,35 @@ def main():
         elif bonus_estado == "final":
             bonus_timer -= 1
             if bonus_timer <= 0 and not dying and not game_over:
-                _cinematica_gato_durmiendo()
+                if ruta_bonus == "halloween":
+                    _cinematica_fin_halloween()
+                else:
+                    _cinematica_gato_durmiendo()
                 bonus_estado = "terminado"
                 terminar_partida(True)
+
+    def _cinematica_fin_halloween():
+        """Final de la ruta de Halloween ("¡FELIZ HALLOWEEN!", ver
+        CinematicaFinHalloween), con el mismo mini-bucle que el gatito."""
+        bullets.clear(); boss_bullets.clear(); alien_bullets.clear()
+        audio.reproducir_musica("fin_halloween")
+        cine = CinematicaFinHalloween()
+        cine_surface = pygame.Surface((GAME_WIDTH, GAME_HEIGHT))
+        while not cine.terminada:
+            for evento in pygame.event.get():
+                if evento.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                if (evento.type == pygame.KEYDOWN and evento.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE, pygame.K_ESCAPE)) \
+                        or evento.type in (pygame.MOUSEBUTTONDOWN, pygame.JOYBUTTONDOWN):
+                    cine.saltar()
+            clock.tick(FPS)
+            cine.update()
+            cine.draw(cine_surface)
+            screen.fill((0, 0, 0))
+            screen.blit(cine_surface, (game_offset_x, game_offset_y))
+            draw_viewport_frame(screen, game_offset_x, game_offset_y, GAME_WIDTH, GAME_HEIGHT, pygame.time.get_ticks())
+            pygame.display.flip()
 
     def _cinematica_gato_durmiendo():
         """Final del bonus: el Gato Pan se duerme ("¡FELICIDADES! Ayudaste a
@@ -1403,7 +1481,7 @@ def main():
         # oleadas (6, 11, 16...), asi tambien al caer cada jefe (pasa a la
         # 11, 21...). Si justo hay un jefe o su cartel, espera a que termine.
         if (eleccion is None and not game_over and not dying and not paused and countdown_val <= 0
-                and bonus_estado in (None, "interludio_alien", "interludio_pan")
+                and bonus_estado in (None,) + INTERLUDIOS_BONUS
                 and not bonus_directo_pendiente and not bosses and boss_reward_timer <= 0):
             if mejoras_extra:
                 _abrir_eleccion(mejoras_extra.pop(0))
@@ -1970,9 +2048,16 @@ def main():
 
             if game_victory:
                 if bonus_estado == "terminado":
-                    icono = sprite_pixel("durmiendo", 1 if math.sin(frame_count * 0.05) > 0 else 0, 3)
-                    draw_victory_final(game_surface, GAME_WIDTH, GAME_HEIGHT, score, wave, stats_actuales(),
-                                       f"Récord: {progress.puntaje_maximo()}", nuevo_record, frame_count, icono=icono)
+                    if ruta_bonus == "halloween":
+                        draw_victory_final(game_surface, GAME_WIDTH, GAME_HEIGHT, score, wave, stats_actuales(),
+                                           f"Récord: {progress.puntaje_maximo()}", nuevo_record, frame_count,
+                                           icono=icono_halloween(), zetas=False,
+                                           mensaje="Derrotaste al Rey Calabaza, a la Bruja y a la Parca")
+                    else:
+                        icono = sprite_pixel("durmiendo", 1 if math.sin(frame_count * 0.05) > 0 else 0, 3)
+                        draw_victory_final(game_surface, GAME_WIDTH, GAME_HEIGHT, score, wave, stats_actuales(),
+                                           f"Récord: {progress.puntaje_maximo()}", nuevo_record, frame_count,
+                                           icono=icono)
                 else:
                     draw_victory_screen(game_surface, GAME_WIDTH, GAME_HEIGHT, score, wave, font, big_font, stats=stats_actuales())
             else:

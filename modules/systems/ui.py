@@ -490,11 +490,14 @@ def _confeti(surface, game_w, game_h, t, cantidad=70):
 
 
 def draw_victory_final(surface, game_w, game_h, score, wave, stats, texto_record, nuevo_record, t,
-                       icono=None):
+                       icono=None, mensaje="Derrotaste a Nyan Cat y su pandilla... y el gatito ya duerme",
+                       zetas=True):
     """Pantalla de victoria de verdad (despues del Gato OIIA): mas festiva
     que draw_victory_screen -confeti, titulo arcoiris, franja estilo Nyan y
     las estadisticas en cartas neon como las de mejora-.
-    icono: Surface opcional (el gatito durmiendo) para el panel."""
+    icono: Surface opcional (el gatito durmiendo) para el panel.
+    mensaje y zetas: la ruta de Halloween pone su propio texto y su
+    calabaza sin las "Zzz"."""
     # fondo: degrade violeta -> azul noche en bandas
     fondo = pygame.Surface((game_w, game_h), pygame.SRCALPHA)
     for yy in range(0, game_h, 8):
@@ -511,7 +514,7 @@ def draw_victory_final(surface, game_w, game_h, score, wave, stats, texto_record
             surface.fill(color, (sx, franja_y + i * 7 + ondula, 16, 7))
 
     dibujar_texto_arcoiris(surface, "¡VICTORIA TOTAL!", get_font(60, bold=True), game_w // 2, 40, t)
-    sub = render_texto_pixelado(get_font(20), "Derrotaste a Nyan Cat y su pandilla... y el gatito ya duerme", WHITE)
+    sub = render_texto_pixelado(get_font(20), mensaje, WHITE)
     surface.blit(sub, (game_w // 2 - sub.get_width() // 2, 132))
 
     # panel central con el marco que cambia de color
@@ -548,7 +551,7 @@ def draw_victory_final(surface, game_w, game_h, score, wave, stats, texto_record
     base_y = card.y + 232
     if icono is not None:
         surface.blit(icono, (card.x + 40, base_y + 6))
-        for k in range(3):
+        for k in range(3 if zetas else 0):
             fase = (t * 0.02 + k / 3) % 1.0
             z = render_text("z" if k < 2 else "Z", 14 + k * 5, (220, 220, 255))
             z.set_alpha(int(255 * (1 - fase)))

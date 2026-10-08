@@ -1167,6 +1167,130 @@ def generar_musica_impostor():
     return _ganar_volumen(fundido_de_bucle(mezcla), empuje=2.0)
 
 
+def _organo(freq, dur):
+    """Organo de iglesia embrujada: fundamental + octavas + quinta con un
+    leve tremolo (pipas que respiran)."""
+    n = int(SR * dur)
+    t = np.arange(n) / SR
+    onda = np.zeros(n)
+    for mult, amp in ((0.5, 0.5), (1, 1.0), (1.5, 0.3), (2, 0.55), (4, 0.25)):
+        onda += amp * np.sin(2 * np.pi * freq * mult * t)
+    onda *= 1 + 0.12 * np.sin(2 * np.pi * 5.5 * t)
+    return onda / 2.6 * envolvente(n, 0.03, dur * 3)
+
+
+def _campana(freq, dur=2.5):
+    """Campanada de cementerio: parciales inarmonicos que se apagan lento."""
+    n = int(SR * dur)
+    t = np.arange(n) / SR
+    onda = np.zeros(n)
+    for mult, amp, caida in ((0.5, 0.6, 1.6), (1, 1.0, 1.2), (2.4, 0.5, 0.6), (2.76, 0.35, 0.5), (5.4, 0.2, 0.25)):
+        onda += amp * np.sin(2 * np.pi * freq * mult * t) * np.exp(-t / caida)
+    return onda / 2.4
+
+
+def _capa_halloween(largo, bpm, tonica, raices, figura, voz, vol=0.2, campanas=False):
+    """Capa encima de un _tema_metal: una figura de 8 corcheas por compas
+    con `voz` (_organo o _sinte_impostor) siguiendo las raices, y si
+    `campanas`, una campanada cada 4 compases."""
+    pulso = 60.0 / bpm
+    compas = pulso * 4
+    capa = np.zeros(largo)
+    for c, raiz in enumerate(raices):
+        f_raiz = tonica * 4 * 2 ** (raiz / 12)
+        for k, intervalo in enumerate(figura):
+            if intervalo is None:
+                continue
+            _poner(capa, voz(f_raiz * 2 ** (intervalo / 12), pulso / 2 * 0.95), c * compas + k * pulso / 2, vol)
+        if campanas and c % 4 == 0:
+            _poner(capa, _campana(tonica * 2), c * compas, 0.45)
+    return capa
+
+
+def generar_musica_jefe_calabaza():
+    """Rey Calabaza: metal "de feria embrujada" en Re menor a 160 BPM,
+    galope con organo saltarin y una melodia de guitarra burlona."""
+    bpm, tonica = 160, 73.42
+    riff = [0, 0, 0, None, 0, 0, 1, None, 0, 0, 0, None, 3, "-", 1, "-"]
+    riff_b = [0, None, 0, 3, None, 0, 6, "-", 5, None, 3, 0, 1, "-", 0, None]
+    melodia = [(12, 1), (13, 1), (12, 1), (8, 1), (7, 2), (8, 2), (12, 1), (13, 1), (15, 1), (13, 1),
+               (12, 4), (7, 1), (8, 1), (7, 1), (6, 1), (7, 2), (3, 2), (1, 2), (0, 6), (None, 2)]
+    secciones = [(riff, [0, 0, 1, 0], "galope", False),
+                 (riff_b, [0, 0, 3, 1, 0, 0, 6, 5], "galope", True),
+                 (riff, [0, 1, 0, -1], "doble", True)]
+    base = _tema_metal(bpm, tonica, secciones, ganancia=11, melodia=melodia, voz_melodia="guitarra",
+                       golpes_bronce=False, empuje=1.9)
+    raices = [r for _, rs, _, _ in secciones for r in rs]
+    capa = _capa_halloween(len(base), bpm, tonica, raices, (0, 7, 12, 7, 1, 7, 12, 7), _organo, 0.22)
+    return _ganar_volumen(fundido_de_bucle(base * 0.85 + capa), empuje=2.0)
+
+
+def generar_musica_jefe_bruja():
+    """Bruja Neon: thrash rapido en Mi menor a 182 BPM con un clavecin
+    hechizado (sintetizador frio) en arpegios disminuidos."""
+    bpm, tonica = 182, 82.41
+    riff = [0, 0, 0, 0, 1, 0, 0, 0, 3, 0, 0, 0, 6, 5, 3, 1]
+    riff_b = [0, 0, 6, 0, 0, 5, 0, 0, 3, 0, 1, 0, 0, 6, "-", "-"]
+    melodia = [(12, 1), (15, 1), (18, 1), (21, 1), (24, 2), (21, 2), (18, 1), (15, 1), (12, 1), (15, 1),
+               (13, 4), (12, 1), (13, 1), (15, 1), (18, 1), (17, 2), (15, 2), (13, 2), (12, 6)]
+    secciones = [(riff, [0, 0, 0, 1], "thrash", False),
+                 (riff_b, [0, 0, 1, -1, 0, 0, 3, 1], "thrash", True),
+                 (riff, [0, 3, 6, 5], "blast", True)]
+    base = _tema_metal(bpm, tonica, secciones, ganancia=14, melodia=melodia, voz_melodia="gemelas",
+                       golpes_bronce=False, empuje=2.1)
+    raices = [r for _, rs, _, _ in secciones for r in rs]
+    capa = _capa_halloween(len(base), bpm, tonica, raices, (0, 3, 6, 9, 12, 9, 6, 3), _sinte_impostor, 0.2)
+    return _ganar_volumen(fundido_de_bucle(base * 0.85 + capa), empuje=2.0)
+
+
+def generar_musica_jefe_parca():
+    """La Parca: doom de cementerio en Do# a 96 BPM, organo de iglesia,
+    coro y campanadas cada cuatro compases."""
+    bpm, tonica = 96, 69.30
+    riff = [0, "-", "-", "-", "-", "-", None, 0, 1, "-", "-", "-", 0, "-", 6, "-"]
+    riff_b = [0, "-", "-", 0, "-", "-", 1, "-", "-", "-", 3, "-", 1, None, 0, 0]
+    melodia = [(12, 4), (13, 2), (12, 2), (8, 4), (7, 4), (None, 2), (6, 2), (7, 2), (8, 2), (7, 8)]
+    secciones = [(riff, [0, 0, 1, 0], "mitad", False),
+                 (riff_b, [0, 0, -2, 1, 0, 0, -4, -5], "mitad", True),
+                 (riff, [0, 1, 0, 0], "doble", True)]
+    base = _tema_metal(bpm, tonica, secciones, ganancia=12, melodia=melodia, voz_melodia="bronces",
+                       golpes_bronce=False, coro=True, empuje=2.1)
+    raices = [r for _, rs, _, _ in secciones for r in rs]
+    capa = _capa_halloween(len(base), bpm, tonica, raices, (0, None, 7, None, 3, None, 7, None), _organo, 0.26,
+                           campanas=True)
+    return _ganar_volumen(fundido_de_bucle(base * 0.85 + capa), empuje=2.0)
+
+
+def generar_musica_fin_halloween():
+    """Final de la ruta de Halloween: vals de caja de musica embrujada
+    (La menor, 3/4) con organo suave y una campanada al empezar cada vuelta."""
+    bpm = 132
+    pulso = 60.0 / bpm
+    tonica = 220.0
+    melodia = [(0, 1), (3, 1), (7, 1), (12, 2), (11, 1), (8, 1), (7, 1), (3, 1), (2, 2), (None, 1),
+               (0, 1), (3, 1), (7, 1), (10, 2), (8, 1), (7, 1), (5, 1), (3, 1), (0, 3)]
+    largo_pulsos = sum(d for _, d in melodia) * 2
+    mezcla = np.zeros(int(SR * pulso * largo_pulsos) + 1)
+    t = 0.0
+    for vuelta in range(2):
+        for semitono, d in melodia:
+            dur = d * pulso
+            if semitono is not None:
+                f = tonica * 2 * 2 ** (semitono / 12)
+                _poner(mezcla, _sinte_impostor(f, dur * 1.4), t, 0.35)
+            t += dur
+    acordes = [0, 0, 5, 5, 3, 3, 7, 0]
+    compas = pulso * 3
+    for c in range(int(len(mezcla) / SR / compas)):
+        raiz = tonica / 2 * 2 ** (acordes[c % len(acordes)] / 12)
+        _poner(mezcla, _organo(raiz, compas), c * compas, 0.28)
+        for k in (1, 2):
+            _poner(mezcla, _organo(raiz * 2 ** (7 / 12), pulso * 0.8), c * compas + k * pulso, 0.12)
+        if c % 8 == 0:
+            _poner(mezcla, _campana(tonica / 2), c * compas, 0.3)
+    return normalizar(fundido_de_bucle(mezcla), pico=0.9)
+
+
 # ----------------------------------------------------------------- ejecucion
 
 SFX = {
@@ -1199,6 +1323,10 @@ MUSICA = {
     "musica_jefe_gatos": generar_musica_jefe_nyan,
     "musica_jefe_pan": generar_musica_jefe_pan,
     "musica_impostor": generar_musica_impostor,
+    "musica_jefe_calabaza": generar_musica_jefe_calabaza,
+    "musica_jefe_bruja": generar_musica_jefe_bruja,
+    "musica_jefe_parca": generar_musica_jefe_parca,
+    "musica_fin_halloween": generar_musica_fin_halloween,
     "musica_cuna": generar_musica_cuna,
     "musica_victoria_tecno": generar_musica_victoria_tecno,
     "musica_glitch_epica": generar_musica_glitch_epica,
