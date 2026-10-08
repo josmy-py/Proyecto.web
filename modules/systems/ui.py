@@ -500,14 +500,18 @@ def draw_victory_screen(surface, game_w, game_h, score, wave, font, big_font, st
 _ARCOIRIS_FINAL = [(255, 70, 70), (255, 160, 40), (255, 235, 60), (80, 230, 90), (60, 160, 255), (150, 90, 255)]
 
 
-def dibujar_texto_arcoiris(surface, texto, fuente, cx, y, t, amplitud=6, contorno=True):
+def dibujar_texto_arcoiris(surface, texto, fuente, cx, y, t, amplitud=6, contorno=True, paleta=None):
     """Texto centrado en cx con cada letra de un color del arcoiris que va
-    rotando con el tiempo y saltando en ola (t en cuadros)."""
+    rotando con el tiempo y saltando en ola (t en cuadros). Con `paleta`,
+    las letras van rotando entre esos colores en vez del arcoiris."""
     letras = []
     ancho_total = 0
     for i, letra in enumerate(texto):
-        color = pygame.Color(0)
-        color.hsva = (((t * 3 + i * 28) % 360), 70, 100, 100)
+        if paleta:
+            color = paleta[(i + t // 10) % len(paleta)]
+        else:
+            color = pygame.Color(0)
+            color.hsva = (((t * 3 + i * 28) % 360), 70, 100, 100)
         surf = fuente.render(letra, True, color)
         letras.append((surf, i))
         ancho_total += surf.get_width()
@@ -522,51 +526,114 @@ def dibujar_texto_arcoiris(surface, texto, fuente, cx, y, t, amplitud=6, contorn
         x += surf.get_width()
 
 
-def _confeti(surface, game_w, game_h, t, cantidad=70):
+# pantalla final de Halloween: naranja calabaza, violeta y verde toxico
+_HALLOWEEN_FINAL = [(255, 140, 30), (170, 80, 230), (120, 230, 60), (255, 190, 70), (120, 50, 170), (255, 110, 20)]
+_MURCIELAGO_FINAL = (
+    ("X.......X", ".X.....X.", ".XX.X.XX.", "XXXXXXXXX", "X.XX.XX.X", "....X...."),
+    ("....X....", "...XXX...", ".XXXXXXX.", "XXXXXXXXX", "X..X.X..X", "........."),
+)
+
+
+def _confeti(surface, game_w, game_h, t, cantidad=70, paleta=_ARCOIRIS_FINAL):
     """Confeti deterministico (depende solo de t): no necesita estado."""
     for i in range(cantidad):
         velocidad = 0.8 + (i * 37 % 100) / 60.0
         x = (i * 97 + int(math.sin(t * 0.02 + i) * 30)) % game_w
         y = int((t * velocidad + i * 53) % (game_h + 40)) - 20
-        color = _ARCOIRIS_FINAL[i % len(_ARCOIRIS_FINAL)]
+        color = paleta[i % len(paleta)]
         giro = abs(math.sin(t * 0.08 + i))
         w = max(2, int(10 * giro)) // 2 * 2
         surface.fill(color, (x // 2 * 2 - w // 2, y // 2 * 2, w, 6))
 
 
+def _murcielagos(surface, game_w, game_h, t, cantidad=9):
+    """Murcielagos pixel que cruzan la pantalla aleteando (solo dependen de t)."""
+    for i in range(cantidad):
+        velocidad = 1.0 + (i * 29 % 100) / 70.0
+        x = int((t * velocidad + i * 151) % (game_w + 80)) - 40
+        y = 190 + (i * 67) % (game_h - 260) + int(math.sin(t * 0.07 + i * 1.7) * 18)
+        forma = _MURCIELAGO_FINAL[(t // 6 + i) % 2]
+        for fy, fila in enumerate(forma):
+            for fx, c in enumerate(fila):
+                if c == "X":
+                    surface.fill((14, 6, 20), (x + fx * 4, y + fy * 4, 4, 4))
+        surface.fill((255, 60, 60), (x + 14, y + 12, 2, 2))
+        surface.fill((255, 60, 60), (x + 20, y + 12, 2, 2))
+
+
+def _cementerio(surface, game_w, game_h):
+    """Silueta de cementerio al pie de la pantalla final de Halloween."""
+    suelo = (22, 10, 26)
+    for sx in range(0, game_w, 8):
+        alto = 26 + int(10 * math.sin(sx * 0.012) + 6 * math.sin(sx * 0.031))
+        surface.fill(suelo, (sx, game_h - alto, 8, alto))
+    for i, lx in enumerate(range(40, game_w, 150)):
+        w, h = 34 + (i * 7) % 14, 44 + (i * 13) % 22
+        base = game_h - 24
+        surface.fill(suelo, (lx, base - h + w // 2, w, h - w // 2))
+        pygame.draw.circle(surface, suelo, (lx + w // 2, base - h + w // 2), w // 2)
+        if i % 2 == 0:
+            surface.fill((60, 40, 70), (lx + w // 2 - 2, base - h + w // 2 + 4, 4, 18))
+            surface.fill((60, 40, 70), (lx + w // 2 - 8, base - h + w // 2 + 9, 16, 4))
+
+
 def draw_victory_final(surface, game_w, game_h, score, wave, stats, texto_record, nuevo_record, t,
                        icono=None, mensaje="Derrotaste a Nyan Cat y su pandilla... y el gatito ya duerme",
-                       zetas=True):
+                       zetas=True, tema="gatos"):
     """Pantalla de victoria de verdad (despues del Gato OIIA): mas festiva
     que draw_victory_screen -confeti, titulo arcoiris, franja estilo Nyan y
     las estadisticas en cartas neon como las de mejora-.
     icono: Surface opcional (el gatito durmiendo) para el panel.
     mensaje y zetas: la ruta de Halloween pone su propio texto y su
-    calabaza sin las "Zzz"."""
-    # fondo: degrade violeta -> azul noche en bandas
+    calabaza sin las "Zzz".
+    tema "halloween" (ruta de Halloween y duelo con la Parca): noche
+    violeta y naranja, murcielagos, franja y titulo en colores de
+    Halloween en vez del arcoiris de los gatos."""
+    halloween = tema == "halloween"
+    paleta = _HALLOWEEN_FINAL if halloween else _ARCOIRIS_FINAL
+    # fondo: degrade violeta -> azul noche en bandas (Halloween: violeta -> naranja)
     fondo = pygame.Surface((game_w, game_h), pygame.SRCALPHA)
     for yy in range(0, game_h, 8):
         k = yy / game_h
-        fondo.fill((int(40 - 26 * k), int(14 + 8 * k), int(70 + 20 * k), 220), (0, yy, game_w, 8))
+        if halloween:
+            color_banda = (int(30 + 60 * k), int(10 + 14 * k), int(44 - 30 * k), 225)
+        else:
+            color_banda = (int(40 - 26 * k), int(14 + 8 * k), int(70 + 20 * k), 220)
+        fondo.fill(color_banda, (0, yy, game_w, 8))
     surface.blit(fondo, (0, 0))
-    _confeti(surface, game_w, game_h, t)
+    if halloween:
+        # luna llena detras de todo
+        luna = (game_w - 110, 250)
+        pygame.draw.circle(surface, (255, 220, 150), luna, 58)
+        pygame.draw.circle(surface, (235, 190, 120), (luna[0] - 20, luna[1] - 10), 12)
+        pygame.draw.circle(surface, (235, 190, 120), (luna[0] + 18, luna[1] + 20), 8)
+        _cementerio(surface, game_w, game_h)
+        _murcielagos(surface, game_w, game_h, t)
+        _confeti(surface, game_w, game_h, t, 40, paleta)
+    else:
+        _confeti(surface, game_w, game_h, t)
 
-    # franja arcoiris ondulada detras del titulo
+    # franja ondulada detras del titulo (arcoiris o los colores de Halloween)
     franja_y = 58
-    for i, color in enumerate(_ARCOIRIS_FINAL):
+    for i, color in enumerate(paleta):
         for sx in range(0, game_w, 16):
             ondula = 4 if ((sx // 16) + t // 8) % 2 else 0
             surface.fill(color, (sx, franja_y + i * 7 + ondula, 16, 7))
 
-    dibujar_texto_arcoiris(surface, "¡VICTORIA TOTAL!", get_font(60, bold=True), game_w // 2, 40, t)
+    dibujar_texto_arcoiris(surface, "¡VICTORIA TOTAL!", get_font(60, bold=True), game_w // 2, 40, t,
+                           paleta=((255, 150, 40), (190, 110, 255), (140, 240, 80)) if halloween else None)
     sub = render_texto_pixelado(get_font(20), mensaje, WHITE)
     surface.blit(sub, (game_w // 2 - sub.get_width() // 2, 132))
 
     # panel central con el marco que cambia de color
     card = pygame.Rect(game_w // 2 - 330, 170, 660, 330)
-    borde = pygame.Color(0)
-    borde.hsva = ((t * 2) % 360, 60, 100, 100)
-    neon.panel(surface, card, tuple(borde)[:3], t)
+    if halloween:
+        borde = (255, 140, 30) if (t // 20) % 2 else (170, 80, 230)
+    else:
+        borde = pygame.Color(0)
+        borde.hsva = ((t * 2) % 360, 60, 100, 100)
+        borde = tuple(borde)[:3]
+    neon.panel(surface, card, borde, t)
 
     stats = stats or {}
     disparos = stats.get("disparos", 0)
@@ -615,8 +682,12 @@ def draw_victory_final(surface, game_w, game_h, score, wave, stats, texto_record
     surface.blit(gracias, (centro_x - gracias.get_width() // 2, base_y + 56))
 
     # boton de salida neon con el color que rota
-    color_pill = pygame.Color(0)
-    color_pill.hsva = ((t * 2 + 180) % 360, 45, 100, 100)
+    if halloween:
+        color_pill = (255, 150, 40)
+    else:
+        color_pill = pygame.Color(0)
+        color_pill.hsva = ((t * 2 + 180) % 360, 45, 100, 100)
+        color_pill = tuple(color_pill)[:3]
     neon.boton(surface, (game_w // 2 - 190, card.bottom + 26, 380, 40), "ENTER / R  -  volver al menu",
-               tuple(color_pill)[:3], True, t)
+               color_pill, True, t)
     neon.scanlines(surface)

@@ -2142,12 +2142,12 @@ def main():
                     if ruta_bonus == "dimension":
                         draw_victory_final(game_surface, GAME_WIDTH, GAME_HEIGHT, score, wave, stats_actuales(),
                                            f"Récord: {progress.puntaje_maximo()}", nuevo_record, frame_count,
-                                           icono=icono_calavera(), zetas=False,
+                                           icono=icono_calavera(), zetas=False, tema="halloween",
                                            mensaje="Venciste a la Parca en su propia dimension")
                     elif ruta_bonus == "halloween":
                         draw_victory_final(game_surface, GAME_WIDTH, GAME_HEIGHT, score, wave, stats_actuales(),
                                            f"Récord: {progress.puntaje_maximo()}", nuevo_record, frame_count,
-                                           icono=icono_halloween(), zetas=False,
+                                           icono=icono_halloween(), zetas=False, tema="halloween",
                                            mensaje="Derrotaste al Rey Calabaza, a la Bruja y a la Parca")
                     else:
                         icono = sprite_pixel("durmiendo", 1 if math.sin(frame_count * 0.05) > 0 else 0, 3)
