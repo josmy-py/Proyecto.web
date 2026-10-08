@@ -66,6 +66,7 @@ from modules.entities.cyberpunk import (
     FondoCyber, NetrunnerBoss, TarantulaBoss, KaiserBoss, icono_final as icono_cyber,
 )
 from modules.entities.cyberpunk_cine import CinematicaVictoriaCyber, CinematicaEntradaCyber, CinematicaLuna
+from modules.entities.cine_jefes import CinematicaEntradaJefe, CinematicaDerrotaJefe, clave_de, retrato
 from modules.entities import mascota as mascota_mod
 from modules.entities.mascota import ZorritoEspacial, CapsulaMascota, dibujar_aviso_mascota
 from modules.systems.menu import MenuScene, Star
@@ -464,6 +465,9 @@ def main():
         mueve."""
         nonlocal stats_jefes, dificultad, boss_reward_timer
         nonlocal wave, objetivos_oleada
+        if not isinstance(boss, MegaBoss):
+            # el Coloso cae con su propia huida (_cinematica_victoria)
+            _cinematica_derrota_jefe(boss)
         if isinstance(boss, JefeGatoBase):
             _recompensar_jefe_bonus(boss)
             return
@@ -860,19 +864,21 @@ def main():
             _entrar_gato_alien()
         elif jefe == "pan":
             bosses.append(GatoPanBoss(dificultad))
+            _cinematica_entrada_jefe(bosses[-1], "jefe_pan")
             bonus_estado = "pan"
             bonus_banner = ["¡JEFE BONUS!", "GATO OIIA  -  OIIA OIIA", 170]
             audio.reproducir_musica("jefe_pan")
         else:
             bosses.append(NyanBoss(dificultad))
+            _cinematica_entrada_jefe(bosses[-1], "jefe_nyan")
             bonus_estado = "nyan"
             bonus_banner = ["¡JEFE BONUS!", "NYAN CAT", 170]
             audio.reproducir_musica("jefe_nyan")
         audio.sonido_alerta_jefe()
 
     def _entrar_jefe_halloween(jefe):
-        """Hace entrar a un jefe de la ruta de Halloween con su cartel y su
-        tema (musica_jefe_calabaza / _bruja / _parca)."""
+        """Hace entrar a un jefe de la ruta de Halloween con su cinematica de
+        entrada, su cartel y su tema (musica_jefe_calabaza / _bruja / _parca)."""
         nonlocal bonus_estado, bonus_banner
         clase, titulo = {
             "calabaza": (ReyCalabazaBoss, "¡JEFE DE HALLOWEEN!"),
@@ -880,6 +886,7 @@ def main():
             "parca": (ParcaBoss, "¡ULTIMO JEFE!"),
         }[jefe]
         bosses.append(clase(dificultad))
+        _cinematica_entrada_jefe(bosses[-1], f"jefe_{jefe}")
         bonus_estado = jefe
         bonus_banner = [titulo, clase.nombre, 170]
         audio.reproducir_musica(f"jefe_{jefe}")
@@ -1080,6 +1087,7 @@ def main():
                     _entrar_gato_alien()
                 else:
                     bosses.append(GatoPanBoss(dificultad))
+                    _cinematica_entrada_jefe(bosses[-1], "jefe_pan")
                     bonus_estado = "pan"
                     audio.reproducir_musica("jefe_pan")
                     audio.sonido_alerta_jefe()
@@ -1105,7 +1113,7 @@ def main():
                 terminar_partida(True)
 
     def _correr_cinematica(cine, musica, sonidos):
-        """Mini-bucle comun de las cinematicas del desafio de la Parca:
+        """Mini-bucle comun de las cinematicas (desafio de la Parca, jefes):
         `sonidos` lleva cada evento de la cinematica a los sonidos que
         dispara; Enter/Espacio/click/boton del mando la adelantan."""
         bullets.clear(); boss_bullets.clear(); alien_bullets.clear()
@@ -1133,6 +1141,48 @@ def main():
             screen.blit(cine_surface, (sx, sy))
             draw_viewport_frame(screen, game_offset_x, game_offset_y, GAME_WIDTH, GAME_HEIGHT, pygame.time.get_ticks())
             pygame.display.flip()
+
+    _SONIDOS_CINE_JEFE = {
+        "alerta": (audio.sonido_alerta_jefe,),
+        "golpe": (audio.sonido_explosion, audio.sonido_impacto),
+        "explosion": (audio.sonido_explosion,),
+        "carga": (audio.sonido_powerup,),
+        "glitch": (audio.sonido_impacto,),
+    }
+
+    def _dibujar_fondo_cine(surface):
+        """El fondo de la fase sin nada encima, para las cinematicas de los
+        jefes: el entorno pixel del bonus o el cielo de estrellas."""
+        if fondo_pixel is not None:
+            fondo_pixel.update()
+            fondo_pixel.draw(surface)
+        else:
+            surface.fill(DARK_BG)
+            for estrella in estrellas_juego:
+                estrella.update()
+                estrella.draw(surface)
+
+    def _cinematica_entrada_jefe(boss, musica):
+        """Antes de la pelea, la entrada del jefe segun su ficha del grimorio
+        (ver modules/entities/cine_jefes.py), ya con su tema sonando."""
+        clave = clave_de(boss)
+        if clave is None:
+            return
+        cine = CinematicaEntradaJefe(clave, retrato(boss), _dibujar_fondo_cine, pixel=fondo_pixel is not None)
+        _correr_cinematica(cine, musica, _SONIDOS_CINE_JEFE)
+        ship.invincible_timer = max(ship.invincible_timer, 90)
+
+    def _cinematica_derrota_jefe(boss):
+        """El golpe final: el jefe dice sus ultimas palabras y cae a su manera
+        (ver CinematicaDerrotaJefe)."""
+        clave = clave_de(boss)
+        if clave is None:
+            return
+        audio.detener_musica()
+        cine = CinematicaDerrotaJefe(clave, retrato(boss), _dibujar_fondo_cine, (boss.x, boss.y),
+                                     pixel=fondo_pixel is not None)
+        _correr_cinematica(cine, None, _SONIDOS_CINE_JEFE)
+        ship.invincible_timer = max(ship.invincible_timer, 60)
 
     def _cinematica_bruja_gigante(bruja):
         """La Bruja Neon se toma una pocion y se vuelve gigante (ver
@@ -1769,6 +1819,7 @@ def main():
                     bosses.append(jefe_dragon)
                 else:
                     bosses.append(WaveBoss(boss_def, dificultad))
+                _cinematica_entrada_jefe(bosses[-1], f"jefe_{boss_def.boss_id}")
                 audio.sonido_alerta_jefe()
                 # Tema propio por jefe (ver generar_musica_jefe_* en
                 # tools/generate_audio.py) en vez de que siga sonando la
@@ -1780,6 +1831,7 @@ def main():
                 # modules/entities/mega_boss.py. Su derrota es la unica
                 # forma de terminar la partida con "victoria".
                 bosses.append(MegaBoss(dificultad))
+                _cinematica_entrada_jefe(bosses[-1], "jefe_mega")
                 audio.sonido_alerta_jefe()
                 audio.reproducir_musica("jefe_mega")
 

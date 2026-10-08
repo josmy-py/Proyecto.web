@@ -35,6 +35,10 @@ ESC sale del juego.
   carta ofrece tres opciones (potencia, cadencia, turbo, escudo, triple
   cañon, dron escolta, el Zorrito Espacial, etc.).
 - Jefes en las oleadas 10, 20, 30 y 40, y el Coloso en la oleada 50.
+- Cada jefe tiene una cinematica al llegar (alerta, su entrada y su frase) y
+  otra al caer (sus ultimas palabras y su pagina del grimorio tachada), ver
+  modules/entities/cine_jefes.py. Enter, Espacio, click o un boton del mando
+  las adelantan.
 - Despues del Coloso sale al azar una de las tres rutas bonus, nunca la misma
   que en la partida anterior: la de los gatos, la de Halloween (un brazo de
   zombi rompe la cinematica): Rey Calabaza, Bruja Neon y La Parca.
