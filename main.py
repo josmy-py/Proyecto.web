@@ -1817,7 +1817,7 @@ def main():
 
             if game_victory:
                 if bonus_estado == "terminado":
-                    icono = sprite_pixel("durmiendo", 1 if math.sin(frame_count * 0.05) > 0 else 0, 4)
+                    icono = sprite_pixel("durmiendo", 1 if math.sin(frame_count * 0.05) > 0 else 0, 3)
                     draw_victory_final(game_surface, GAME_WIDTH, GAME_HEIGHT, score, wave, stats_actuales(),
                                        f"Récord: {progress.puntaje_maximo()}", nuevo_record, frame_count, icono=icono)
                 else:

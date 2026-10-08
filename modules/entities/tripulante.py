@@ -45,56 +45,60 @@ VENTILA_OSCURA = (30, 32, 42)
 # ------------------------------------------------------------------ arte
 
 def _formas_tripulante(s, color_cuerpo, color_mano, color_arma, objeto="pistola"):
-    """Dibuja las formas planas del tripulante (se usa dos veces: una para
-    la silueta del contorno y otra con los colores de verdad). objeto:
-    "pistola" o "control" (el control remoto con antena de la cinematica)."""
-    s.fill(color_cuerpo, (19, 7, 5, 11))                      # mochila
-    pygame.draw.ellipse(s, color_cuerpo, (4, 1, 18, 16))        # cabeza
-    s.fill(color_cuerpo, (4, 8, 18, 12))                       # torso
-    s.fill(color_cuerpo, (5, 19, 7, 6))                        # pierna delantera
-    s.fill(color_cuerpo, (14, 19, 7, 6))                       # pierna trasera
+    """Dibuja las formas planas del tripulante mirando a la derecha (se usa
+    dos veces: una para la silueta del contorno y otra con los colores de
+    verdad). objeto: "pistola" o "control" (el control remoto con antena de
+    la cinematica)."""
+    pygame.draw.rect(s, color_cuerpo, (1, 8, 6, 11), border_radius=2)  # mochila
+    pygame.draw.ellipse(s, color_cuerpo, (4, 0, 18, 18))                # cabeza
+    s.fill(color_cuerpo, (4, 9, 18, 12))                                # cuerpo
+    s.fill(color_cuerpo, (5, 20, 7, 5))                                 # pierna de atras
+    s.fill(color_cuerpo, (14, 20, 8, 5))                                # pierna de adelante
+    pygame.draw.ellipse(s, color_cuerpo, (10, 4, 14, 9))                # visor (sobresale)
     if objeto == "control":
-        s.fill(color_arma, (28, 0, 1, 3))                      # control: antena
-        s.fill(color_arma, (25, 2, 6, 10))                     # control: cuerpo
+        s.fill(color_arma, (28, 0, 1, 3))                               # control: antena
+        s.fill(color_arma, (25, 2, 6, 10))                              # control: cuerpo
     else:
-        s.fill(color_arma, (23, 4, 10, 4))                     # pistola: corredera
-        s.fill(color_arma, (25, 7, 3, 5))                      # pistola: empuñadura
-    pygame.draw.ellipse(s, color_mano, (24, 9, 7, 9))          # mano
+        s.fill(color_arma, (24, 4, 9, 4))                               # pistola: corredera
+        s.fill(color_arma, (25, 7, 3, 5))                               # pistola: empuñadura
+    pygame.draw.ellipse(s, color_mano, (23, 9, 7, 8))                   # mano
 
 
 def _arte_tripulante(objeto="pistola", encendido=False):
     s = pygame.Surface((35, 27), pygame.SRCALPHA)
 
-    # contorno: la silueta corrida un pixel hacia cada lado
+    # contorno grueso como en el juego: la silueta corrida un pixel a cada lado
     silueta = pygame.Surface((35, 27), pygame.SRCALPHA)
     _formas_tripulante(silueta, CONTORNO, CONTORNO, CONTORNO, objeto)
-    for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+    for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, -1), (-1, 1), (1, 1)):
         s.blit(silueta, (dx, dy))
 
     _formas_tripulante(s, ROJO, ROJO, GRIS_OSCURO if objeto == "control" else GRIS, objeto)
 
-    # sombra: mitad inferior y lado de atras en bordo, con la costura en zigzag
+    # sombra con borde duro: la espalda, la mochila y la parte de abajo
     for y in range(27):
-        for x in range(35):
-            if tuple(s.get_at((x, y)))[:3] != ROJO or x >= 23:
+        for x in range(23):
+            if tuple(s.get_at((x, y)))[:3] != ROJO:
                 continue
-            corte = 13 + (1 if (x // 2) % 2 else 0)
-            if y == corte and 4 <= x <= 19:
-                s.set_at((x, y), CONTORNO)
-            elif y > corte or x >= 19:
+            borde = 7 + int(2 * math.sin(y / 26 * math.pi))
+            if x < 7 or (x < borde + 2 and y > 6) or y >= 19:
                 s.set_at((x, y), ROJO_OSCURO)
-    # separacion entre las piernas
-    s.fill(CONTORNO, (12, 21, 2, 6))
-    s.fill((0, 0, 0, 0), (12, 25, 2, 2))
-    # brillo arriba a la izquierda de la cabeza
-    s.fill(ROJO_BRILLO, (8, 2, 4, 1))
-    s.fill(ROJO_BRILLO, (6, 3, 2, 1))
+    # costura entre la mochila y el cuerpo, y entre las piernas
+    s.fill(CONTORNO, (6, 10, 1, 8))
+    s.fill(CONTORNO, (12, 21, 2, 4))
+    s.fill((0, 0, 0, 0), (12, 23, 2, 4))
+    # brillo arriba de la cabeza
+    s.fill(ROJO_BRILLO, (9, 1, 6, 1))
+    s.fill(ROJO_BRILLO, (8, 2, 2, 1))
+    s.fill(ROJO_BRILLO, (2, 9, 1, 3))
 
-    # visor
-    pygame.draw.ellipse(s, VISOR_BORDE, (1, 5, 15, 7))
-    pygame.draw.ellipse(s, VISOR, (3, 6, 12, 4))
-    s.fill(VISOR_OSCURO, (5, 9, 8, 1))
-    s.fill(WHITE, (6, 7, 4, 1))
+    # visor grande mirando a la derecha, con su reflejo
+    pygame.draw.ellipse(s, VISOR_BORDE, (10, 4, 14, 9))
+    pygame.draw.ellipse(s, VISOR, (11, 5, 12, 7))
+    pygame.draw.ellipse(s, VISOR_OSCURO, (11, 8, 12, 4))
+    s.fill(VISOR, (12, 7, 10, 1))
+    s.fill(WHITE, (17, 6, 4, 1))
+    s.fill(WHITE, (19, 7, 2, 1))
 
     if objeto == "control":
         # control remoto: frente claro, boton rojo (amarillo al apretarlo)
@@ -106,15 +110,14 @@ def _arte_tripulante(objeto="pistola", encendido=False):
         s.set_at((28, 0), BOTON_ENCENDIDO if encendido else BOTON)
     else:
         # pistola: sombra, ranuras y brillo
-        s.fill(GRIS_OSCURO, (23, 7, 10, 1))
-        for rx in (27, 29):
+        s.fill(GRIS_OSCURO, (24, 7, 9, 1))
+        for rx in (28, 30):
             s.fill(GRIS_OSCURO, (rx, 5, 1, 2))
-        s.fill(WHITE, (24, 5, 2, 1))
+        s.fill(WHITE, (25, 5, 2, 1))
         s.fill(GRIS_OSCURO, (25, 10, 3, 2))
-    # dedos de la mano (tres pliegues) y su sombra
-    for fy in (12, 14, 16):
-        s.fill(CONTORNO, (27, fy, 3, 1))
-    s.fill(ROJO_OSCURO, (24, 13, 2, 4))
+    # mano: brillo y sombra
+    s.fill(ROJO_BRILLO, (25, 10, 2, 1))
+    s.fill(ROJO_OSCURO, (23, 14, 6, 2))
     return s
 
 
@@ -546,7 +549,7 @@ class CinematicaTripulante:
                 p = (self.t - self.T_PUNO) / (self.T_ROTURA - self.T_PUNO)
                 escala = int(6 + p * 8)
                 trip = sprite("tripulante", escala)
-                mano = trip.subsurface((21 * escala, 1 * escala, 14 * escala, 19 * escala))
+                mano = trip.subsurface((23 * escala, 1 * escala, 12 * escala, 19 * escala))
                 surface.blit(mano, (GAME_WIDTH // 2 - mano.get_width() // 2, GAME_HEIGHT // 2 - mano.get_height() // 2))
             self._dibujar_pedazos(surface)
             return
@@ -576,7 +579,7 @@ class CinematicaTripulante:
             else:
                 p = max(0.0, 1 - (tr - 62) / 28)
             escala = 10
-            mano = sprite("tripulante", escala).subsurface((21 * escala, 1 * escala, 14 * escala, 19 * escala))
+            mano = sprite("tripulante", escala).subsurface((23 * escala, 1 * escala, 12 * escala, 19 * escala))
             mx = GAME_WIDTH + 20 - p * (GAME_WIDTH * 0.30)
             my = GAME_HEIGHT * 0.45 + (math.sin(tr * 0.35) * 10 if 30 <= tr < 62 else 0)
             surface.blit(mano, (int(mx) - mano.get_width() // 2, int(my) - mano.get_height() // 2))

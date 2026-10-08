@@ -194,39 +194,82 @@ def _arte_ovni(cuadro):
 
 
 def _arte_gato_durmiendo(cuadro):
-    """El Gato Pan hecho bolita sobre un almohadon, ojos cerrados y la cola
-    enroscada por delante. cuadro 0/1 = inhala/exhala (el lomo sube un
+    """El gato negro del final (el OIIA) hecho bolita sobre su almohadon,
+    ojos cerrados y la cola enroscada por delante; su casco espartano
+    dorado descansa al lado. cuadro 0/1 = inhala/exhala (el lomo sube un
     pixel)."""
-    s = pygame.Surface((40, 22), pygame.SRCALPHA)
-    pygame.draw.ellipse(s, ALMOHADON_BORDE, (0, 12, 40, 10))
-    pygame.draw.ellipse(s, ALMOHADON, (1, 12, 38, 8))
+    s = pygame.Surface((60, 26), pygame.SRCALPHA)
+    # almohadon
+    pygame.draw.ellipse(s, ALMOHADON_BORDE, (0, 15, 42, 11))
+    pygame.draw.ellipse(s, ALMOHADON, (1, 15, 40, 9))
+    _px(s, (255, 200, 230), 6, 16, 10, 1)
 
     sube = cuadro % 2
-    pygame.draw.ellipse(s, PAN_CONTORNO, (9, 4 - sube, 28, 13 + sube))
-    pygame.draw.ellipse(s, PAN_MEDIO, (10, 5 - sube, 26, 11 + sube))
-    rng = random.Random(3)
-    for _ in range(22):
-        mx, my = rng.randrange(10, 36), rng.randrange(4, 15)
-        if tuple(s.get_at((mx, my)))[:3] == PAN_MEDIO:
-            _px(s, rng.choice((PAN_OSCURO, PAN_OSCURO, PAN_CLARO)), mx, my)
+    # lomo
+    pygame.draw.ellipse(s, GATO_CONTORNO, (9, 6 - sube, 29, 14 + sube))
+    pygame.draw.ellipse(s, GATO_NEGRO, (10, 7 - sube, 27, 12 + sube))
+    _px(s, GATO_NEGRO_LUZ, 16, 8 - sube, 12, 1)
+    _px(s, GATO_NEGRO_LUZ, 14, 9 - sube, 2, 1)
+    _px(s, GATO_NEGRO_LUZ, 28, 9 - sube, 4, 1)
+    _px(s, GATO_NEGRO_LUZ, 32, 10 - sube, 2, 2)
 
     # cabeza apoyada a la izquierda
-    pygame.draw.ellipse(s, PAN_CONTORNO, (3, 6, 12, 10))
-    pygame.draw.ellipse(s, PAN_MEDIO, (4, 7, 10, 8))
-    _px(s, PAN_CONTORNO, 4, 5, 2, 2)
-    _px(s, PAN_CONTORNO, 11, 5, 2, 2)
-    # ojos cerrados (dos arcos) y cachetes
-    for ox in (5, 10):
-        _px(s, PAN_CONTORNO, ox, 10)
-        _px(s, PAN_CONTORNO, ox + 1, 11)
-        _px(s, PAN_CONTORNO, ox + 2, 10)
-    _px(s, MEJILLA, 5, 13)
-    _px(s, MEJILLA, 12, 13)
+    for pts, relleno, adentro in (([(2, 12), (4, 2), (10, 9)], [(3, 11), (4, 4), (9, 9)], [(5, 9), (5, 6), (7, 9)]),
+                                  ([(9, 10), (13, 1), (17, 11)], [(10, 10), (13, 3), (16, 10)], [(12, 9), (13, 5), (14, 9)])):
+        pygame.draw.polygon(s, GATO_CONTORNO, pts)
+        pygame.draw.polygon(s, GATO_NEGRO, relleno)
+        pygame.draw.polygon(s, GATO_OREJA, adentro)
+    pygame.draw.ellipse(s, GATO_CONTORNO, (2, 8, 16, 12))
+    pygame.draw.ellipse(s, GATO_NEGRO, (3, 9, 14, 10))
+    _px(s, GATO_NEGRO_LUZ, 6, 9, 5, 1)
+    # ojos cerrados (arcos claros) y nariz rosa
+    for ox in (5, 11):
+        _px(s, (176, 166, 200), ox, 13, 1, 1)
+        _px(s, (176, 166, 200), ox + 1, 14, 1, 1)
+        _px(s, (176, 166, 200), ox + 2, 13, 1, 1)
+    _px(s, GATO_ROSA, 9, 15, 2, 1)
+    _px(s, GATO_BOCA, 9, 16, 2, 1)
+    # bigotes
+    _px(s, GATO_BLANCO, 0, 15, 4, 1)
+    _px(s, GATO_BLANCO, 0, 17, 4, 1)
+    _px(s, GATO_BLANCO, 15, 16, 4, 1)
+    # patita debajo del cachete
+    pygame.draw.ellipse(s, GATO_CONTORNO, (12, 16, 7, 5))
+    pygame.draw.ellipse(s, GATO_NEGRO, (13, 17, 5, 3))
 
     # cola enroscada por delante del cuerpo
-    _px(s, PAN_CONTORNO, 13, 16, 22, 1)
-    _px(s, PAN_MEDIO, 14, 15, 20, 1)
-    _px(s, PAN_CONTORNO, 34, 14, 2, 2)
+    _px(s, GATO_CONTORNO, 16, 19, 22, 3)
+    _px(s, GATO_NEGRO, 17, 20, 20, 1)
+    _px(s, GATO_CONTORNO, 36, 16, 3, 5)
+    _px(s, GATO_NEGRO, 37, 17, 1, 3)
+
+    # ------------------------------------------------ casco al lado (perfil)
+    x0 = 43
+    # cresta roja de crin de adelante para atras, con sus mechones
+    pygame.draw.ellipse(s, GATO_CONTORNO, (x0 - 1, 0, 19, 11))
+    pygame.draw.ellipse(s, PENACHO, (x0, 1, 17, 9))
+    for mx in range(x0 + 2, x0 + 16, 3):
+        _px(s, PENACHO_OSCURO, mx, 3, 1, 5)
+    _px(s, (240, 90, 96), x0 + 3, 2, 9, 1)
+    # cupula
+    pygame.draw.ellipse(s, GATO_CONTORNO, (x0, 7, 16, 13))
+    pygame.draw.ellipse(s, CASCO, (x0 + 1, 8, 14, 11))
+    # protector de la mejilla (adelante, mirando al gato) y cubrenuca
+    pygame.draw.polygon(s, GATO_CONTORNO, [(x0, 12), (x0, 23), (x0 + 6, 24), (x0 + 7, 16)])
+    pygame.draw.polygon(s, CASCO, [(x0 + 1, 13), (x0 + 1, 22), (x0 + 5, 23), (x0 + 6, 16)])
+    pygame.draw.polygon(s, GATO_CONTORNO, [(x0 + 12, 14), (x0 + 17, 22), (x0 + 11, 23)])
+    pygame.draw.polygon(s, CASCO_SOMBRA, [(x0 + 12, 16), (x0 + 15, 21), (x0 + 12, 22)])
+    _px(s, CASCO_SOMBRA, x0 + 6, 18, 6, 4)
+    _px(s, GATO_CONTORNO, x0 + 5, 22, 8, 2)
+    # ranura del ojo y filo
+    _px(s, GATO_CONTORNO, x0 + 1, 13, 5, 2)
+    _px(s, CASCO_FILO, x0 + 6, 13, 1, 3)
+    # brillos
+    _px(s, CASCO_LUZ, x0 + 4, 9, 6, 1)
+    _px(s, CASCO_FILO, x0 + 5, 9, 2, 1)
+    _px(s, CASCO_LUZ, x0 + 2, 11, 1, 2)
+    _px(s, CASCO_LUZ, x0 + 2, 16, 1, 5)
+    _px(s, CASCO_SOMBRA, x0 + 11, 10, 3, 1)
     return s
 
 
