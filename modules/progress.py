@@ -1,5 +1,6 @@
 """
-Progreso guardado del jugador: puntaje maximo y oleada mas alta alcanzada.
+Progreso guardado del jugador: puntaje maximo, oleada mas alta alcanzada y
+la ultima ruta bonus que salio (para no repetirla en la partida siguiente).
 
 Mismo patron que modules/skins.py usa para los colores personalizados: un
 JSON en la raiz del proyecto, tolerante a errores (si el archivo no existe,
@@ -13,7 +14,7 @@ import os
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROGRESS_FILE = os.path.join(_PROJECT_ROOT, "progreso.json")
 
-_VALORES_POR_DEFECTO = {"puntaje_maximo": 0, "oleada_maxima": 1}
+_VALORES_POR_DEFECTO = {"puntaje_maximo": 0, "oleada_maxima": 1, "ultima_ruta": ""}
 _progreso = dict(_VALORES_POR_DEFECTO)
 
 
@@ -25,7 +26,7 @@ def cargar():
         with open(PROGRESS_FILE, "r", encoding="utf-8") as fh:
             datos = json.load(fh)
         for clave in _VALORES_POR_DEFECTO:
-            if clave in datos and isinstance(datos[clave], (int, float)):
+            if clave in datos and isinstance(datos[clave], type(_VALORES_POR_DEFECTO[clave])):
                 _progreso[clave] = datos[clave]
     except (OSError, ValueError, TypeError):
         pass
@@ -42,6 +43,16 @@ def guardar():
 
 def puntaje_maximo():
     return _progreso.get("puntaje_maximo", 0)
+
+
+def ultima_ruta():
+    return _progreso.get("ultima_ruta", "")
+
+
+def registrar_ruta(ruta):
+    """Guarda la ruta bonus que acaba de salir."""
+    _progreso["ultima_ruta"] = ruta
+    guardar()
 
 
 def registrar_partida(puntaje, oleada):

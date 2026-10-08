@@ -54,7 +54,7 @@ from modules.entities.nyan_boss import (
 )
 from modules.entities.tripulante import TripulanteAliado, CinematicaTripulante
 from modules.entities.halloween import (
-    PROB_HALLOWEEN, FondoHalloween, ReyCalabazaBoss, BrujaBoss, ParcaBoss,
+    FondoHalloween, ReyCalabazaBoss, BrujaBoss, ParcaBoss,
     CinematicaVictoriaHalloween, CinematicaFinHalloween, icono_final as icono_halloween,
 )
 from modules.entities.bruja_gigante import CinematicaBrujaGigante
@@ -63,7 +63,7 @@ from modules.entities.parca_dimension import (
     icono_calavera,
 )
 from modules.entities.cyberpunk import (
-    PROB_CYBER, FondoCyber, NetrunnerBoss, TarantulaBoss, KaiserBoss, icono_final as icono_cyber,
+    FondoCyber, NetrunnerBoss, TarantulaBoss, KaiserBoss, icono_final as icono_cyber,
 )
 from modules.entities.cyberpunk_cine import CinematicaVictoriaCyber, CinematicaEntradaCyber, CinematicaLuna
 from modules.entities import mascota as mascota_mod
@@ -307,6 +307,7 @@ def main():
     JEFES_CYBER = ("netrunner", "tarantula", "kaiser")
     # "gatos" (Nyan -> Alien -> OIIA), "halloween" (Calabaza -> Bruja ->
     # Parca) o "cyber" (Netrunner -> Tarantula -> Kaiser)
+    RUTAS_BONUS = ("gatos", "halloween", "cyber")
     ruta_bonus = "gatos"
     # escena de la Luna que sigue animada detras de la victoria final de la
     # ruta cyberpunk (ver _cinematica_luna)
@@ -763,11 +764,11 @@ def main():
         """La pantalla de VICTORIA de siempre con techno de fondo; a los 6 s
         la musica se vuelve epica y todo se rompe en glitch con "NEW BOSS
         READY" y compañia (ver CinematicaVictoriaFalsa). Enter salta la
-        parte tranquila; el glitch se ve entero. Con probabilidad
-        PROB_HALLOWEEN un brazo de zombi rompe el glitch y la ruta pasa a
-        ser la de Halloween (ver CinematicaVictoriaHalloween); con
-        PROB_CYBER la hackean y la ruta es la cyberpunk
-        (ver CinematicaVictoriaCyber)."""
+        parte tranquila; el glitch se ve entero. La ruta se sortea entre las
+        tres de RUTAS_BONUS, sin repetir la de la partida anterior (queda
+        guardada en progreso.json): gatos, Halloween (un brazo de zombi
+        rompe el glitch, ver CinematicaVictoriaHalloween) o cyberpunk (la
+        hackean, ver CinematicaVictoriaCyber)."""
         nonlocal tiempo_sobrevivido, ruta_bonus
         # el tiempo de verdad en la pantalla trampa (terminar_partida lo
         # recalcula al final de todo)
@@ -788,13 +789,8 @@ def main():
         audio.sonido_victoria()
         # mas fuerte que el resto de la musica (sin tocar el ajuste guardado)
         audio.reproducir_musica("victoria_tecno", ganancia=1.7)
-        dado = random.random()
-        if dado < PROB_HALLOWEEN:
-            ruta_bonus = "halloween"
-        elif dado < PROB_HALLOWEEN + PROB_CYBER:
-            ruta_bonus = "cyber"
-        else:
-            ruta_bonus = "gatos"
+        ruta_bonus = random.choice([r for r in RUTAS_BONUS if r != progress.ultima_ruta()])
+        progress.registrar_ruta(ruta_bonus)
         if ruta_bonus == "halloween":
             cine = CinematicaVictoriaHalloween(captura)
         elif ruta_bonus == "cyber":

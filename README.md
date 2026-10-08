@@ -35,8 +35,9 @@ ESC sale del juego.
   carta ofrece tres opciones (potencia, cadencia, turbo, escudo, triple
   cañon, dron escolta, el Zorrito Espacial, etc.).
 - Jefes en las oleadas 10, 20, 30 y 40, y el Coloso en la oleada 50.
-- Despues del Coloso viene la fase bonus de los gatos o, a veces (un brazo de
-  zombi rompe la cinematica), la ruta de Halloween: Rey Calabaza, Bruja Neon y La Parca.
+- Despues del Coloso sale al azar una de las tres rutas bonus, nunca la misma
+  que en la partida anterior: la de los gatos, la de Halloween (un brazo de
+  zombi rompe la cinematica): Rey Calabaza, Bruja Neon y La Parca.
   A mitad de su pelea, la Bruja Neon se toma una pocion y se vuelve gigante:
   ataca con los brazos (pociones, manotazos y barridos).
 - O la hackean y sale la ruta cyberpunk: Netrunner Fantasma, Tarantula-9 y

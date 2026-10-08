@@ -1,6 +1,6 @@
 """
 Ruta secreta de Halloween del jefe bonus. Al caer el mega-jefe, la
-cinematica de la VICTORIA falsa a veces se tuerce (ver PROB_HALLOWEEN y
+cinematica de la VICTORIA falsa a veces se tuerce (ver
 _cinematica_victoria_falsa en main.py): un brazo de zombi rompe la pantalla
 desde abajo, el glitch se vuelve naranja/violeta y en vez de Nyan Cat
 llegan tres jefes de Halloween, uno tras otro:
@@ -31,8 +31,6 @@ from modules.entities.nyan_boss import (
     _anillo, _apuntada, _blit_centrado, _lanzar_en_arco, _px, pixelar,
 )
 
-# probabilidad de que la victoria falsa lleve a esta ruta en vez de a Nyan Cat
-PROB_HALLOWEEN = 0.35
 
 NEGRO = (0, 0, 0)
 CONTORNO = (20, 8, 24)

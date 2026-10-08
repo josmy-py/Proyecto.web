@@ -1,6 +1,6 @@
 """
 Ruta secreta cyberpunk del jefe bonus. Al caer el mega-jefe, la
-cinematica de la VICTORIA falsa a veces es hackeada (ver PROB_CYBER y
+cinematica de la VICTORIA falsa a veces es hackeada (ver
 _cinematica_victoria_falsa en main.py): llueve codigo, el glitch se vuelve
 cian/magenta/amarillo y "ACCESO CONCEDIDO". Despues, en una ciudad de neon
 bajo la lluvia, llegan tres jefes (cada uno con su cinematica de entrada,
@@ -28,9 +28,6 @@ from modules.constants import GAME_WIDTH, GAME_HEIGHT, WHITE
 from modules.entities.nyan_boss import BalaPixel, PIXEL_BONUS, _anillo, _apuntada, _blit_centrado, _lanzar_en_arco
 from modules.entities.halloween import JefeHalloweenBase, _contornear, _desde_texto, _hitbox
 
-# probabilidad de que la victoria falsa lleve a esta ruta (la de Halloween
-# tiene PROB_HALLOWEEN; lo que queda es la ruta de los gatos)
-PROB_CYBER = 0.30
 
 NEGRO = (0, 0, 0)
 CONTORNO = (10, 8, 22)
