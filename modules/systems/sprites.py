@@ -42,31 +42,13 @@ ENEMY_KINDS = ("fighter", "drone", "gunner")
 # como prefijo (dragon_a, titan_px, ...).
 BOSS_SPRITE_PREFIX = {
     "saucer": "centinela",
-    "anomaly": "anomaly",
 }
 
-# Geometria del sprite del jefe final (debe coincidir con BOSS_* en
-# tools/generate_sprites.py). Se expresa en fracciones del ancho/alto ya
-# escalados para que boss.py pueda ubicar encima la cupula animada, el
-# piloto y el anillo de luces parpadeantes sin conocer los pixeles del PNG.
+# Tamano por defecto de un jefe normal en pantalla (lo usan las barras y
+# los radios de colision de main.py y boss_system.py).
 BOSS_SPRITE_W, BOSS_SPRITE_H = 320, 170
 BOSS_DISPLAY_W = 230
 BOSS_DISPLAY_H = round(BOSS_DISPLAY_W * BOSS_SPRITE_H / BOSS_SPRITE_W)
-BOSS_PLATFORM_CY_FRAC = 0.2882   # centro vertical de la plataforma de la cupula
-BOSS_PLATFORM_RX_FRAC = 0.1375
-BOSS_PLATFORM_RY_FRAC = 0.0882
-BOSS_RING_RX_FRAC = 0.3969       # radio del anillo de nodos (para las luces animadas)
-BOSS_RING_RY_FRAC = 0.2147
-
-# La Anomalia (calavera glicheada) se dibuja "un poco" mas grande que el
-# resto de jefes normales, y boss.py dibuja DOS pupilas dinamicas (una por
-# cuenca) centradas en +-ANOMALY_OJO_DX_FRAC/ANOMALY_OJO_CY_FRAC, encima de
-# las cuencas vacias ya horneadas en el sprite (debe coincidir con
-# ANOMALY_OJO_* en tools/generate_sprites.py).
-ANOMALY_DISPLAY_SCALE = 1.18
-ANOMALY_OJO_DX_FRAC = 0.1144
-ANOMALY_OJO_CY_FRAC = 0.4824
-ANOMALY_OJO_R_FRAC = 0.06
 
 _MAX_COMPOSED = 160
 _MAX_ROTATIONS = 1200

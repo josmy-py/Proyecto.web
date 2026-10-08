@@ -223,3 +223,37 @@ def columna_aviso(screen, x, ancho, color, t, y0=0, y1=None):
         screen.fill(luz, (x0 + int(ancho) - 4, y, 4, 12))
         for k in range(3):
             screen.fill(color[:3], (int(x) - 8 + k * 2, y + 4 + k * 2, 16 - k * 4, 2))
+
+
+_ESQUIRLA = [
+    "..w..",
+    ".wcw.",
+    ".wcw.",
+    "wcWcw",
+    "wcWcw",
+    ".wcw.",
+    ".wcw.",
+    "..w..",
+    "..o..",
+]
+
+
+def esquirla(color, angulo):
+    """Lanza de cristal en pixel art apuntando a `angulo` (radianes). Se
+    gira en la grilla (pasos de 22.5 grados) y despues se agranda."""
+    paso = round(math.degrees(angulo) / 22.5) % 16
+    clave = ("esq", _q(color), paso)
+    surf = _cache.get(clave)
+    if surf is not None:
+        return surf
+    colores = {"w": aclarar(color, 0.55), "c": color[:3], "W": (255, 255, 255), "o": CONTORNO}
+    alto, ancho = len(_ESQUIRLA), len(_ESQUIRLA[0])
+    base = pygame.Surface((ancho, alto), pygame.SRCALPHA)
+    for y, fila in enumerate(_ESQUIRLA):
+        for x, ch in enumerate(fila):
+            if ch in colores:
+                base.set_at((x, y), colores[ch])
+    # el mapa apunta hacia arriba (-90 grados)
+    girado = pygame.transform.rotate(base, -(paso * 22.5 + 90))
+    surf = pygame.transform.scale(girado, (girado.get_width() * PIXEL, girado.get_height() * PIXEL))
+    return _guardar(clave, surf)

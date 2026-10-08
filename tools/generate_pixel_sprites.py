@@ -777,7 +777,71 @@ def titan():
     return _contorno(_espejar(img))
 
 
-JEFES = {"centinela": centinela(), "dragon_a": dragon(0), "dragon_b": dragon(1), "titan_px": titan()}
+ANOMALIA_W, ANOMALIA_H = 64, 58
+
+
+def anomalia():
+    """La Anomalia Final: calavera de vacio con el craneo partido, un nucleo
+    de energia en la frente, cuencas vacias (los ojos los dibuja el juego)
+    y la mandibula abierta. Las placas laterales van en la capa de ala."""
+    img = Image.new("L", (ANOMALIA_W, ANOMALIA_H), 0)
+    d = ImageDraw.Draw(img)
+    c = ANOMALIA_W // 2
+
+    def E(caja, ch):
+        d.ellipse(caja, fill=_CH.index(ch))
+
+    def P(pts, ch):
+        d.polygon(pts, fill=_CH.index(ch))
+
+    def L(pts, ch, ancho=1):
+        d.line(pts, fill=_CH.index(ch), width=ancho)
+
+    # placas/aletas laterales (capa de ala)
+    P([(c - 22, 14), (c - 31, 6), (c - 30, 24), (c - 22, 30)], "w")
+    P([(c - 23, 18), (c - 29, 12), (c - 28, 22)], "v")
+    L([(c - 30, 7), (c - 30, 23)], "N")
+    P([(c - 20, 34), (c - 28, 36), (c - 24, 44), (c - 18, 42)], "w")
+    # craneo
+    E([c - 22, 2, c + 22, 42], "d")
+    E([c - 21, 3, c + 18, 39], "b")
+    E([c - 18, 4, c + 4, 26], "B")
+    # grieta del craneo (neon)
+    L([(c - 1, 3), (c - 4, 9), (c - 2, 13), (c - 6, 18)], "N")
+    # nucleo de la frente
+    P([(c, 9), (c - 5, 14), (c, 19)], "o")
+    P([(c, 11), (c - 3, 14), (c, 17)], "E")
+    # pomulos con mejillas hundidas
+    E([c - 21, 26, c - 10, 37], "b")
+    L([(c - 19, 33), (c - 13, 37)], "x")
+    # cuencas inclinadas (mirada enojada)
+    P([(c - 18, 20), (c - 4, 25), (c - 5, 32), (c - 11, 33), (c - 17, 29)], "o")
+    P([(c - 16, 22), (c - 6, 26), (c - 7, 30), (c - 11, 31), (c - 15, 28)], "e")
+    # nariz
+    P([(c, 31), (c - 3, 36), (c, 37)], "o")
+    # fila de dientes de arriba
+    L([(c - 12, 38), (c, 38)], "o")
+    for x in range(c - 11, c, 3):
+        P([(x, 39), (x + 1, 39), (x + 1, 41), (x, 41)], "K")
+        L([(x + 2, 39), (x + 2, 40)], "o")
+    # boca abierta: hueco de vacio con fuego frio adentro
+    P([(c - 12, 42), (c - 10, 46), (c, 47), (c, 42)], "o")
+    L([(c - 7, 44), (c, 44)], "E")
+    # mandibula separada
+    P([(c - 13, 47), (c - 11, 53), (c - 5, 56), (c, 57), (c, 48), (c - 9, 47)], "d")
+    P([(c - 11, 48), (c - 10, 52), (c - 5, 54), (c, 55), (c, 49), (c - 8, 48)], "b")
+    for x in range(c - 10, c, 3):
+        P([(x, 46), (x + 1, 46), (x + 1, 48), (x, 48)], "K")
+    return _contorno(_espejar(img))
+
+
+if __name__ == "__main__":
+    for f in anomalia():
+        print(f)
+
+
+JEFES = {"centinela": centinela(), "dragon_a": dragon(0), "dragon_b": dragon(1), "titan_px": titan(),
+         "anomalia_px": anomalia()}
 
 
 def parse(mapa):
