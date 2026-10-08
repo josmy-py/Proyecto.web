@@ -5,7 +5,8 @@ Al arrancar la partida, cada 5 oleadas y despues de cada jefe el juego se
 congela y aparecen tres cartas (SeleccionMejora). Se elige moviendo la nave
 debajo de la carta y cerrando el puño (o el boton del mando), con las
 flechas/1-2-3 + ENTER, o con el mouse. Cada mejora dura toda la partida y
-algunas se pueden subir de nivel (ver MEJORAS); EstadoMejoras guarda los
+algunas se pueden subir de nivel. Es la UNICA forma de conseguir buffs:
+los enemigos y jefes ya no sueltan power-ups (ver MEJORAS); EstadoMejoras guarda los
 niveles y los drones escolta."""
 
 import math
@@ -15,9 +16,9 @@ import pygame
 
 from modules.constants import (
     GAME_WIDTH, GAME_HEIGHT, WHITE,
-    BUFF_TYPE_TRIPLE_SHOT, BUFF_TYPE_PIERCING, BUFF_TYPE_ATTRACT, BUFF_TYPE_LIGHTNING,
+    BUFF_TYPE_TRIPLE_SHOT, BUFF_TYPE_PIERCING, BUFF_TYPE_LIGHTNING,
 )
-from modules.systems import pixelfx, audio
+from modules.systems import pixelfx, audio, neon
 from modules.systems.fonts import get_font, render_text
 
 CONTORNO = pixelfx.CONTORNO
@@ -122,19 +123,6 @@ _ICONOS = {
         "...occco...",
         "....ooo....",
     ],
-    "iman": [
-        "...........",
-        "..ooooooo..",
-        ".ollllllco.",
-        "olloooooclo",
-        "olo.....olo",
-        "olo.....olo",
-        "olo.....olo",
-        "owo.....owo",
-        "owo.....owo",
-        "ooo.....ooo",
-        "...........",
-    ],
     "rayo": [
         "......oooo.",
         ".....owllo.",
@@ -198,7 +186,6 @@ MEJORAS = {
     "escudo": ("ESCUDO VIVO", "Una carga de escudo que se recarga sola", "comun", 2, (110, 200, 255)),
     "triple": ("TRIPLE CAÑON", "Rafaga triple para siempre", "epica", 1, (255, 210, 90)),
     "perforante": ("PERFORADOR", "Las balas atraviesan todo", "rara", 1, (255, 170, 110)),
-    "iman": ("IMAN", "Los power-ups vienen solos", "comun", 1, (200, 150, 255)),
     "rayo": ("TORMENTA", "Campo electrico para siempre", "epica", 1, (185, 240, 255)),
     "dron": ("DRON ESCOLTA", "Un dron que dispara a tu lado", "rara", 2, (120, 255, 200)),
     "zorrito": ("ZORRITO", "El Zorrito Espacial se une ya", "epica", 1, (245, 132, 42)),
@@ -282,8 +269,6 @@ class EstadoMejoras:
             _buff_para_siempre(ship, BUFF_TYPE_TRIPLE_SHOT)
         elif mejora_id == "perforante":
             _buff_para_siempre(ship, BUFF_TYPE_PIERCING)
-        elif mejora_id == "iman":
-            _buff_para_siempre(ship, BUFF_TYPE_ATTRACT)
         elif mejora_id == "rayo":
             _buff_para_siempre(ship, BUFF_TYPE_LIGHTNING)
         elif mejora_id == "dron":
@@ -306,18 +291,6 @@ def _envolver(texto, fuente, ancho):
     if actual:
         lineas.append(actual)
     return lineas
-
-
-def _marco_pixel(surface, rect, color, grosor=4):
-    """Marco con esquinas recortadas en escalon (pixel art)."""
-    x, y, w, h = rect
-    p = grosor
-    surface.fill(color, (x + p * 2, y, w - p * 4, p))
-    surface.fill(color, (x + p * 2, y + h - p, w - p * 4, p))
-    surface.fill(color, (x, y + p * 2, p, h - p * 4))
-    surface.fill(color, (x + w - p, y + p * 2, p, h - p * 4))
-    for cx, cy in ((x + p, y + p), (x + w - p * 2, y + p), (x + p, y + h - p * 2), (x + w - p * 2, y + h - p * 2)):
-        surface.fill(color, (cx, cy, p, p))
 
 
 class SeleccionMejora:
@@ -431,9 +404,9 @@ class SeleccionMejora:
         # franjas de scanline adentro
         for y in range(rect.y + 6, rect.bottom - 4, 6):
             surface.fill((28, 16, 62), (rect.x + 6, y, rect.w - 12, 2))
-        _marco_pixel(surface, rect, r_color if marcada else pixelfx.apagar(r_color, 0.6))
+        neon.marco_pixel(surface, rect, r_color if marcada else pixelfx.apagar(r_color, 0.6))
         if marcada and (self.t // 8) % 2 == 0 and self.elegida is None:
-            _marco_pixel(surface, rect.inflate(-12, -12), pixelfx.aclarar(r_color, 0.5), 2)
+            neon.marco_pixel(surface, rect.inflate(-12, -12), pixelfx.aclarar(r_color, 0.5), 2)
 
         # cartel de rareza arriba
         etiqueta = render_text(RAREZAS[rareza]["nombre"], 13, CONTORNO, bold=True, outline=False)
@@ -525,7 +498,7 @@ def dibujar_hud_mejoras(surface, estado, t=0):
         caja = pygame.Rect(x - 4, y - 4, ico.get_width() + 8, ico.get_height() + 8)
         surface.fill(CONTORNO, caja.inflate(4, 4))
         surface.fill(FONDO_CARTA, caja)
-        _marco_pixel(surface, caja, pixelfx.apagar(color, 0.7), 2)
+        neon.marco_pixel(surface, caja, pixelfx.apagar(color, 0.7), 2)
         surface.blit(ico, (x, y))
         if nivel > 1:
             n = render_text(f"x{nivel}", 12, pixelfx.aclarar(color, 0.4), bold=True)

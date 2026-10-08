@@ -17,6 +17,7 @@ from modules.constants import (
     BUFF_TYPE_LIGHTNING,
 )
 from modules.systems.fonts import get_font, render_text, render_texto_pixelado
+from modules.systems import neon, pixelfx
 
 
 def _texto_ajustado(texto, fuente, color, ancho_maximo):
@@ -617,45 +618,37 @@ def draw_camera_preview(surface, preview_surf, preview_rect, timestamp):
 
 
 def draw_countdown(surface, game_w, game_h, countdown_val, countdown_fraction, font, info_font, big_font, control_hint=""):
-    """Pantalla de preparacion minimalista antes de que arranque la partida:
-    un anillo que se va vaciando con el tiempo restante y el numero grande
-    en el centro, sobre el fondo de estrellas que ya dibujo el llamador.
-    countdown_fraction va de 1.0 (recien empezo) a 0.0 (arranca la partida)."""
-    ticks = pygame.time.get_ticks()
+    """Pantalla de preparacion antes de que arranque la partida, en pixel
+    art neon: un anillo de bloques que se van apagando con el tiempo
+    restante y el numero grande en el centro, sobre el fondo de estrellas
+    que ya dibujo el llamador. countdown_fraction va de 1.0 (recien
+    empezo) a 0.0 (arranca la partida)."""
+    t = pygame.time.get_ticks() // 16
     cx, cy = game_w // 2, game_h // 2 - 20
-    radius = 74
+    radio = 84
 
-    title = render_texto_pixelado(get_font(20, bold=True), "NAVE VS ASTEROIDES", (150, 165, 200))
-    surface.blit(title, (game_w // 2 - title.get_width() // 2, cy - radius - 64))
-
-    pulse = 0.5 + 0.5 * math.sin(ticks * 0.004)
-    glow_size = (radius + 34) * 2
-    glow_surf = pygame.Surface((glow_size, glow_size), pygame.SRCALPHA)
-    gc = glow_size // 2
-    for i in range(5):
-        r = radius + 8 + i * 6
-        alpha = max(0, int(24 + 16 * pulse) - i * 4)
-        pygame.draw.circle(glow_surf, (*AZUL_CIELO[:3], alpha), (gc, gc), r, width=2)
-    surface.blit(glow_surf, (cx - gc, cy - gc))
-
-    pygame.draw.circle(surface, (55, 58, 86), (cx, cy), radius, width=4)
+    neon.titulo(surface, "NAVE VS ASTEROIDES", 22, (170, 190, 255), cx, cy - radio - 70, halo=False)
 
     frac = max(0.0, min(1.0, countdown_fraction))
-    if frac > 0.004:
-        start_angle = -math.pi / 2
-        end_angle = start_angle + frac * 2 * math.pi
-        arc_rect = (cx - radius, cy - radius, radius * 2, radius * 2)
-        pygame.draw.arc(surface, AZUL, arc_rect, start_angle, end_angle, 4)
+    segmentos = 28
+    encendidos = int(round(frac * segmentos))
+    pixelfx.dibujar_halo(surface, neon.CIAN, cx, cy, radio + 40)
+    for i in range(segmentos):
+        a = -math.pi / 2 + 2 * math.pi * i / segmentos
+        x, y = cx + math.cos(a) * radio, cy + math.sin(a) * radio
+        if i < encendidos:
+            color = neon.CIAN if i < encendidos - 1 or (t // 6) % 2 else WHITE
+            neon.cuadro_pixel(surface, neon.CONTORNO, x, y, 14)
+            neon.cuadro_pixel(surface, color, x, y, 10)
+        else:
+            neon.cuadro_pixel(surface, (40, 30, 80), x, y, 8)
 
-    numero = render_texto_pixelado(big_font, str(countdown_val), WHITE)
-    surface.blit(numero, (cx - numero.get_width() // 2, cy - numero.get_height() // 2))
-
-    prep = render_texto_pixelado(info_font, "PREPARATE", (195, 200, 225))
-    surface.blit(prep, (game_w // 2 - prep.get_width() // 2, cy + radius + 26))
+    neon.titulo(surface, str(countdown_val), 86, WHITE, cx, cy + 4)
+    neon.cinta(surface, "PREPARATE", neon.CIAN, (cx, cy + radio + 34), tam=16)
 
     if control_hint:
-        hint = render_texto_pixelado(get_font(14), control_hint, (140, 150, 180))
-        surface.blit(hint, (game_w // 2 - hint.get_width() // 2, cy + radius + 52))
+        hint = render_texto_pixelado(get_font(14), control_hint, (150, 160, 200))
+        surface.blit(hint, (game_w // 2 - hint.get_width() // 2, cy + radio + 62))
 
 
 def formatear_tiempo(segundos):
@@ -688,20 +681,24 @@ def _dibujar_stats_partida(surface, game_w, y, stats):
     return y + 22 + linea2.get_height()
 
 
-def draw_game_over(surface, game_w, game_h, score, wave, font, big_font, buttons=None, selected=0, stats=None):
-    overlay = pygame.Surface((game_w, game_h), pygame.SRCALPHA)
-    overlay.fill((0, 0, 0, 180))
-    surface.blit(overlay, (0, 0))
+def _pantalla_final(surface, game_w, game_h, color):
+    """Velo oscuro + panel neon de las pantallas de fin de partida."""
+    neon.velo(surface, (6, 2, 20), 175)
+    caja = pygame.Rect(0, 0, 620, 268)
+    caja.midtop = (game_w // 2, game_h // 2 - 178)
+    neon.panel(surface, caja, color, pygame.time.get_ticks() // 16)
+    return caja
 
-    go_text = render_texto_pixelado(big_font, "GAME OVER", ROSA)
+
+def draw_game_over(surface, game_w, game_h, score, wave, font, big_font, buttons=None, selected=0, stats=None):
+    caja = _pantalla_final(surface, game_w, game_h, neon.ROJO)
+    neon.titulo(surface, "GAME OVER", 50, (255, 110, 140), game_w // 2, caja.y + 40)
     sc_text = render_texto_pixelado(font, f"Puntuacion Final: {score}", WHITE)
     wt_text = render_texto_pixelado(font, f"Oleada Alcanzada: {wave}", AZUL)
+    surface.blit(sc_text, (game_w // 2 - sc_text.get_width() // 2, game_h // 2 - 98))
+    surface.blit(wt_text, (game_w // 2 - wt_text.get_width() // 2, game_h // 2 - 72))
 
-    surface.blit(go_text, (game_w // 2 - go_text.get_width() // 2, game_h // 2 - 130))
-    surface.blit(sc_text, (game_w // 2 - sc_text.get_width() // 2, game_h // 2 - 85))
-    surface.blit(wt_text, (game_w // 2 - wt_text.get_width() // 2, game_h // 2 - 58))
-
-    _dibujar_stats_partida(surface, game_w, game_h // 2 - 26, stats)
+    _dibujar_stats_partida(surface, game_w, game_h // 2 - 40, stats)
 
     if buttons:
         btn_w = 150
@@ -709,39 +706,27 @@ def draw_game_over(surface, game_w, game_h, score, wave, font, big_font, buttons
         spacing = 180
         base_x = game_w // 2 - btn_w // 2 - spacing // 2
         y = game_h // 2 + 30
-        padding_texto = 16
+        t = pygame.time.get_ticks() // 16
         for i, (label, color) in enumerate(buttons):
-            is_sel = i == selected
-            btn_color = (*color[:3], 255) if is_sel else (*color[:3], 120)
-            bg = pygame.Surface((btn_w, btn_h), pygame.SRCALPHA)
-            pygame.draw.rect(bg, btn_color, (0, 0, btn_w, btn_h), border_radius=8)
-            if is_sel:
-                pygame.draw.rect(bg, WHITE, (0, 0, btn_w, btn_h), width=2, border_radius=8)
-            surface.blit(bg, (base_x + i * spacing, y))
-            txt = _texto_ajustado(label, font, WHITE, btn_w - padding_texto)
-            surface.blit(txt, (base_x + i * spacing + btn_w // 2 - txt.get_width() // 2, y + btn_h // 2 - txt.get_height() // 2))
+            neon.boton(surface, (base_x + i * spacing, y, btn_w, btn_h), label, color, i == selected, t)
+    neon.scanlines(surface)
 
 
 def draw_victory_screen(surface, game_w, game_h, score, wave, font, big_font, stats=None,
-                        subtitulo="Has derrotado a La Anomalia Final"):
-    overlay = pygame.Surface((game_w, game_h), pygame.SRCALPHA)
-    overlay.fill((0, 0, 0, 180))
-    surface.blit(overlay, (0, 0))
-
-    title = render_texto_pixelado(big_font, "VICTORIA", AMARILLO)
+                        subtitulo="Has derrotado al Coloso"):
+    caja = _pantalla_final(surface, game_w, game_h, neon.ORO)
+    neon.titulo(surface, "VICTORIA", 54, AMARILLO, game_w // 2, caja.y + 42)
     sub = render_texto_pixelado(font, subtitulo, WHITE)
     sc_text = render_texto_pixelado(font, f"Puntuacion Final: {score}", WHITE)
     wt_text = render_texto_pixelado(font, f"Oleada Alcanzada: {wave}", AZUL)
-    restart_text = render_texto_pixelado(font, "Presiona R para volver al menu", AMARILLO)
+    surface.blit(sub, (game_w // 2 - sub.get_width() // 2, game_h // 2 - 104))
+    surface.blit(sc_text, (game_w // 2 - sc_text.get_width() // 2, game_h // 2 - 72))
+    surface.blit(wt_text, (game_w // 2 - wt_text.get_width() // 2, game_h // 2 - 46))
 
-    surface.blit(title, (game_w // 2 - title.get_width() // 2, game_h // 2 - 140))
-    surface.blit(sub, (game_w // 2 - sub.get_width() // 2, game_h // 2 - 100))
-    surface.blit(sc_text, (game_w // 2 - sc_text.get_width() // 2, game_h // 2 - 62))
-    surface.blit(wt_text, (game_w // 2 - wt_text.get_width() // 2, game_h // 2 - 36))
+    _dibujar_stats_partida(surface, game_w, game_h // 2 - 16, stats)
 
-    _dibujar_stats_partida(surface, game_w, game_h // 2 - 4, stats)
-
-    surface.blit(restart_text, (game_w // 2 - restart_text.get_width() // 2, game_h // 2 + 48))
+    neon.cinta(surface, "Presiona R para volver al menu", neon.ORO, (game_w // 2, game_h // 2 + 58), tam=15)
+    neon.scanlines(surface)
 
 
 def draw_boss_rewards(surface, boss_name, rewards, x, y):
@@ -790,21 +775,21 @@ def _confeti(surface, game_w, game_h, t, cantidad=70):
         y = int((t * velocidad + i * 53) % (game_h + 40)) - 20
         color = _ARCOIRIS_FINAL[i % len(_ARCOIRIS_FINAL)]
         giro = abs(math.sin(t * 0.08 + i))
-        w = max(2, int(10 * giro))
-        pygame.draw.rect(surface, color, (x - w // 2, y, w, 6))
+        w = max(2, int(10 * giro)) // 2 * 2
+        surface.fill(color, (x // 2 * 2 - w // 2, y // 2 * 2, w, 6))
 
 
 def draw_victory_final(surface, game_w, game_h, score, wave, stats, texto_record, nuevo_record, t,
                        icono=None):
-    """Pantalla de victoria de verdad (despues del Gato Pan): mucho mas
-    festiva que draw_victory_screen -confeti, titulo arcoiris, franja estilo
-    Nyan, tarjeta con borde animado y las estadisticas en chips de color-.
-    icono: Surface opcional (el gatito durmiendo) para la tarjeta."""
-    # fondo: degrade violeta -> azul noche semitransparente sobre el mundo
+    """Pantalla de victoria de verdad (despues del Gato OIIA): mas festiva
+    que draw_victory_screen -confeti, titulo arcoiris, franja estilo Nyan y
+    las estadisticas en cartas neon como las de mejora-.
+    icono: Surface opcional (el gatito durmiendo) para el panel."""
+    # fondo: degrade violeta -> azul noche en bandas
     fondo = pygame.Surface((game_w, game_h), pygame.SRCALPHA)
-    for yy in range(0, game_h, 4):
+    for yy in range(0, game_h, 8):
         k = yy / game_h
-        fondo.fill((int(60 - 40 * k), int(20 + 10 * k), int(90 + 20 * k), 215), (0, yy, game_w, 4))
+        fondo.fill((int(40 - 26 * k), int(14 + 8 * k), int(70 + 20 * k), 220), (0, yy, game_w, 8))
     surface.blit(fondo, (0, 0))
     _confeti(surface, game_w, game_h, t)
 
@@ -819,15 +804,11 @@ def draw_victory_final(surface, game_w, game_h, score, wave, stats, texto_record
     sub = render_texto_pixelado(get_font(20), "Derrotaste a Nyan Cat y su pandilla... y el gatito ya duerme", WHITE)
     surface.blit(sub, (game_w // 2 - sub.get_width() // 2, 132))
 
-    # tarjeta central con borde que cambia de color
+    # panel central con el marco que cambia de color
     card = pygame.Rect(game_w // 2 - 330, 170, 660, 330)
-    panel = pygame.Surface(card.size, pygame.SRCALPHA)
-    pygame.draw.rect(panel, (20, 14, 45, 225), panel.get_rect(), border_radius=22)
-    surface.blit(panel, card.topleft)
     borde = pygame.Color(0)
     borde.hsva = ((t * 2) % 360, 60, 100, 100)
-    pygame.draw.rect(surface, borde, card, width=4, border_radius=22)
-    pygame.draw.rect(surface, (255, 255, 255), card.inflate(-12, -12), width=1, border_radius=18)
+    neon.panel(surface, card, tuple(borde)[:3], t)
 
     stats = stats or {}
     disparos = stats.get("disparos", 0)
@@ -845,16 +826,15 @@ def draw_victory_final(surface, game_w, game_h, score, wave, stats, texto_record
         col, fila = i % 3, i // 3
         cx = card.x + 30 + col * (chip_w + 10)
         cy = card.y + 28 + fila * (chip_h + 12) + int(math.sin(t * 0.06 + i) * 2)
-        chip = pygame.Surface((chip_w, chip_h), pygame.SRCALPHA)
-        pygame.draw.rect(chip, (*color[:3], 55), chip.get_rect(), border_radius=14)
-        pygame.draw.rect(chip, (*color[:3], 230), chip.get_rect(), width=2, border_radius=14)
-        surface.blit(chip, (cx, cy))
-        et = render_text(etiqueta, 13, color)
-        surface.blit(et, (cx + chip_w // 2 - et.get_width() // 2, cy + 10))
+        chip = pygame.Rect(cx, cy, chip_w, chip_h)
+        surface.fill(neon.CONTORNO, chip.inflate(6, 6))
+        surface.fill((34, 20, 70), chip)
+        neon.marco_pixel(surface, chip, color, 3)
+        neon.cinta(surface, etiqueta, color, (chip.centerx, chip.y + 14), tam=11)
         va = render_texto_pixelado(get_font(30, bold=True), valor, WHITE)
-        surface.blit(va, (cx + chip_w // 2 - va.get_width() // 2, cy + 30))
+        surface.blit(va, (chip.centerx - va.get_width() // 2, cy + 32))
 
-    # gatito durmiendo + Zzz en la parte baja de la tarjeta
+    # gatito durmiendo + Zzz en la parte baja del panel
     base_y = card.y + 232
     if icono is not None:
         surface.blit(icono, (card.x + 40, base_y + 6))
@@ -870,18 +850,15 @@ def draw_victory_final(surface, game_w, game_h, score, wave, stats, texto_record
         color_record = (255, int(200 + 55 * pulso), int(90 + 100 * pulso))
     centro_x = card.x + 250 + (card.w - 250) // 2
     if nuevo_record:
-        aviso = render_texto_pixelado(get_font(14, bold=True), "¡NUEVO RÉCORD!", color_record)
-        surface.blit(aviso, (centro_x - aviso.get_width() // 2, base_y - 2))
+        neon.cinta(surface, "¡NUEVO RÉCORD!", neon.ORO, (centro_x, base_y + 4), tam=13)
     rec = render_texto_pixelado(get_font(22, bold=True), texto_record, color_record)
     surface.blit(rec, (centro_x - rec.get_width() // 2, base_y + 20))
     gracias = render_texto_pixelado(get_font(15), "¡Gracias por jugar!", ROSA_CHICLE)
     surface.blit(gracias, (centro_x - gracias.get_width() // 2, base_y + 56))
 
-    # boton de salida con color que rota y un latido suave
-    pie = render_texto_pixelado(get_font(18, bold=True), "ENTER / R  -  volver al menu", (30, 20, 50), contorno=False)
-    pill = pygame.Rect(0, 0, pie.get_width() + 40, pie.get_height() + 16)
-    pill.center = (game_w // 2, card.bottom + 44)
+    # boton de salida neon con el color que rota
     color_pill = pygame.Color(0)
     color_pill.hsva = ((t * 2 + 180) % 360, 45, 100, 100)
-    pygame.draw.rect(surface, color_pill, pill.inflate(int(6 * pulso), int(4 * pulso)), border_radius=pill.h // 2)
-    surface.blit(pie, (pill.centerx - pie.get_width() // 2, pill.centery - pie.get_height() // 2))
+    neon.boton(surface, (game_w // 2 - 190, card.bottom + 26, 380, 40), "ENTER / R  -  volver al menu",
+               tuple(color_pill)[:3], True, t)
+    neon.scanlines(surface)

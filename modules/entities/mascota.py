@@ -24,6 +24,7 @@ import pygame
 
 from modules.constants import GAME_WIDTH, GAME_HEIGHT, WHITE, AMARILLO
 from modules.systems.fonts import get_font, render_text
+from modules.systems import neon
 
 MASCOTA_OLEADA = 25
 
@@ -331,10 +332,11 @@ def dibujar_aviso_mascota(surface, titulo, subtitulo, restante, t):
     alfa = min(1.0, restante / 30)
     caja = pygame.Rect(0, 0, 520, 74)
     caja.midtop = (GAME_WIDTH // 2, 70 - int((1 - alfa) * 20))
-    panel = pygame.Surface(caja.size, pygame.SRCALPHA)
-    pygame.draw.rect(panel, (40, 20, 10, int(210 * alfa)), panel.get_rect(), border_radius=16)
-    pygame.draw.rect(panel, (*NARANJA, int(255 * alfa)), panel.get_rect(), 3, border_radius=16)
-    surface.blit(panel, caja.topleft)
+    # panel neon como las cartas de mejora (se arma aparte para el fundido)
+    capa = pygame.Surface(caja.inflate(12, 12).size, pygame.SRCALPHA)
+    neon.panel(capa, pygame.Rect(6, 6, caja.w, caja.h), NARANJA, t, halo=False)
+    capa.set_alpha(int(255 * alfa))
+    surface.blit(capa, (caja.x - 6, caja.y - 6))
     zorro = _sprite("zorro", (t // 10) % 2, 2)
     surface.blit(zorro, (caja.x + 14, caja.centery - zorro.get_height() // 2))
     ti = get_font(24, bold=True).render(titulo, True, NARANJA_CLARO)

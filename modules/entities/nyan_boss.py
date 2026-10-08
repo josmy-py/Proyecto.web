@@ -30,6 +30,7 @@ import pygame
 from modules.constants import GAME_WIDTH, GAME_HEIGHT, WHITE, AMARILLO, MENTA
 from modules.systems.fonts import render_text, get_font
 from modules.systems.ui import dibujar_texto_arcoiris
+from modules.systems import neon
 
 # Tamaño (en px de juego) de cada "pixel" del entorno bonus: main.py
 # reduce el cuadro a 1/PIXEL_BONUS y lo vuelve a agrandar sin filtrado.
@@ -1838,19 +1839,23 @@ class CinematicaGatoDormido:
         surface.blit(pygame.transform.scale(arte, surface.get_size()), (0, 0))
 
         # textos nitidos
+        neon.franjas_cine(surface, self.t / 40, neon.MAGENTA, alto=40)
         if self.t > 70:
             dibujar_texto_arcoiris(surface, "¡FELICIDADES!", get_font(64, bold=True), GAME_WIDTH // 2, 70,
                                    self.t, amplitud=8)
-        if self.t > 130:
-            letras = min(len(self.MENSAJE), (self.t - 130) // 3)
-            texto = get_font(30, bold=True).render(self.MENSAJE[:letras], True, WHITE)
-            sombra = get_font(30, bold=True).render(self.MENSAJE[:letras], True, (20, 10, 40))
-            x = GAME_WIDTH // 2 - get_font(30, bold=True).size(self.MENSAJE)[0] // 2
-            surface.blit(sombra, (x + 3, 163))
-            surface.blit(texto, (x, 160))
+        if self.t > 120:
+            fuente = get_font(28, bold=True)
+            caja = pygame.Rect(0, 0, fuente.size(self.MENSAJE)[0] + 60, 64)
+            caja.center = (GAME_WIDTH // 2, 186)
+            neon.panel(surface, caja, neon.MAGENTA, self.t, halo=False)
+            letras = min(len(self.MENSAJE), max(0, self.t - 130) // 3)
+            texto = fuente.render(self.MENSAJE[:letras], True, WHITE)
+            surface.blit(texto, (caja.x + 30, caja.centery - texto.get_height() // 2))
+            if letras < len(self.MENSAJE) and (self.t // 8) % 2 == 0:
+                surface.fill(neon.MAGENTA, (caja.x + 32 + texto.get_width(), caja.centery - 12, 12, 24))
         if self.t > 260 and (self.t // 30) % 2 == 0:
-            ayuda = render_text("Enter para continuar", 14, (200, 200, 230))
-            surface.blit(ayuda, (GAME_WIDTH // 2 - ayuda.get_width() // 2, GAME_HEIGHT - 34))
+            neon.cinta(surface, "ENTER para continuar", neon.MAGENTA, (GAME_WIDTH // 2, GAME_HEIGHT - 64), tam=14)
+        neon.scanlines(surface)
 
         # fundido de entrada (desde blanco, la explosion) y de salida (a negro)
         if self.t < self.FUNDIDO:
@@ -1968,13 +1973,14 @@ class CinematicaVictoriaFalsa:
 
         # "NEW BOSS READY" gigante: aparece a saltos y al final se queda
         if (p > 0.4 and (self.t // 5) % 3 == 0) or p > 0.82:
-            franja = pygame.Surface((GAME_WIDTH, 110), pygame.SRCALPHA)
-            franja.fill((0, 0, 0, 190))
-            surface.blit(franja, (0, GAME_HEIGHT // 2 - 55))
+            caja = pygame.Rect(0, 0, 760, 120)
+            caja.center = (GAME_WIDTH // 2 + random.randint(-4, 4), GAME_HEIGHT // 2)
+            neon.panel(surface, caja, random.choice((neon.MAGENTA, neon.CIAN, neon.ROJO)), self.t, halo=False)
             self._texto_glitch(surface, "NEW BOSS READY", 72, WHITE,
                                GAME_WIDTH // 2 + random.randint(-6, 6), GAME_HEIGHT // 2 + random.randint(-4, 4),
                                4 + int(8 * p))
 
+        neon.scanlines(surface, 60 if p > 0 else 40)
         restante = self.DURACION_NORMAL + self.DURACION_GLITCH - self.t
         if restante < 18:
             destello = pygame.Surface(surface.get_size(), pygame.SRCALPHA)

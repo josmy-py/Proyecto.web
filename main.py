@@ -24,19 +24,18 @@ from modules.constants import (
     PURPLE, PINK, ROSA, AMARILLO,
     AZUL, AZUL_CIELO, ROSA_CHICLE, MENTA, ELECTRICO, BUFF_TYPE_EXTRA_LIFE, BUFF_TYPE_FAST_SHOOT, BUFF_TYPE_TRIPLE_SHOT, BUFF_TYPE_SHIELD,
     BUFF_TYPE_PIERCING, BUFF_TYPE_ATTRACT, BUFF_TYPE_DAMAGE_UP, BUFF_TYPE_SPEED_UP,
-    BUFF_TYPE_MAX_LIFE_UP, BUFF_TYPE_RAPID_FIRE, BUFF_TYPE_LIGHTNING, POWERUP_SPAWN_EVERY,
+    BUFF_TYPE_MAX_LIFE_UP, BUFF_TYPE_RAPID_FIRE, BUFF_TYPE_LIGHTNING,
     SHIP_WIDTH, SHIP_HEIGHT, FINAL_BOSS_SPAWN_WAVE,
     MEGA_BOSS_SPAWN_WAVE, cuota_de_oleada, DIFICULTADES,
     DIFICULTAD_DEFECTO, GAMEPAD_MOVE_SPEED,
     GAMEPAD_DEADZONE,
     BONUS_SHIP_MIN_WAVE, BONUS_SHIP_SPAWN_CHANCE,
-    BONUS_SHIP_POWERUP_COUNT, BONUS_SHIP_SCORE,
-    BONUS_SHIP_MINIBOSS_CHANCE, BONUS_SHIP_MINIBOSS_POWERUP_MULT, BONUS_SHIP_MINIBOSS_SCORE_MULT,
+    BONUS_SHIP_SCORE,
+    BONUS_SHIP_MINIBOSS_CHANCE, BONUS_SHIP_MINIBOSS_SCORE_MULT,
 )
 from modules.entities.ship import Ship
 from modules.entities.enemy import AlienShip, BONUS_SHIP_KINDS
 from modules.entities.asteroid import Asteroid, Particle, Explosion
-from modules.entities.powerup import PowerUp, random_buff_type
 from modules.systems.input import (
     init_hand_landmarker,
     process_camera_frame,
@@ -45,7 +44,7 @@ from modules.systems.input import (
     find_hand_position,
 )
 from modules.systems.ui import draw_hud, draw_countdown, draw_camera_preview, draw_game_over, draw_buff_hud, draw_victory_screen, draw_boss_rewards, draw_viewport_frame, draw_ship_status_bar, draw_victory_final
-from modules.core.boss_system import get_boss_for_wave, WaveBoss, BossReward
+from modules.core.boss_system import get_boss_for_wave, WaveBoss
 from modules.entities.boss import FinalBoss
 from modules.entities.titan_boss import TitanBoss
 from modules.entities.dragon_boss import DragonBoss
@@ -62,6 +61,7 @@ from modules.systems.menu import MenuScene, Star
 from modules.systems.mejoras import EstadoMejoras, SeleccionMejora, dibujar_hud_mejoras, MEJORAS
 from modules.systems import audio
 from modules.systems import sprites
+from modules.systems import neon
 from modules.systems.fonts import render_text, render_texto_pixelado, get_font
 from modules import progress
 from modules import settings
@@ -70,6 +70,17 @@ MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'models', 
 
 
 _RGB_SURF = None
+
+
+def _botones_pausa(joystick):
+    """Botones que pausan con el mando: START/OPTIONS segun el modelo
+    (los numeros cambian entre Xbox, PlayStation y mandos genericos)."""
+    nombre = joystick.get_name().lower() if joystick is not None else ""
+    if "xbox" in nombre or "xinput" in nombre:
+        return (6, 7)  # BACK / START
+    if any(k in nombre for k in ("ps4", "ps5", "dualsense", "dualshock", "wireless controller", "playstation")):
+        return (6, 9)  # OPTIONS (SDL nuevo / DirectInput)
+    return (9,)  # START de los mandos genericos
 
 
 def resize_frame(frame, w, h):
@@ -243,6 +254,8 @@ def main():
     # esta abierta el mundo queda congelado y la nave solo mueve el cursor.
     estado_mejoras = EstadoMejoras()
     eleccion = None
+    # cartas extra ganadas (nave bonus, gatos del bonus): titulos en espera
+    mejoras_extra = []
     ultima_oleada_mejora = 1
     mejora_inicial_pendiente = False
     bonus_estado = None
@@ -319,6 +332,7 @@ def main():
             _dar_todos_los_buffs()
         estado_mejoras = EstadoMejoras()
         eleccion = None
+        mejoras_extra.clear()
         ultima_oleada_mejora = wave
         mejora_inicial_pendiente = bonus_directo_pendiente is None
         start_time = pygame.time.get_ticks()
@@ -365,15 +379,12 @@ def main():
             _recompensar_jefe_bonus(boss)
             return
         stats_jefes += 1
-        rewards = boss.rewards if isinstance(boss, MegaBoss) else boss.definition.rewards
-        last_boss_rewards = list(rewards)
+        # ya no sueltan power-ups: los buffs salen solo de las cartas de
+        # mejora (la de despues del jefe se abre al terminar este respiro)
+        last_boss_rewards = []
         boss_reward_timer = 180
-        for reward in rewards:
-            powerups.append(PowerUp(boss.x + random.uniform(-40, 40), boss.y, reward.buff_type))
 
         if isinstance(boss, MegaBoss):
-            for _ in range(6):
-                powerups.append(PowerUp(boss.x + random.uniform(-70, 70), boss.y + random.uniform(-20, 20), random_buff_type()))
             explosions.append(Explosion(boss.x, boss.y, WHITE, 100))
             particles.extend([Particle(boss.x, boss.y, AMARILLO) for _ in range(80)])
             particles.extend([Particle(boss.x, boss.y, ORANGE) for _ in range(60)])
@@ -448,14 +459,13 @@ def main():
                         'vida': random.randint(110, 170),
                     })
 
-        # Dos naves escolta que se le suman a la nave del jugador para la
-        # huida (reciclan el sprite "scout" con otro tinte, no son
-        # AlienShip ni nada que el resto del juego necesite conocer).
+        # Dos naves escolta (un interceptor y un bombardero) que se le
+        # suman a la nave del jugador para la huida; solo sprites, no son
+        # AlienShip ni nada que el resto del juego necesite conocer.
         escoltas = []
-        for dx, dy, color in ((-70, 26, AZUL_CIELO), (70, 34, MENTA)):
-            aw = int(SHIP_WIDTH * 1.05)
-            ah = int(aw * SHIP_HEIGHT / SHIP_WIDTH)
-            spr = sprites.get_ship_surface("scout", color, tuple(int(c * 0.68) for c in color[:3]), aw, ah)
+        for dx, dy, color, casco in ((-70, 26, AZUL_CIELO, "interceptor"), (70, 34, MENTA, "bomber")):
+            aw, ah = sprites.get_ship_size(casco, SHIP_WIDTH, SHIP_HEIGHT)
+            spr = sprites.get_ship_surface(casco, color, tuple(int(c * 0.68) for c in color[:3]), aw, ah)
             escoltas.append({'x': ship.x + dx, 'y': ship.y + dy, 'spr': spr, 'fase': random.uniform(0, 6.28),
                               'rastro_timer': random.randint(0, 8)})
 
@@ -468,6 +478,7 @@ def main():
 
         fase = "explosion"
         timer = 0
+        total = 0
         DUR_EXPLOSION = 130
         DUR_ESCAPE = 220
         shake = 0
@@ -479,6 +490,7 @@ def main():
                     sys.exit()
             clock.tick(FPS)
             timer += 1
+            total += 1
 
             for p in pedazos:
                 p['x'] += p['vx']
@@ -600,9 +612,11 @@ def main():
                     estrella.draw(cine_surface)
 
                 for e in estelas:
-                    ex = int(e['x'])
+                    # estela de hiperespacio en bloques de pixel
+                    ex = int(e['x']) // 4 * 4
                     ey = int(e['y'] - cam_y_int)
-                    pygame.draw.line(cine_surface, e['color'], (ex, ey), (ex, ey + e['largo']), 2)
+                    cine_surface.fill(e['color'], (ex, ey, 4, int(e['largo'])))
+                    cine_surface.fill(WHITE, (ex, ey + int(e['largo']) - 8, 4, 8))
 
                 for p in pedazos:
                     rotada = pygame.transform.rotate(p['surf'], p['ang'])
@@ -611,9 +625,8 @@ def main():
 
                 for p in particulas_cine:
                     alpha = p['vida'] / p['vida_max']
-                    size = max(1, int(p['r'] * alpha))
                     c = tuple(int(ch * alpha) for ch in p['color'][:3])
-                    pygame.draw.circle(cine_surface, c, (int(p['x']), int(p['y'] - cam_y_int)), size)
+                    neon.cuadro_pixel(cine_surface, c, p['x'], p['y'] - cam_y_int, 2 + p['r'] * 2 * alpha)
 
                 for ex in explosiones_cine:
                     ex.draw(cine_surface, offset_y=-cam_y_int)
@@ -624,6 +637,14 @@ def main():
                         cine_surface.blit(esc['spr'], rect)
 
                 ship.draw(cine_surface, offset_y=-cam_y_int)
+
+            # franjas de cine y carteles neon
+            neon.franjas_cine(cine_surface, total / 30, neon.ORO if fase == "explosion" else neon.CIAN)
+            if fase == "explosion" and 24 < timer and (timer // 6) % 5:
+                neon.titulo(cine_surface, "¡COLOSO DESTRUIDO!", 40, AMARILLO, GAME_WIDTH // 2, 100)
+            elif fase == "escape" and 20 < timer < DUR_ESCAPE - 30:
+                neon.titulo(cine_surface, "¡A TODA VELOCIDAD!", 34, (150, 240, 255), GAME_WIDTH // 2, 100)
+            neon.scanlines(cine_surface)
 
             if fase == "explosion" and timer > DUR_EXPLOSION - 25:
                 alfa = min(200, int(255 * (timer - (DUR_EXPLOSION - 25)) / 25))
@@ -770,8 +791,8 @@ def main():
 
     def _recompensar_jefe_bonus(boss):
         """Cadena de jefes bonus: Nyan Cat -> Gato Alien -> Gato Pan (el que
-        gira, OIIA). Entre uno y otro suelta ayuda y hay un respiro con
-        cartel; al caer el Gato Pan arranca la victoria de verdad."""
+        gira, OIIA). Entre uno y otro hay una carta de mejora y un
+        respiro con cartel; al caer el Gato Pan arranca la victoria de verdad."""
         nonlocal stats_jefes, bonus_estado, bonus_timer, bonus_banner
         nonlocal last_boss_rewards, boss_reward_timer
         stats_jefes += 1
@@ -787,11 +808,10 @@ def main():
             bonus_banner = None
             audio.sonido_victoria()
             return
-        for buff in (BUFF_TYPE_EXTRA_LIFE, BUFF_TYPE_SHIELD, random_buff_type(), random_buff_type()):
-            powerups.append(PowerUp(boss.x + random.uniform(-60, 60), boss.y + random.uniform(-20, 20), buff))
-        last_boss_rewards = [BossReward(BUFF_TYPE_EXTRA_LIFE, "+1", "Vida extra"),
-                             BossReward(BUFF_TYPE_SHIELD, "DEF", "Escudo +1 golpe")]
-        boss_reward_timer = 180
+        # en vez de soltar ayuda: una carta de mejora en el respiro
+        _pedir_mejora("¡GATO VENCIDO! ELEGI UNA MEJORA")
+        last_boss_rewards = []
+        boss_reward_timer = 120
         bonus_timer = 180
         if isinstance(boss, NyanBoss):
             bonus_estado = "interludio_alien"
@@ -928,14 +948,12 @@ def main():
         titulo, subtitulo, restante = bonus_banner
         if restante < 30 and restante % 6 < 3:
             return
-        franja = pygame.Surface((GAME_WIDTH, 96), pygame.SRCALPHA)
-        franja.fill((0, 0, 0, 150))
-        surface.blit(franja, (0, GAME_HEIGHT // 2 - 60))
-        t = render_texto_pixelado(big_font, titulo, AMARILLO)
-        surface.blit(t, (GAME_WIDTH // 2 - t.get_width() // 2, GAME_HEIGHT // 2 - 54))
+        caja = pygame.Rect(0, 0, 620, 112 if subtitulo else 80)
+        caja.center = (GAME_WIDTH // 2, GAME_HEIGHT // 2 - 10)
+        neon.panel(surface, caja, neon.ORO, frame_count)
+        neon.titulo(surface, titulo, 34, AMARILLO, caja.centerx, caja.y + 38, halo=False)
         if subtitulo:
-            st = render_texto_pixelado(font, subtitulo, ROSA_CHICLE)
-            surface.blit(st, (GAME_WIDTH // 2 - st.get_width() // 2, GAME_HEIGHT // 2 + 2))
+            neon.titulo(surface, subtitulo, 20, ROSA_CHICLE, caja.centerx, caja.y + 82, halo=False)
 
     def _dibujar_mundo(surface, incluir_nitidos=True):
         """Entidades del mundo en el orden de siempre (juego activo, muerte
@@ -983,6 +1001,11 @@ def main():
         for dron in estado_mejoras.drones:
             dron.draw(surface)
 
+    def _pedir_mejora(titulo):
+        """Deja una carta extra en espera; se abre apenas no haya jefe ni
+        cartel en pantalla (ver el bucle principal)."""
+        mejoras_extra.append(titulo)
+
     def _abrir_eleccion(titulo):
         nonlocal eleccion
         opciones = estado_mejoras.opciones(ship, mascota is not None)
@@ -1009,14 +1032,9 @@ def main():
     def _soltar_recompensa_bonus(x, y, miniboss=False):
         """Recompensa de una nave bonus (tank/interceptor/bomber reciclados
         como enemigo especial infrecuente, ver BONUS_SHIP_* en
-        modules/entities/enemy.py): varios power-ups dispersos en vez de
-        uno solo, para que valga la pena arriesgarse a ir por ella -mas
-        todavia si era un mini-jefe (ver BONUS_SHIP_MINIBOSS_*)."""
-        cantidad = BONUS_SHIP_POWERUP_COUNT
-        if miniboss:
-            cantidad = max(BONUS_SHIP_POWERUP_COUNT, int(round(BONUS_SHIP_POWERUP_COUNT * BONUS_SHIP_MINIBOSS_POWERUP_MULT)))
-        for _ in range(cantidad):
-            powerups.append(PowerUp(x + random.uniform(-45, 45), y + random.uniform(-30, 30), random_buff_type()))
+        modules/entities/enemy.py): ya no suelta power-ups, gana una carta
+        de mejora extra (vale la pena arriesgarse a ir por ella)."""
+        _pedir_mejora("¡MINI JEFE CAIDO! ELEGI UNA MEJORA" if miniboss else "¡NAVE BONUS! ELEGI UNA MEJORA")
         explosions.append(Explosion(x, y, AMARILLO, 60 if not miniboss else 90))
         particles.extend([Particle(x, y, AMARILLO) for _ in range(20 if not miniboss else 34)])
         particles.extend([Particle(x, y, PINK) for _ in range(12 if not miniboss else 20)])
@@ -1043,7 +1061,14 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
             if event.type == pygame.JOYBUTTONDOWN and modo_control == "mando":
-                if not menu_scene.active and not game_over and not paused and countdown_val <= 0:
+                if event.button in _botones_pausa(joystick):
+                    if not menu_scene.active and not game_over and bonus_estado not in congelados_bonus:
+                        paused = not paused
+                        if paused:
+                            audio.pausar_musica()
+                        else:
+                            audio.reanudar_musica()
+                elif not menu_scene.active and not game_over and not paused and countdown_val <= 0:
                     ship.queue_shot()
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
@@ -1202,7 +1227,7 @@ def main():
 
         en_bonus = bonus_estado is not None
         congelado_bonus = bonus_estado in congelados_bonus
-        if en_bonus and not paused:
+        if en_bonus and not paused and eleccion is None:
             _actualizar_bonus()
             en_bonus = bonus_estado is not None
             congelado_bonus = bonus_estado in congelados_bonus
@@ -1211,9 +1236,13 @@ def main():
         # oleadas (6, 11, 16...), asi tambien al caer cada jefe (pasa a la
         # 11, 21...). Si justo hay un jefe o su cartel, espera a que termine.
         if (eleccion is None and not game_over and not dying and not paused and countdown_val <= 0
-                and bonus_estado is None and not bonus_directo_pendiente and not bosses
-                and boss_reward_timer <= 0):
-            if mejora_inicial_pendiente:
+                and bonus_estado in (None, "interludio_alien", "interludio_pan")
+                and not bonus_directo_pendiente and not bosses and boss_reward_timer <= 0):
+            if mejoras_extra:
+                _abrir_eleccion(mejoras_extra.pop(0))
+            elif bonus_estado is not None:
+                pass
+            elif mejora_inicial_pendiente:
                 mejora_inicial_pendiente = False
                 _abrir_eleccion("ELEGI TU MEJORA INICIAL")
             elif (wave - 1) // 5 > (ultima_oleada_mejora - 1) // 5:
@@ -1447,9 +1476,6 @@ def main():
                         objetivos_oleada += 1
                         stats_aciertos += 1
                         score += a.size // 10 + 1
-                        if asteroid_kills % POWERUP_SPAWN_EVERY == 0:
-                            buff = random_buff_type()
-                            powerups.append(PowerUp(a.x, a.y, buff))
                         if not b.piercing:
                             b.active = False
                         a.active = False
@@ -1469,8 +1495,6 @@ def main():
                                 _soltar_recompensa_bonus(aship.x, aship.y, miniboss=aship.is_miniboss)
                                 score += int(BONUS_SHIP_SCORE * (BONUS_SHIP_MINIBOSS_SCORE_MULT if aship.is_miniboss else 1))
                             else:
-                                buff = random_buff_type()
-                                powerups.append(PowerUp(aship.x, aship.y, buff))
                                 explosions.append(Explosion(aship.x, aship.y, PURPLE, 15))
                                 particles.extend([Particle(aship.x, aship.y, PINK) for _ in range(8)])
                                 score += 50
@@ -1551,8 +1575,6 @@ def main():
                         asteroid_kills += 1
                         objetivos_oleada += 1
                         score += objetivo.size // 10 + 1
-                        if asteroid_kills % POWERUP_SPAWN_EVERY == 0:
-                            powerups.append(PowerUp(objetivo.x, objetivo.y, random_buff_type()))
                         objetivo.active = False
                     elif objetivo_tipo == "alien":
                         # respeta el hp igual que un golpe de bala normal
@@ -1565,7 +1587,6 @@ def main():
                                 _soltar_recompensa_bonus(objetivo.x, objetivo.y, miniboss=es_mb)
                                 score += int(BONUS_SHIP_SCORE * (BONUS_SHIP_MINIBOSS_SCORE_MULT if es_mb else 1))
                             else:
-                                powerups.append(PowerUp(objetivo.x, objetivo.y, random_buff_type()))
                                 score += 50
                             stats_alienigenas += 1
                             objetivos_oleada += 1
@@ -1684,7 +1705,7 @@ def main():
             if modo_control == "camara":
                 control_hint = "Cerra el puño para disparar"
             else:
-                control_hint = "Boton del mando para disparar"
+                control_hint = "Boton del mando para disparar - START para pausar"
             draw_countdown(game_surface, GAME_WIDTH, GAME_HEIGHT, countdown_val, countdown_fraction,
                             font, info_font, big_font, control_hint)
 
@@ -1749,7 +1770,7 @@ def main():
                     indicator = render_texto_pixelado(small_font, "Buscando mano...", RED)
             else:
                 if hand_active:
-                    indicator = render_texto_pixelado(small_font, "Mando conectado | Boton = Disparar", GREEN)
+                    indicator = render_texto_pixelado(small_font, "Mando | Boton = Disparar | START = Pausa", GREEN)
                 else:
                     indicator = render_texto_pixelado(small_font, "Mando no detectado", RED)
             game_surface.blit(indicator, (GAME_WIDTH - indicator.get_width() - 8, 8))
@@ -1758,13 +1779,14 @@ def main():
                 eleccion.draw(game_surface)
 
             if paused:
-                overlay_pausa = pygame.Surface(game_surface.get_size(), pygame.SRCALPHA)
-                overlay_pausa.fill((0, 0, 0, 130))
-                game_surface.blit(overlay_pausa, (0, 0))
-                texto_pausa = render_texto_pixelado(big_font, "PAUSA", WHITE)
-                game_surface.blit(texto_pausa, (GAME_WIDTH // 2 - texto_pausa.get_width() // 2, GAME_HEIGHT // 2 - 40))
-                texto_ayuda = render_texto_pixelado(info_font, "Presiona P para continuar", WHITE)
-                game_surface.blit(texto_ayuda, (GAME_WIDTH // 2 - texto_ayuda.get_width() // 2, GAME_HEIGHT // 2 + 20))
+                neon.velo(game_surface, (6, 2, 20), 150)
+                caja = pygame.Rect(0, 0, 420, 170)
+                caja.center = (GAME_WIDTH // 2, GAME_HEIGHT // 2)
+                neon.panel(game_surface, caja, neon.MAGENTA, frame_count)
+                neon.titulo(game_surface, "PAUSA", 52, (255, 150, 235), caja.centerx, caja.y + 62)
+                ayuda = "START para continuar" if modo_control == "mando" else "P para continuar"
+                neon.cinta(game_surface, ayuda, neon.MAGENTA, (caja.centerx, caja.bottom - 36), tam=15)
+                neon.scanlines(game_surface)
 
         if dying:
             for e in explosions:
@@ -1777,8 +1799,7 @@ def main():
             overlay = pygame.Surface(game_surface.get_size(), pygame.SRCALPHA)
             overlay.fill((0, 0, 0, fade))
             game_surface.blit(overlay, (0, 0))
-            dying_text = render_texto_pixelado(font, "¡Impacto crítico!", ROSA)
-            game_surface.blit(dying_text, (GAME_WIDTH // 2 - dying_text.get_width() // 2, GAME_HEIGHT // 2))
+            neon.titulo(game_surface, "¡IMPACTO CRITICO!", 34, ROSA, GAME_WIDTH // 2, GAME_HEIGHT // 2 + 14)
 
         if game_over:
             _dibujar_mundo(game_surface, incluir_nitidos=not entorno_pixel)
@@ -1816,7 +1837,7 @@ def main():
                 btn_w = 150
                 btn_h = 40
                 spacing = 180
-                base_x = game_offset_x + GAME_WIDTH // 2 - btn_w - spacing // 2 + btn_w
+                base_x = game_offset_x + GAME_WIDTH // 2 - btn_w // 2 - spacing // 2
                 btn_y = game_offset_y + GAME_HEIGHT // 2 + 30
                 mouse_pos = pygame.mouse.get_pos()
                 for i, (_, _) in enumerate(go_buttons):

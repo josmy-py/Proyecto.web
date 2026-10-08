@@ -22,6 +22,7 @@ import pygame
 
 from modules.constants import GAME_WIDTH, GAME_HEIGHT, WHITE, AMARILLO, MENTA
 from modules.systems.fonts import get_font, render_text
+from modules.systems import neon
 from modules.entities.nyan_boss import sprite_pixel, ESTRELLA_VERDE
 
 CONTORNO = (38, 6, 22)
@@ -160,19 +161,21 @@ def sprite(nombre, escala, voltear=False):
 
 
 def _globo(surface, texto, x, y, cola_derecha=True):
-    """Globo de dialogo pixelado (borde grueso, cola hacia el que habla)."""
+    """Globo de dialogo neon (panel oscuro con marco rojo y cola en
+    escalon hacia el que habla)."""
     fuente = get_font(20, bold=True)
-    t = fuente.render(texto, True, (20, 10, 30))
-    rect = pygame.Rect(0, 0, t.get_width() + 28, t.get_height() + 18)
+    t = fuente.render(texto, True, WHITE)
+    rect = pygame.Rect(0, 0, t.get_width() + 32, t.get_height() + 20)
     rect.midbottom = (x, y)
     rect.clamp_ip(pygame.Rect(6, 6, GAME_WIDTH - 12, GAME_HEIGHT - 12))
-    surface.fill(CONTORNO, rect.inflate(8, 8))
-    surface.fill(WHITE, rect)
+    surface.fill(neon.CONTORNO, rect.inflate(8, 8))
+    surface.fill(neon.FONDO, rect)
+    neon.marco_pixel(surface, rect, ROJO_BRILLO, 3)
     cola_x = rect.right - 34 if cola_derecha else rect.left + 20
     for i in range(4):
-        surface.fill(CONTORNO, (cola_x + i * 4 - 4, rect.bottom + i * 4, 16 - i * 4 + 4, 4))
-        surface.fill(WHITE, (cola_x + i * 4, rect.bottom + i * 4 - 4, max(0, 12 - i * 4), 4))
-    surface.blit(t, (rect.x + 14, rect.y + 9))
+        surface.fill(neon.CONTORNO, (cola_x + i * 4 - 4, rect.bottom + i * 4, 16 - i * 4 + 4, 4))
+        surface.fill(ROJO_BRILLO, (cola_x + i * 4, rect.bottom + i * 4 - 3, max(0, 12 - i * 4), 3))
+    surface.blit(t, (rect.x + 16, rect.y + 10))
 
 
 # ------------------------------------------------------------ aliado
@@ -508,10 +511,23 @@ class CinematicaTripulante:
         surface.fill((25, 4, 12))
         luz = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
         alfa = min(45, max(0, self._tr()) * 2)
+        # focos en escalones de 8 px (pixel art) en vez de un poligono liso
         for bx in (GAME_WIDTH * 0.25, GAME_WIDTH * 0.68):
-            pygame.draw.polygon(luz, (255, 230, 200, alfa),
-                                [(bx - 40, 0), (bx + 40, 0), (bx + 130, GAME_HEIGHT), (bx - 130, GAME_HEIGHT)])
+            for y in range(0, GAME_HEIGHT, 8):
+                medio = 40 + 90 * y / GAME_HEIGHT
+                luz.fill((255, 230, 200, alfa), (int(bx - medio) // 8 * 8, y, int(medio * 2) // 8 * 8, 8))
         surface.blit(luz, (0, 0))
+        # piso de grilla synthwave
+        horizonte = int(GAME_HEIGHT * 0.80)
+        surface.fill((40, 6, 30), (0, horizonte, GAME_WIDTH, GAME_HEIGHT - horizonte))
+        for k in range(7):
+            y = horizonte + int((k / 6) ** 1.7 * (GAME_HEIGHT - horizonte))
+            surface.fill((150, 30, 90), (0, y, GAME_WIDTH, 2))
+        for k in range(-8, 9):
+            x0 = GAME_WIDTH // 2 + k * 40
+            x1 = GAME_WIDTH // 2 + k * 150
+            pygame.draw.line(surface, (120, 24, 80), (x0, horizonte), (x1, GAME_HEIGHT), 2)
+        surface.fill(neon.ROJO, (0, horizonte, GAME_WIDTH, 3))
 
     def draw(self, surface):
         tr = self._tr()
@@ -583,7 +599,7 @@ class CinematicaTripulante:
                 sx = antena[0] + (ox - antena[0]) * p
                 sy = antena[1] + (oy - antena[1]) * p
                 r = int(10 + 22 * p)
-                pygame.draw.circle(surface, BOTON_ENCENDIDO, (int(sx), int(sy)), r, 4)
+                neon.anillo_pixel(surface, BOTON_ENCENDIDO, sx, sy, r, 6)
         if self.PULSA - 12 <= tr < self.PULSA:
             # el dedo por apretar: un destello chiquito en el boton
             surface.fill(WHITE, (int(mano_x) - 4, int(ty) - 60, 8, 8))
@@ -598,7 +614,7 @@ class CinematicaTripulante:
                 y = mano_y + (ny - mano_y) * p - math.sin(math.pi * p) * 120
                 surface.blit(corazon, (int(x) - corazon.get_width() // 2, int(y) - corazon.get_height() // 2))
         for c in self.chispas:
-            surface.fill(CORAZON if c[4] % 4 < 2 else CORAZON_BRILLO, (int(c[0]), int(c[1]), 5, 5))
+            neon.cuadro_pixel(surface, CORAZON if c[4] % 4 < 2 else CORAZON_BRILLO, c[0], c[1], 6)
 
         chico = sprite("corazon", 3)
         total_w = self.vidas * (chico.get_width() + 6)
@@ -614,24 +630,18 @@ class CinematicaTripulante:
         if self.ENTRA_DESDE + 70 < tr < self.PULSA:
             _globo(surface, "¿Invencible? Ja.", int(tx) - 40, globo_y)
         if self.ESCUDO_ROTO <= tr < self.ESCUDO_ROTO + 80 and (tr // 6) % 4 != 0:
-            texto = get_font(36, bold=True).render("¡ESCUDO DESACTIVADO!", True, BOTON_ENCENDIDO)
-            sombra = get_font(36, bold=True).render("¡ESCUDO DESACTIVADO!", True, (60, 20, 10))
-            ox_t = GAME_WIDTH // 2 - texto.get_width() // 2
-            surface.blit(sombra, (ox_t + 3, 33))
-            surface.blit(texto, (ox_t, 30))
+            neon.titulo(surface, "¡ESCUDO DESACTIVADO!", 36, BOTON_ENCENDIDO, GAME_WIDTH // 2, 72)
         if self.ESCUDO_ROTO + 50 < tr < self.inicio_corazones + 20:
             _globo(surface, "¿Necesitas una mano?", int(tx) - 40, globo_y)
         if tr >= self.fin_corazones - 20:
-            titulo = get_font(40, bold=True).render("¡VIDAS RESTAURADAS!", True, MENTA)
-            sombra = get_font(40, bold=True).render("¡VIDAS RESTAURADAS!", True, (10, 40, 25))
-            ox_t = GAME_WIDTH // 2 - titulo.get_width() // 2
-            surface.blit(sombra, (ox_t + 3, 63))
-            surface.blit(titulo, (ox_t, 60))
+            neon.titulo(surface, "¡VIDAS RESTAURADAS!", 40, MENTA, GAME_WIDTH // 2, 72)
         if tr >= self.fin_corazones + 40:
             _globo(surface, "Vamos por ese gato.", int(tx) - 40, globo_y)
 
         # los ultimos vidrios siguen cayendo por delante
         self._dibujar_pedazos(surface)
+        neon.franjas_cine(surface, tr / 30, neon.ROJO, alto=44)
+        neon.scanlines(surface)
 
         restante = self.fin - self.t
         if restante < self.FUNDIDO:
@@ -653,7 +663,8 @@ class CinematicaTripulante:
             if self.PULSA + 25 <= tr:
                 brillo = 200 if (tr // 3) % 2 else 120  # la señal le pega: parpadea
             pygame.draw.circle(burbuja, (*ESTRELLA_VERDE, brillo // 3), (radio + 4, radio + 4), radio)
-            pygame.draw.circle(burbuja, (*ESTRELLA_VERDE, brillo), (radio + 4, radio + 4), radio, 6)
+            # borde de la burbuja en bloques de pixel
+            neon.anillo_pixel(burbuja, (*ESTRELLA_VERDE, brillo), radio + 4, radio + 4, radio - 3, 8, 44)
             if tr >= self.ESCUDO_GRIETA:
                 # grietas que crecen desde el punto de impacto de la señal
                 largo = min(1.0, (tr - self.ESCUDO_GRIETA) / (self.ESCUDO_ROTO - self.ESCUDO_GRIETA))
@@ -665,11 +676,9 @@ class CinematicaTripulante:
                                      (x0 + math.cos(a) * radio * largo, y0 + math.sin(a) * radio * largo), 3)
             surface.blit(burbuja, (int(ox) - radio - 4 + temblor, int(oy) - radio - 4))
         for e in self.pedazos_escudo:
-            t = e['tam']
-            puntos = [(e['x'] + math.cos(e['ang'] + k * 2.1) * t, e['y'] + math.sin(e['ang'] + k * 2.1) * t)
-                      for k in range(3)]
-            pygame.draw.polygon(surface, ESTRELLA_VERDE, puntos)
-            pygame.draw.polygon(surface, WHITE, puntos, 1)
+            neon.cuadro_pixel(surface, neon.CONTORNO, e['x'], e['y'], e['tam'] + 4)
+            neon.cuadro_pixel(surface, ESTRELLA_VERDE, e['x'], e['y'], e['tam'])
+            neon.cuadro_pixel(surface, WHITE, e['x'] - e['tam'] // 4, e['y'] - e['tam'] // 4, 2)
 
     def _dibujar_pedazos(self, surface):
         for p in self.pedazos:
