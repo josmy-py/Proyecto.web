@@ -9,7 +9,7 @@ import pygame
 import random
 import math
 from modules.constants import (
-    MELON, WHITE, AMARILLO,
+    MELON, AMARILLO,
     GAME_WIDTH, GAME_HEIGHT, SHIP_WIDTH, SHIP_HEIGHT,
 )
 from modules.systems import sprites, pixelfx
@@ -379,16 +379,12 @@ class AlienMissile:
             self.active = False
 
     def draw(self, screen, offset_x=0, offset_y=0):
-        for i, (tx, ty) in enumerate(self.trail):
-            alpha = int(90 * (i / max(1, len(self.trail))))
-            r = max(1, int(self.radius * 0.5 * (i / max(1, len(self.trail)))))
-            surf = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
-            pygame.draw.circle(surf, (255, 160, 60, alpha), (r, r), r)
-            screen.blit(surf, (int(tx) + offset_x - r, int(ty) + offset_y - r))
-
-        cx, cy = int(self.x) + offset_x, int(self.y) + offset_y
-        punta = (cx + math.cos(self.angle) * self.radius * 1.7, cy + math.sin(self.angle) * self.radius * 1.7)
-        cola_izq = (cx + math.cos(self.angle + 2.5) * self.radius, cy + math.sin(self.angle + 2.5) * self.radius)
-        cola_der = (cx + math.cos(self.angle - 2.5) * self.radius, cy + math.sin(self.angle - 2.5) * self.radius)
-        pygame.draw.polygon(screen, (230, 90, 70), [punta, cola_izq, cola_der])
-        pygame.draw.polygon(screen, WHITE, [punta, cola_izq, cola_der], 1)
+        # humo detras
+        for i, (tx, ty) in enumerate(self.trail[:-2]):
+            k = (i + 1) / len(self.trail)
+            gris = int(50 + 70 * k)
+            lado = 2 if k < 0.5 else 4
+            screen.fill((gris, gris - 6, gris + 18),
+                        (int(tx) + offset_x - lado // 2, int(ty) + offset_y - lado // 2, lado, lado))
+        pixelfx.misil(screen, self.x + offset_x, self.y + offset_y, self.angle, self.vida,
+                      cuerpo=(176, 130, 230), largo=5)

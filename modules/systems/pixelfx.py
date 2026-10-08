@@ -257,3 +257,51 @@ def esquirla(color, angulo):
     girado = pygame.transform.rotate(base, -(paso * 22.5 + 90))
     surf = pygame.transform.scale(girado, (girado.get_width() * PIXEL, girado.get_height() * PIXEL))
     return _guardar(clave, surf)
+
+
+# ------------------------------------------------------ explosiones y misiles
+
+def disco(color, radio):
+    """Circulo lleno en pixeles grandes (nucleo del destello de explosion)."""
+    celdas = max(1, int(radio) // PIXEL)
+    clave = ("disco", _q(color), celdas)
+    surf = _cache.get(clave)
+    if surf is not None:
+        return surf
+    chico = pygame.Surface((celdas * 2 + 1, celdas * 2 + 1), pygame.SRCALPHA)
+    pygame.draw.circle(chico, color[:3], (celdas, celdas), celdas)
+    surf = pygame.transform.scale(chico, (chico.get_width() * PIXEL, chico.get_height() * PIXEL))
+    return _guardar(clave, surf)
+
+
+def apagar(color, k):
+    """Color de una chispa segun la vida que le queda (k de 1 a 0): blanca
+    al nacer, del color propio en el medio y oscura al final."""
+    if k > 0.7:
+        return aclarar(color, (k - 0.7) / 0.3 * 0.8)
+    f = 0.35 + 0.65 * k / 0.7
+    return tuple(int(c * f) for c in color[:3])
+
+
+def misil(screen, x, y, angulo, t, cuerpo=(200, 206, 224), punta=(255, 70, 90), fuego=(255, 190, 80),
+          largo=6):
+    """Cohete pixel: cuerpo de cuadraditos con contorno, aletas, punta que
+    parpadea y tobera encendida con halo."""
+    dx, dy = math.cos(angulo), math.sin(angulo)
+    nx, ny = -dy, dx
+    for k in range(largo):
+        px, py = int(x - dx * k * 3), int(y - dy * k * 3)
+        screen.fill(CONTORNO, (px - 4, py - 4, 8, 8))
+    for k in range(largo):
+        px, py = int(x - dx * k * 3), int(y - dy * k * 3)
+        screen.fill(cuerpo, (px - 3, py - 3, 6, 6))
+    cola = (largo - 1) * 3
+    oscuro = tuple(int(c * 0.6) for c in cuerpo)
+    for s in (-1, 1):
+        screen.fill(oscuro, (int(x - dx * cola + nx * s * 6) - 2, int(y - dy * cola + ny * s * 6) - 2, 5, 5))
+    color = punta if (t // 4) % 2 else (255, 255, 255)
+    screen.fill(color, (int(x + dx * 3) - 3, int(y + dy * 3) - 3, 6, 6))
+    fx, fy = x - dx * (cola + 6), y - dy * (cola + 6)
+    dibujar_halo(screen, fuego, fx, fy, 10)
+    screen.fill(fuego, (int(fx) - 3, int(fy) - 3, 6, 6))
+    screen.fill((255, 255, 255), (int(fx) - 1, int(fy) - 1, 3, 3))

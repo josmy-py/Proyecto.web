@@ -104,24 +104,7 @@ class ColosoMisil:
             lado = 4 if vida > 7 else 2
             gris = 60 + vida * 6
             screen.fill((gris, gris, gris + 20), (int(hx) + offset_x - lado // 2, int(hy) + offset_y - lado // 2, lado, lado))
-        x, y = self.x + offset_x, self.y + offset_y
-        dx, dy = math.cos(self.ang), math.sin(self.ang)
-        nx, ny = -dy, dx
-        for k in range(6):
-            px, py = int(x - dx * k * 3), int(y - dy * k * 3)
-            screen.fill(pixelfx.CONTORNO, (px - 4, py - 4, 8, 8))
-        for k in range(6):
-            px, py = int(x - dx * k * 3), int(y - dy * k * 3)
-            screen.fill((200, 206, 224), (px - 3, py - 3, 6, 6))
-        # aletas
-        for s in (-1, 1):
-            screen.fill((120, 128, 150), (int(x - dx * 15 + nx * s * 6) - 2, int(y - dy * 15 + ny * s * 6) - 2, 5, 5))
-        punta = ROJO_AVISO if (self.t // 4) % 2 else WHITE
-        screen.fill(punta, (int(x + dx * 3) - 3, int(y + dy * 3) - 3, 6, 6))
-        fx, fy = x - dx * 21, y - dy * 21
-        pixelfx.dibujar_halo(screen, AMBAR, fx, fy, 10)
-        screen.fill(AMBAR, (int(fx) - 3, int(fy) - 3, 6, 6))
-        screen.fill(WHITE, (int(fx) - 1, int(fy) - 1, 3, 3))
+        pixelfx.misil(screen, self.x + offset_x, self.y + offset_y, self.ang, self.t)
 
 
 class ColosoLaser:

@@ -3,11 +3,10 @@ Asteroides y los efectos visuales de particulas que usa todo el juego
 (Particle/Explosion las reutilizan bosses, enemigos y power-ups, no solo
 los asteroides)."""
 
-import pygame
 import random
 import math
 from modules.constants import MELON, GAME_HEIGHT
-from modules.systems import sprites
+from modules.systems import pixelfx, sprites
 
 
 # Paleta de roca: pocos tonos para que el cache de sprites se reutilice
@@ -67,52 +66,87 @@ class Asteroid:
 
 
 class Particle:
-    """Chispa individual con velocidad aleatoria y desvanecimiento por vida
-    restante. Explosion agrupa varias para el efecto de destruccion."""
+    """Chispa pixel: un cuadradito que sale disparado, frena de a poco y
+    pasa de blanco a su color y despues a oscuro. Explosion agrupa varias."""
 
     def __init__(self, x, y, color):
         self.x = x
         self.y = y
-        self.vx = random.uniform(-3, 3)
-        self.vy = random.uniform(-3, 3)
+        ang = random.uniform(0, 2 * math.pi)
+        vel = random.uniform(0.6, 4.2)
+        self.vx = math.cos(ang) * vel
+        self.vy = math.sin(ang) * vel
         self.life = random.randint(15, 40)
         self.max_life = self.life
         self.radius = random.randint(1, 4)
-        self.color = color
+        self.color = tuple(color[:3])
 
     def update(self):
         self.x += self.vx
         self.y += self.vy
+        self.vx *= 0.95
+        self.vy *= 0.95
         self.life -= 1
 
     def draw(self, screen, offset_x=0, offset_y=0):
         if self.life <= 0:
             return
-        alpha = self.life / self.max_life
-        size = max(1, int(self.radius * alpha))
-        c = tuple(int(ch * alpha) for ch in self.color)
-        pygame.draw.circle(screen, c, (int(self.x) + offset_x, int(self.y) + offset_y), size)
+        k = self.life / self.max_life
+        lado = 2 * max(1, round(self.radius * (0.4 + 0.6 * k)))
+        screen.fill(pixelfx.apagar(self.color, k),
+                    (int(self.x) + offset_x - lado // 2, int(self.y) + offset_y - lado // 2, lado, lado))
 
 
 class Explosion:
-    """Grupo de Particle que se dispara al destruir algo. active pasa a
-    False cuando ya ninguna particula tiene vida restante."""
+    """Explosion pixel neon: destello blanco, onda de choque en cuadraditos
+    que se abre y se apaga, y chispas (Particle) que salen volando. count
+    es el tamaño: 8 es un chispazo, 100 o mas una explosion de jefe.
+    active pasa a False cuando ya no queda nada en pantalla."""
 
     def __init__(self, x, y, color=MELON, count=20):
-        self.particles = [Particle(x, y, color) for _ in range(count)]
+        self.x, self.y = x, y
+        self.color = tuple(color[:3])
+        self.radio = min(70, 6 + count * 0.45)
+        self.particles = [Particle(x, y, color) for _ in range(max(4, count // 2))]
+        for p in self.particles:
+            # las chispas grandes vuelan mas lejos
+            f = 0.6 + self.radio / 40
+            p.vx *= f
+            p.vy *= f
+        self.t = 0
+        self.dur_onda = 10 + int(self.radio / 4)
         self.active = True
-        self.glow_phase = 0
 
     def update(self):
-        alive_any = False
+        self.t += 1
+        vivas = False
         for p in self.particles:
-            p.update()
             if p.life > 0:
-                alive_any = True
-        if not alive_any:
+                p.update()
+                vivas = True
+        if not vivas and self.t > self.dur_onda:
             self.active = False
-        self.glow_phase += 0.1
 
     def draw(self, screen, offset_x=0, offset_y=0):
+        x, y = int(self.x) + offset_x, int(self.y) + offset_y
+        if self.t <= self.dur_onda:
+            k = self.t / self.dur_onda
+            # destello: nucleo blanco que se achica rapido
+            if k < 0.45:
+                r = self.radio * (0.9 - k)
+                pixelfx.dibujar_halo(screen, self.color, x, y, self.radio * 1.6 * (1 - k))
+                nucleo = pixelfx.disco(pixelfx.aclarar(self.color, 0.5), r)
+                screen.blit(nucleo, (x - nucleo.get_width() // 2, y - nucleo.get_height() // 2))
+                blanco = pixelfx.disco((255, 255, 255), r * 0.6)
+                screen.blit(blanco, (x - blanco.get_width() // 2, y - blanco.get_height() // 2))
+            # onda de choque
+            r = self.radio * (0.5 + 1.3 * k)
+            n = max(10, int(r * 0.7))
+            lado = 6 if k < 0.4 else 4 if k < 0.75 else 2
+            color = pixelfx.apagar(self.color, 1 - k)
+            for i in range(n):
+                a = 2 * math.pi * i / n
+                screen.fill(color, (int(x + math.cos(a) * r) - lado // 2, int(y + math.sin(a) * r) - lado // 2,
+                                    lado, lado))
         for p in self.particles:
             p.draw(screen, offset_x, offset_y)
