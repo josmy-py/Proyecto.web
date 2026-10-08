@@ -26,6 +26,10 @@ CELESTE = (170, 236, 255)
 AZUL_NOCHE = (60, 110, 230)
 
 
+def _globo(surface, texto, x, y):
+    neon.globo(surface, texto, x, y, CELESTE, cola_derecha=False, tam=22)
+
+
 class CinematicaBrujaGigante:
     T_POCION = 80
     T_BEBE = 150
@@ -156,10 +160,21 @@ class CinematicaBrujaGigante:
             neon.velo(surface, AZUL_NOCHE if (t // 12) % 2 else VERDE_TOXICO, 70)
         neon.franjas_cine(surface, t / 30, CELESTE, alto=48)
 
-        # solo el nombre (nitido, encima del pixelado)
+        # textos (nitidos, encima del pixelado)
+        if 15 <= t < 75:
+            _globo(surface, "Vaya, vaya... me estas haciendo enojar.", GAME_WIDTH / 2 + 60, 210)
+        elif self.T_POCION + 10 <= t < self.T_BEBE:
+            _globo(surface, "Hora de ponerme seria, cariño.", GAME_WIDTH / 2 + 60, 210)
+        elif self.T_BEBE + 14 <= t < self.T_CRECE:
+            dy = int(math.sin(t * 0.4) * 4)
+            neon.cinta(surface, "*glu glu glu*", VERDE_TOXICO, (GAME_WIDTH / 2 + 150, 230 + dy), tam=20)
+        elif self.T_CRECE + 10 <= t < self.T_FLASH and (t // 8) % 2 == 0:
+            neon.titulo(surface, "¡¿QUE ME PASA?!", 44, VERDE_TOXICO, GAME_WIDTH / 2, 110)
         if t >= self.T_RISA:
             tam = 58 + int(4 * math.sin(t * 0.2))
             neon.titulo(surface, "¡BRUJA NEON GIGANTE!", tam, CELESTE, GAME_WIDTH / 2, GAME_HEIGHT - 130)
+            if t >= self.T_RISA + 20:
+                _globo(surface, "¡Ahora juguemos en serio!", GAME_WIDTH / 2 + 190, 120)
 
         # destello blanco del cambio de tamaño
         if self.T_FLASH <= t < self.T_GIGANTE + 20:

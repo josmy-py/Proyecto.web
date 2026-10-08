@@ -45,8 +45,8 @@ ESC sale del juego.
 - "Intentar de Nuevo" sigue desde donde perdiste (la misma oleada o el mismo
   jefe), con la vida llena y todas tus mejoras. Si perdiste contra un jefe,
   antes de volver a pelear eliges una carta de mejora.
-- Cada jefe tiene una cinematica al llegar (alerta, su entrada y su nombre) y
-  otra al caer (su caida y "¡NOMBRE DERROTADO!"), sin textos de mas, ver
+- Cada jefe tiene una cinematica al llegar (alerta, su entrada, su nombre y
+  su frase) y otra al caer (sus ultimas palabras y "¡NOMBRE DERROTADO!"), ver
   modules/entities/cine_jefes.py. Enter, Espacio, click o un boton del mando
   las adelantan.
   Los jefes ya no explotan en la pelea: al golpe final salta directo su

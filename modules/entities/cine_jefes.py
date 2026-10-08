@@ -538,8 +538,10 @@ class CinematicaEntradaJefe(_CineBase):
             tam = 50 + int(3 * math.sin(t * 0.2))
             entra = _ease((t - self.T_NOMBRE) / 14)
             cx = int(-300 + (GAME_WIDTH // 2 + 300) * entra)
-            # solo el nombre: sin capitulo, apodo ni frase (pedido de Josmy)
             neon.titulo(surface, f["nombre"], tam, f["color"], cx, GAME_HEIGHT - 142)
+        if f["entrada"] and self.T_NOMBRE + 30 <= t < self.DURACION - 15:
+            sh = self.sprite.get_height()
+            self._globo(surface, f["entrada"], self.x + 60, max(110, self.y - sh / 2 + 10), f["color2"])
         self._fundidos(surface)
 
 
@@ -716,6 +718,10 @@ class CinematicaDerrotaJefe(_CineBase):
             neon.titulo(surface, "Z" if edad % 52 < 26 else "z", 22 + edad // 6, WHITE,
                         x + math.sin(edad * 0.1) * 12 + edad * 0.6, y - edad * 1.2, halo=False)
         neon.franjas_cine(surface, t / 20, c2, alto=48)
+        if f["derrota"] and 12 <= t < self.T_CAE - 4:
+            letras = f["derrota"][:max(1, (t - 12) // 2)]
+            sh = self.sprite.get_height()
+            self._globo(surface, letras, self.x + 60, max(110, self.y - sh / 2 + 6), c)
         if self.T_CAE <= t < self.T_CAE + 10 and self.caida != "duerme":
             neon.velo(surface, WHITE, 255 * (1 - (t - self.T_CAE) / 10))
         if t >= self.T_TITULO:
@@ -908,7 +914,7 @@ class CinematicaRenacerColoso(_CineBase):
     def draw(self, surface):
         t = self.t
         f = self.ficha
-        c2 = f["color2"]
+        c, c2 = f["color"], f["color2"]
         mundo = pygame.Surface(surface.get_size())
         self.fondo(mundo)
         neon.velo(mundo, NEGRO, 90 if t < self.T_ESTALLA else 130)
@@ -976,11 +982,21 @@ class CinematicaRenacerColoso(_CineBase):
         surface.blit(pixelar(mundo, PIXEL_BONUS) if self.pixel else mundo, (0, 0))
 
         neon.franjas_cine(surface, t / 20, c2, alto=48)
+        if t < self.T_ESTALLA:
+            if t > 30:
+                frase = "¿Crees que esto se acabó?"
+                self._globo(surface, frase[:max(1, (t - 30) // 2)], self.x + 120,
+                            self.y - self.sprite.get_height() / 2 + 10, c)
         if self.T_ESTALLA <= t < self.T_ESTALLA + 12:
             neon.velo(surface, WHITE, 255 * (1 - (t - self.T_ESTALLA) / 12))
         if self.T_ESFERA <= t < self.T_ESFERA + 8:
             neon.velo(surface, WHITE, 200 * (1 - (t - self.T_ESFERA) / 8))
         if t >= self.T_TITULO:
+            y = GAME_HEIGHT - 120
             if (t - self.T_TITULO) < 6 or (t // 5) % 6:
-                neon.titulo(surface, "ESFERA DE COMBATE", 40, c2, GAME_WIDTH // 2, GAME_HEIGHT - 120)
+                neon.titulo(surface, "ESFERA DE COMBATE", 40, c2, GAME_WIDTH // 2, y)
+            if t >= self.T_TITULO + 20:
+                frase = "Lo que es parte de mí nunca muere del todo."
+                self._globo(surface, frase[:max(1, (t - self.T_TITULO - 20) // 2)], cx + 110,
+                            cy - self.esfera.get_height() / 2 + 6, c2)
         self._fundidos(surface)
