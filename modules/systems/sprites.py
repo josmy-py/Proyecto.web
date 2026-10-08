@@ -36,12 +36,11 @@ ASTEROID_VARIANTS = 14
 ENEMY_KINDS = ("fighter", "drone", "gunner")
 
 # body_type del jefe (ver modules/core/boss_system.py) -> prefijo de archivo
-# en assets/sprites/boss/. "saucer" (Centinela) se guarda como "mothership"
-# por compatibilidad de nombre; "dragon", "titan" y "anomaly" (La Anomalia
-# Final, casco fracturado con nucleo de vacio) tienen cada uno su propia
-# silueta generada por tools/generate_sprites.py.
+# en assets/sprites/boss/. Los que tienen capa _neon son pixel art de
+# tools/generate_pixel_sprites.py ("centinela"); el resto todavia sale de
+# tools/generate_sprites.py.
 BOSS_SPRITE_PREFIX = {
-    "saucer": "mothership",
+    "saucer": "centinela",
     "anomaly": "anomaly",
     "dragon": "dragon",
     "titan": "titan",
@@ -382,12 +381,15 @@ def get_boss_surface(body_color, wing_color, width=BOSS_DISPLAY_W, height=BOSS_D
     (ver BossDefinition en modules/core/boss_system.py): decide que silueta
     de assets/sprites/boss/ se usa (BOSS_SPRITE_PREFIX).
     """
-    prefix = BOSS_SPRITE_PREFIX.get(kind, "mothership")
+    prefix = BOSS_SPRITE_PREFIX.get(kind, "centinela")
     key = ("boss", prefix, _quantize(body_color), _quantize(wing_color), int(width), int(height))
     if key in _composed_cache:
         return _composed_cache[key]
 
-    surface = _compose_layers("boss", prefix, body_color, wing_color, width, height)
+    if es_pixel("boss", prefix):
+        surface = _compose_pixel("boss", prefix, body_color, wing_color, width, height, color_neon(wing_color))
+    else:
+        surface = _compose_layers("boss", prefix, body_color, wing_color, width, height)
     _composed_cache[key] = surface
     _cap(_composed_cache, _MAX_COMPOSED)
     return surface

@@ -8,6 +8,8 @@ fondo oscuro. Cada superficie se cachea por (forma, color, tamaño), asi que
 dibujar cientos de balas por cuadro no vuelve a construir nada.
 """
 
+import math
+
 import pygame
 
 PIXEL = 2
@@ -150,3 +152,74 @@ def bala_enemiga(color, radio, fase=0):
         colores["o"] = color[:3]
     surf = _desde_mapa(_ORBE[nivel], colores)
     return _guardar(clave, surf)
+
+
+# ------------------------------------------------------------------ jefes
+
+def silueta_blanca(surf):
+    """Silueta blanca del sprite (destello al recibir un golpe)."""
+    clave = ("blanca", id(surf), surf.get_size())
+    s = _cache.get(clave)
+    if s is not None:
+        return s
+    s = pygame.mask.from_surface(surf).to_surface(setcolor=(255, 255, 255, 255), unsetcolor=(0, 0, 0, 0))
+    return _guardar(clave, s)
+
+
+def barra_jefe(screen, cx, y, ancho, ratio, ratio_anim, color, temblor=(0, 0)):
+    """Barra de vida en bloques: el tramo recien perdido queda en blanco un
+    momento (ratio_anim) antes de vaciarse."""
+    bloque = 6
+    n = max(4, ancho // bloque)
+    ancho = n * bloque
+    x0 = int(cx - ancho // 2) + temblor[0]
+    y0 = int(y) + temblor[1]
+    alto = 8
+    screen.fill(CONTORNO, (x0 - 3, y0 - 3, ancho + 4, alto + 6))
+    screen.fill(aclarar(color, 0.2), (x0 - 2, y0 - 2, ancho + 2, 1))
+    screen.fill(aclarar(color, 0.2), (x0 - 2, y0 + alto + 1, ancho + 2, 1))
+    oscuro = tuple(int(c * 0.22) for c in color[:3])
+    claro = aclarar(color, 0.55)
+    for i in range(n):
+        x = x0 + i * bloque
+        f = (i + 1) / n
+        if f <= ratio + 1e-6:
+            screen.fill(color[:3], (x, y0, bloque - 2, alto))
+            screen.fill(claro, (x, y0, bloque - 2, 2))
+        elif f <= ratio_anim + 1e-6:
+            screen.fill((255, 255, 255), (x, y0, bloque - 2, alto))
+        else:
+            screen.fill(oscuro, (x, y0, bloque - 2, alto))
+    if ratio > 0:
+        dibujar_halo(screen, color, x0 + ancho * ratio, y0 + alto // 2, 10)
+
+
+def carga(screen, color, x, y, progreso, t, radio=16):
+    """Aviso de disparo: un nucleo que crece y chispas que se juntan en el
+    punto de salida. progreso va de 0 (recien empieza) a 1 (dispara)."""
+    progreso = max(0.0, min(1.0, progreso))
+    dibujar_halo(screen, color, x, y, radio * (0.6 + progreso * 1.4))
+    lado = 2 + int(progreso * 4) * 2
+    c = (255, 255, 255) if (t // 3) % 2 else aclarar(color, 0.5)
+    screen.fill(c, (int(x) - lado // 2, int(y) - lado // 2, lado, lado))
+    dist = radio * 2.2 * (1 - progreso) + 4
+    for k in range(6):
+        a = k * math.pi / 3 + t * 0.08
+        px = int(x + math.cos(a) * dist)
+        py = int(y + math.sin(a) * dist)
+        screen.fill(aclarar(color, 0.4), (px - 1, py - 1, PIXEL + 1, PIXEL + 1))
+
+
+def columna_aviso(screen, x, ancho, color, t, y0=0, y1=None):
+    """Franja de peligro parpadeante (antes de un rayo): bordes punteados y
+    chevrones bajando."""
+    if y1 is None:
+        y1 = screen.get_height()
+    x0 = int(x - ancho / 2)
+    vel = (t * 3) % 24
+    luz = aclarar(color, 0.3) if (t // 5) % 2 else color[:3]
+    for y in range(int(y0) - 24 + vel, int(y1), 24):
+        screen.fill(luz, (x0, y, 4, 12))
+        screen.fill(luz, (x0 + int(ancho) - 4, y, 4, 12))
+        for k in range(3):
+            screen.fill(color[:3], (int(x) - 8 + k * 2, y + 4 + k * 2, 16 - k * 4, 2))

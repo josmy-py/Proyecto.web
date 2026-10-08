@@ -1,6 +1,6 @@
 """
-Genera en pixel art neon las naves (assets/sprites/ships/) y los enemigos
-comunes (assets/sprites/enemies/).
+Genera en pixel art neon las naves (assets/sprites/ships/), los enemigos
+comunes (assets/sprites/enemies/) y los jefes (assets/sprites/boss/).
 
 Cada nave se dibuja a mano como un mapa de caracteres (solo la mitad
 izquierda; la derecha se obtiene en espejo) sobre una grilla chica. Las naves
@@ -42,9 +42,11 @@ GLOW_BLUR = 5.0
 #   C c h   cristal de cabina: claro / oscuro / reflejo
 #   e E     tobera: carcasa / nucleo encendido (+ halo)
 #   G       luz de navegacion (verde a la izquierda, roja en el espejo)
+#   x u     sombra mas oscura del casco / del ala
+#   A a Y   piloto alien: piel clara / oscura / brillo de los ojos
 
-BODY = {"B": 235, "b": 172, "d": 112}
-WING = {"W": 200, "w": 140, "v": 88}
+BODY = {"B": 235, "b": 172, "d": 112, "x": 70}
+WING = {"W": 200, "w": 140, "v": 88, "u": 55}
 NEON = {"N": 255}
 DETAIL = {
     "o": (12, 6, 34, 255),
@@ -55,6 +57,9 @@ DETAIL = {
     "E": (200, 252, 255, 255),
     "G": (90, 255, 170, 255),
     "R": (255, 70, 120, 255),
+    "A": (120, 240, 130, 255),
+    "a": (40, 150, 80, 255),
+    "Y": (255, 255, 255, 255),
 }
 GLOW = {"N": 1.0, "E": 1.0, "G": 0.8, "R": 0.8, "C": 0.35, "h": 0.35}
 
@@ -495,6 +500,122 @@ for _nombre in PLATILLOS:
     ENEMIES[_nombre] = platillo(_nombre)
 
 
+# ------------------------------------------------------------------ jefes
+# Mapas completos (sin espejo), armados por codigo. Los puntos fijos que el
+# juego anima encima (luces, emisor, torretas) estan copiados como
+# constantes en la clase de cada jefe.
+
+# Posiciones (en celdas de la grilla, sin PAD) de los enchufes de luz del
+# anillo: boss_system.py dibuja ahi las luces que corren.
+CENTINELA_W, CENTINELA_H = 78, 40
+
+
+def centinela():
+    """Nave nodriza del Centinela, de frente y un poco desde arriba: cupula
+    con el piloto alien, casco con ojos de buey, anillo ancho con enchufes
+    para las luces, panza con el emisor del rayo y dos torretas."""
+    W, H = CENTINELA_W, CENTINELA_H
+    g = [["."] * W for _ in range(H)]
+    cx = (W - 1) / 2.0
+
+    def put(x, y, ch):
+        if 0 <= x < W and 0 <= y < H:
+            g[y][x] = ch
+
+    def tono(luz, tonos):
+        # tonos de claro a oscuro; luz en [-1, 1]
+        i = int((1 - (luz + 1) / 2) * len(tonos))
+        return tonos[max(0, min(len(tonos) - 1, i))]
+
+    for y in range(H):
+        for x in range(W):
+            dx = x - cx
+            # anillo (ala): cara de arriba clara, canto frontal oscuro
+            e = ((dx) / 38.5) ** 2 + ((y - 21.5) / 4.6) ** 2
+            if e <= 1.0 and 18 <= y:
+                if e > 0.82:
+                    put(x, y, "o")
+                elif y <= 20:
+                    put(x, y, tono(-dx / 40 + 0.4, "WWw"))
+                elif y == 21:
+                    put(x, y, "N")
+                else:
+                    put(x, y, tono(-dx / 40 - 0.2, "wvvu"))
+            # casco inferior (panza)
+            e = (dx / 25) ** 2 + ((y - 23) / 9.5) ** 2
+            if y >= 24 and e <= 1.0:
+                if e > 0.84:
+                    put(x, y, "o")
+                elif y == 25:
+                    put(x, y, "e" if int(abs(dx)) % 3 == 0 else "x")
+                else:
+                    put(x, y, tono(-dx / 26 - (y - 24) / 6, "bddx"))
+            # casco superior
+            e = (dx / 27.5) ** 2 + ((y - 19) / 8.5) ** 2
+            if y <= 18 and e <= 1.0:
+                if e > 0.87:
+                    put(x, y, "o")
+                elif y == 15 and 5 < abs(dx) < 24:
+                    put(x, y, "N" if abs(dx) > 9 else "o")
+                elif y == 17 and abs(dx) < 23 and int(abs(dx) + 1.5) % 5 == 0:
+                    put(x, y, "E")
+                elif y >= 16 and abs(abs(dx) - 13) < 0.5:
+                    put(x, y, "x")
+                else:
+                    put(x, y, tono(-dx / 28 - (y - 14) / 7, "BBbbd"))
+            # cupula
+            e = (dx / 10.5) ** 2 + ((y - 13) / 10.5) ** 2
+            if y <= 13 and e <= 1.0:
+                if e > 0.8:
+                    put(x, y, "o")
+                else:
+                    luz = -dx / 10 - (y - 9) / 8
+                    if 0.45 < e < 0.62 and dx < -1 and y < 10:
+                        put(x, y, "h")
+                    else:
+                        put(x, y, "c" if luz < 0.6 else "C")
+    # piloto alien dentro de la cupula
+    alien = [
+        "..AAAA..",
+        ".AAAAAA.",
+        "AYoAAYoA",
+        "AooAAooA",
+        ".AAAAAA.",
+        "..aaaa..",
+        ".aAAAAa.",
+    ]
+    ax, ay = int(cx) - 3, 6
+    for j, fila in enumerate(alien):
+        for i, ch in enumerate(fila):
+            if ch != ".":
+                put(ax + i, ay + j, ch)
+    put(int(cx), 4, "o")
+    put(int(cx) + 1, 4, "o")
+    # emisor central del rayo
+    for y in range(28, 35):
+        half = {28: 6, 29: 5, 30: 5, 31: 4, 32: 3, 33: 2, 34: 1}[y]
+        x0, x1 = int(cx - half) + 1, int(cx + half)
+        for x in range(x0 - 1, x1 + 1):
+            borde = x in (x0 - 1, x1) or y == 34
+            put(x, y, "o" if borde else ("E" if y >= 31 else "e"))
+    # torretas laterales
+    for s in (-1, 1):
+        tx = int(round(cx + s * 15.5))
+        for y in range(27, 33):
+            for x in range(tx - 2, tx + 3):
+                borde = abs(x - tx) == 2 or y == 32
+                put(x, y, "o" if borde else ("E" if y == 31 else "e" if y > 28 else "x"))
+    # enchufes de las luces del anillo (las prende el juego)
+    for k in range(-4, 5):
+        put(int(round(cx + k * 7.6)), 23, "e")
+    put(int(cx - 36), 21, "G")
+    put(int(cx + 37), 21, "R")
+    return ["".join(f) for f in g]
+
+
+JEFES = {"centinela": centinela()}
+
+
 def parse(mapa):
     filas = [f for f in mapa.strip("\n").split("\n")]
     ancho = max(len(f) for f in filas)
@@ -550,7 +671,7 @@ def build(mapa):
 
 
 def main():
-    for carpeta, mapas in (("ships", SHIPS), ("enemies", ENEMIES)):
+    for carpeta, mapas in (("ships", SHIPS), ("enemies", ENEMIES), ("boss", JEFES)):
         destino = os.path.join(OUT_DIR, carpeta)
         os.makedirs(destino, exist_ok=True)
         for kind, mapa in mapas.items():
