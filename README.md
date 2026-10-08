@@ -48,7 +48,7 @@ modules/skins.py            colores de las naves
 modules/core/boss_system.py jefes por oleada
 modules/entities/           nave, enemigos, jefes, dron, mascota, tripulante
 modules/systems/            menu, HUD, cartas de mejora, estilo neon, sprites, audio, entrada
-assets/sprites/             PNG de naves, enemigos, jefes y asteroides
+assets/sprites/             PNG de naves, enemigos y jefes (los asteroides se dibujan por codigo)
 assets/audio/               musica y efectos
 models/hand_landmarker.task modelo de MediaPipe para la mano
 tools/                      generadores de sprites y audio
@@ -58,7 +58,6 @@ tools/                      generadores de sprites y audio
 
 ```bash
 pip install pillow numpy
-python tools/generate_sprites.py        # asteroides + pixel art de naves y jefes
-python tools/generate_pixel_sprites.py  # solo el pixel art
+python tools/generate_pixel_sprites.py  # pixel art de naves, enemigos y jefes
 python tools/generate_audio.py          # efectos y musica
 ```

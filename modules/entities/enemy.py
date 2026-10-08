@@ -268,8 +268,8 @@ class AlienShip:
             # Los PNG de assets/sprites/ships tienen el morro hacia ARRIBA
             # (mismo criterio que la nave del jugador); los de
             # assets/sprites/enemies ya vienen dibujados apuntando hacia
-            # ABAJO, mirando al jugador (ver enemy_geometry() en
-            # tools/generate_sprites.py). Sin este giro de 180 grados la nave
+            # ABAJO, mirando al jugador (ver
+            # tools/generate_pixel_sprites.py). Sin este giro de 180 grados la nave
             # bonus quedaria mirando para el lado contrario a todo enemigo.
             angle = self.rotation + 180 if self.is_bonus else self.rotation
             rotated = sprites.get_rotated(sprite, angle, self._sprite_key)

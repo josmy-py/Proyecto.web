@@ -12,7 +12,8 @@ naves/rocas/jefes ya no generan una silueta de respaldo por codigo, ver
 sus draw()); los "detalles" en tiempo real (cupula, luces, barra de vida,
 particulas...) siguen animandose igual.
 
-Regenerar los PNG:  python tools/generate_sprites.py
+Regenerar los PNG:  python tools/generate_pixel_sprites.py
+(los asteroides se dibujan por codigo, ver modules/entities/asteroid.py)
 """
 
 import os
@@ -29,10 +30,8 @@ SHIP_SCALE = {
     "interceptor": 1.62,
     "bomber": 1.76,
 }
-ASTEROID_SCALE = 2.25
 ENEMY_SCALE = 2.90
 
-ASTEROID_VARIANTS = 14
 ENEMY_KINDS = ("fighter", "drone", "gunner")
 
 # body_type del jefe (ver modules/core/boss_system.py) -> prefijo de archivo
@@ -303,24 +302,6 @@ def get_enemy_surface(kind, body_color, wing_color, size):
         return _composed_cache[key]
 
     surface = _compose_layers("enemies", kind, body_color, wing_color, px, px)
-    _composed_cache[key] = surface
-    _cap(_composed_cache, _MAX_COMPOSED)
-    return surface
-
-
-def get_asteroid_surface(variant, size, color):
-    """Roca tintada. size = radio logico usado en las colisiones."""
-    px = max(8, int(size * ASTEROID_SCALE))
-    px = (px // 4) * 4  # cuantizado para reutilizar cache
-    key = ("rock", int(variant) % ASTEROID_VARIANTS, _quantize(color, 16), px)
-    if key in _composed_cache:
-        return _composed_cache[key]
-
-    raw = load_raw("asteroids", f"asteroid_{int(variant) % ASTEROID_VARIANTS}.png")
-    surface = None
-    if raw is not None:
-        surface = _scaled(tint(raw, color), px, px)
-
     _composed_cache[key] = surface
     _cap(_composed_cache, _MAX_COMPOSED)
     return surface

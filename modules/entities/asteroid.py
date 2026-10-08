@@ -1,68 +1,229 @@
 """
-Asteroides y los efectos visuales de particulas que usa todo el juego
-(Particle/Explosion las reutilizan bosses, enemigos y power-ups, no solo
-los asteroides)."""
+Asteroides (pixel art dibujado por codigo, ver _arte_roca) y los efectos
+visuales de particulas que usa todo el juego (Particle/Explosion las
+reutilizan jefes y enemigos, no solo los asteroides)."""
 
 import random
 import math
-from modules.constants import MELON, GAME_HEIGHT
-from modules.systems import pixelfx, sprites
+
+import pygame
+
+from modules.constants import MELON, GAME_WIDTH, GAME_HEIGHT
+from modules.systems import pixelfx
 
 
-# Paleta de roca: pocos tonos para que el cache de sprites se reutilice
-ROCK_TINTS = [
-    (196, 172, 146),
-    (168, 150, 138),
-    (150, 132, 116),
-    (186, 182, 178),
-    (140, 152, 164),
-]
+# ------------------------------------------------------------- asteroides
+
+PIXEL_ROCA = 3          # px de juego por "pixel de arte"
+VARIANTES_ROCA = 10
+
+# Tipos de roca: (contorno, sombra, medio, luz, brillo, veta, veta_luz).
+# Roca oscura con vetas de energia neon que se encienden al agrietarse.
+PALETAS_ROCA = {
+    "magma":   ((24, 8, 20), (70, 34, 44), (112, 62, 62), (156, 98, 84), (204, 150, 120), (255, 110, 40), (255, 230, 120)),
+    "cristal": ((8, 14, 32), (36, 52, 84), (64, 88, 124), (100, 128, 164), (160, 190, 220), (60, 220, 255), (210, 250, 255)),
+    "plasma":  ((20, 6, 34), (52, 30, 76), (86, 56, 112), (124, 90, 150), (180, 150, 210), (255, 70, 220), (255, 200, 250)),
+    "toxica":  ((10, 20, 14), (40, 58, 46), (68, 90, 70), (104, 126, 98), (160, 180, 140), (130, 255, 90), (230, 255, 190)),
+}
+_TIPOS_ROCA = tuple(PALETAS_ROCA)
+
+# matriz de Bayer 4x4 para el tramado entre tonos (borde de luz y sombra)
+_BAYER = ((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5))
+
+_CACHE_ROCAS = {}
+
+
+def _arte_roca(variante, radio, tipo, rajada):
+    """Roca pixel art de `radio` pixeles de arte: silueta irregular con
+    contorno oscuro, tres tonos con tramado (luz arriba a la izquierda),
+    crateres, vetas de energia y, si esta `rajada` (le queda 1 golpe),
+    grietas encendidas que la cruzan y un pedazo de borde saltado."""
+    clave = (variante, radio, tipo, rajada)
+    arte = _CACHE_ROCAS.get(clave)
+    if arte is not None:
+        return arte
+    contorno, sombra, medio, luz, brillo, veta, veta_luz = PALETAS_ROCA[tipo]
+    rng = random.Random(variante * 7919 + radio * 31)
+    lado = radio * 2 + 3
+    c = lado / 2.0
+
+    # silueta: radio variable por angulo (suavizado), algunas rocas alargadas
+    n = 16
+    crudo = [rng.uniform(0.68, 1.0) for _ in range(n)]
+    perfil = [(crudo[i - 1] + 2 * crudo[i] + crudo[(i + 1) % n]) / 4 for i in range(n)]
+    estirar = rng.uniform(0.82, 1.0)
+    giro = rng.uniform(0, math.pi)
+
+    def dentro(x, y):
+        dx, dy = x + 0.5 - c, y + 0.5 - c
+        rx = dx * math.cos(giro) + dy * math.sin(giro)
+        ry = (-dx * math.sin(giro) + dy * math.cos(giro)) / estirar
+        a = math.atan2(ry, rx) % (2 * math.pi)
+        k = a / (2 * math.pi) * n
+        i = int(k) % n
+        f = k - int(k)
+        r = (perfil[i] * (1 - f) + perfil[(i + 1) % n] * f) * radio
+        return rx * rx + ry * ry <= r * r
+
+    mascara = [[dentro(x, y) for x in range(lado)] for y in range(lado)]
+    if rajada:
+        # un pedazo del borde saltado por el primer golpe
+        a = rng.uniform(0, 2 * math.pi)
+        mx, my = c + math.cos(a) * radio, c + math.sin(a) * radio
+        for y in range(lado):
+            for x in range(lado):
+                if (x - mx) ** 2 + (y - my) ** 2 < (radio * 0.32) ** 2:
+                    mascara[y][x] = False
+
+    arte = pygame.Surface((lado, lado), pygame.SRCALPHA)
+    crateres = [(c + rng.uniform(-0.5, 0.5) * radio, c + rng.uniform(-0.5, 0.5) * radio,
+                 rng.uniform(0.14, 0.26) * radio) for _ in range(rng.randint(2, 4))]
+    for y in range(lado):
+        for x in range(lado):
+            if not mascara[y][x]:
+                continue
+            borde = any(not (0 <= x + dx < lado and 0 <= y + dy < lado and mascara[y + dy][x + dx])
+                        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+            if borde:
+                arte.set_at((x, y), contorno)
+                continue
+            dx, dy = (x + 0.5 - c) / radio, (y + 0.5 - c) / radio
+            luz_k = -(dx * 0.62 + dy * 0.78) + 0.25 * (1 - dx * dx - dy * dy)
+            umbral = (_BAYER[y % 4][x % 4] / 16.0 - 0.5) * 0.28
+            for cx, cy, cr in crateres:
+                d = math.hypot(x + 0.5 - cx, y + 0.5 - cy)
+                if d < cr:
+                    # hueco: oscuro arriba a la izquierda, borde claro abajo a la derecha
+                    luz_k = -0.6 if (x - cx) + (y - cy) < cr * 0.4 else 0.55
+            v = luz_k + umbral
+            color = brillo if v > 0.62 else luz if v > 0.22 else medio if v > -0.28 else sombra
+            arte.set_at((x, y), color)
+
+    def pintar(x, y, color):
+        x, y = int(x), int(y)
+        if 0 <= x < lado and 0 <= y < lado and mascara[y][x]:
+            arte.set_at((x, y), color)
+
+    # vetas de energia: caminatas cortas desde adentro
+    for _ in range(rng.randint(1, 2) + (1 if radio > 9 else 0)):
+        x, y = c + rng.uniform(-0.4, 0.4) * radio, c + rng.uniform(-0.4, 0.4) * radio
+        a = rng.uniform(0, 2 * math.pi)
+        for paso in range(rng.randint(3, 3 + radio // 2)):
+            pintar(x, y, veta_luz if rajada and paso % 2 == 0 else veta)
+            a += rng.uniform(-0.7, 0.7)
+            x += math.cos(a)
+            y += math.sin(a)
+    if rajada:
+        # grietas encendidas que cruzan la roca desde el centro
+        for _ in range(3):
+            x, y = c, c
+            a = rng.uniform(0, 2 * math.pi)
+            while 0 <= x < lado and 0 <= y < lado:
+                pintar(x, y, veta_luz)
+                pintar(x + 1, y, veta)
+                a += rng.uniform(-0.5, 0.5)
+                x += math.cos(a)
+                y += math.sin(a)
+    else:
+        # destellito de luz arriba a la izquierda
+        pintar(c - radio * 0.45, c - radio * 0.5, (255, 255, 255))
+        pintar(c - radio * 0.45 + 1, c - radio * 0.5, brillo)
+
+    _CACHE_ROCAS[clave] = arte
+    return arte
 
 
 class Asteroid:
-    """Roca que cae desde arriba del area de juego. Usa uno de los 14
-    sprites generados por tools/generate_sprites.py (tintado y rotado)."""
+    """Roca pixel art que cae desde arriba del area de juego.
 
-    def __init__(self, x, y, size=25):
+    vida: golpes que aguanta. Las de las oleadas salen con 2: el primer
+    golpe la raja (grietas neon encendidas, pedazo saltado) y el segundo la
+    rompe en dos fragmentos de 1 golpe que salen despedidos a los costados
+    (ver fragmentos()). Los meteoros de los jefes usan el valor por defecto
+    (1 golpe, sin dividirse)."""
+
+    def __init__(self, x, y, size=25, vida=1, tipo=None, fragmento=False):
         self.x = x
         self.y = y
         self.size = size
         self.speed = random.uniform(2.0, 5.0)
+        self.vx = 0.0
         self.rotation = random.uniform(0, 360)
         self.rot_speed = random.uniform(-2.2, 2.2)
         self.active = True
-        self.variant = random.randrange(sprites.ASTEROID_VARIANTS)
-        self.color = random.choice(ROCK_TINTS)
-        self.dark_color = tuple(max(0, c - 35) for c in self.color)
-        self.light_color = tuple(min(255, c + 35) for c in self.color)
+        self.vida = vida
+        self.vida_max = vida
+        self.fragmento = fragmento
+        self.tipo = tipo or random.choice(_TIPOS_ROCA)
+        self.variant = random.randrange(VARIANTES_ROCA)
         self.flash_timer = 0
+        self.temblor = 0
         self.glow_phase = random.uniform(0, math.pi * 2)
-        self._sprite_key = ("rock", self.variant, self.size, self.color)
+
+    @property
+    def color(self):
+        """Color de la veta (para chispas y explosiones)."""
+        return PALETAS_ROCA[self.tipo][5]
+
+    @property
+    def rajada(self):
+        return self.vida < self.vida_max
+
+    def take_damage(self, amount=1):
+        """Resta vida; True si la roca se rompe con este golpe."""
+        self.vida -= max(1, int(amount))
+        self.flash_timer = 6
+        if self.vida <= 0:
+            self.active = False
+            return True
+        self.temblor = 8
+        return False
+
+    def fragmentos(self):
+        """Los dos pedazos de 1 golpe en que se parte una roca de las
+        oleadas al romperse (una que ya es fragmento no se divide mas)."""
+        if self.fragmento or self.vida_max < 2:
+            return []
+        tam = max(14, int(self.size * 0.6))
+        pedazos = []
+        for lado in (-1, 1):
+            p = Asteroid(self.x + lado * tam * 0.6, self.y, tam, vida=1, tipo=self.tipo, fragmento=True)
+            p.vx = lado * random.uniform(1.4, 2.4)
+            p.speed = max(2.0, self.speed * random.uniform(0.9, 1.15))
+            p.rot_speed = lado * random.uniform(3, 5)
+            pedazos.append(p)
+        return pedazos
 
     def update(self):
         self.y += self.speed
+        self.x += self.vx
+        self.vx *= 0.99
         self.rotation = (self.rotation + self.rot_speed) % 360
         self.glow_phase += 0.06
         if self.flash_timer > 0:
             self.flash_timer -= 1
-        if self.y > GAME_HEIGHT + self.size + 20:
+        if self.temblor > 0:
+            self.temblor -= 1
+        if self.y > GAME_HEIGHT + self.size + 20 or not (-self.size - 40 < self.x < GAME_WIDTH + self.size + 40):
             self.active = False
 
     def draw(self, screen, offset_x=0, offset_y=0):
-        cx = int(self.x) + offset_x
+        cx = int(self.x) + offset_x + (random.randint(-2, 2) if self.temblor else 0)
         cy = int(self.y) + offset_y
 
-        hit = self.flash_timer > 0
-        tint = (255, 255, 255) if hit else self.color
-        sprite = sprites.get_asteroid_surface(self.variant, self.size, tint)
-
-        if sprite is not None:
-            key = self._sprite_key + (hit,)
-            rotated = sprites.get_rotated(sprite, self.rotation, key)
-            sprites.blit_centered(screen, rotated, cx, cy)
-        # Sin PNG en assets/sprites/asteroids no se dibuja una roca de
-        # respaldo por codigo: simplemente no se ve hasta que se regeneren
-        # los sprites.
+        radio = max(4, round(self.size * 1.1 / PIXEL_ROCA))
+        arte = _arte_roca(self.variant, radio, self.tipo, self.rajada)
+        if self.flash_timer > 0:
+            arte = pixelfx.silueta_blanca(arte)
+        # se gira el arte chico (a pasos de 15 grados) y recien despues se
+        # agranda sin filtrado: los pixeles quedan cuadrados y del mismo tamaño
+        girado = pygame.transform.rotate(arte, -(int(self.rotation) // 15) * 15)
+        grande = pygame.transform.scale(girado, (girado.get_width() * PIXEL_ROCA, girado.get_height() * PIXEL_ROCA))
+        if self.rajada:
+            # las grietas laten con un halo del color de la veta
+            pulso = round(2 + 2 * math.sin(self.glow_phase * 3)) / 4
+            pixelfx.dibujar_halo(screen, pixelfx.apagar(self.color, 0.25 + 0.25 * pulso), cx, cy, int(self.size * 1.3))
+        screen.blit(grande, (cx - grande.get_width() // 2, cy - grande.get_height() // 2))
 
 
 FUEGO = (255, 150, 50)

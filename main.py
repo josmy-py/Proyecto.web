@@ -846,6 +846,26 @@ def main():
             draw_viewport_frame(screen, game_offset_x, game_offset_y, GAME_WIDTH, GAME_HEIGHT, pygame.time.get_ticks())
             pygame.display.flip()
 
+    def _golpear_asteroide(a, dano=1):
+        """Un golpe a una roca: las de las oleadas aguantan 2 (el primero la
+        raja con chispas del color de su veta) y al romperse se parten en
+        dos fragmentos de 1 golpe (ver Asteroid.fragmentos). Solo la roca
+        entera suma al objetivo de la oleada; los fragmentos dan puntaje."""
+        nonlocal asteroid_kills, objetivos_oleada, score
+        if not a.take_damage(dano):
+            explosions.append(Explosion(a.x, a.y, a.color, 8))
+            particles.extend([Particle(a.x, a.y, a.color) for _ in range(6)])
+            audio.sonido_impacto()
+            return
+        explosions.append(Explosion(a.x, a.y, a.color, 20 if not a.fragmento else 12))
+        particles.extend([Particle(a.x, a.y, a.color) for _ in range(8)])
+        audio.sonido_explosion()
+        asteroid_kills += 1
+        if not a.fragmento:
+            objetivos_oleada += 1
+        score += a.size // 10 + 1
+        asteroids.extend(a.fragmentos())
+
     def _dar_todos_los_buffs():
         """Opcion de AJUSTES "BONUS CON TODOS LOS BUFFS" y de ELEGIR FASE
         "TODOS LOS BUFFS": toma cada carta de mejora hasta su nivel maximo
@@ -1444,7 +1464,7 @@ def main():
                 spawn_timer = 0
                 size = random.randint(18, 38)
                 x = random.randint(size, GAME_WIDTH - size)
-                nuevo_asteroide = Asteroid(x, -size - 10, size)
+                nuevo_asteroide = Asteroid(x, -size - 10, size, vida=2)
                 nuevo_asteroide.speed *= dificultad
                 asteroids.append(nuevo_asteroide)
 
@@ -1602,19 +1622,14 @@ def main():
 
             for b in bullets[:]:
                 for a in asteroids[:]:
+                    if not a.active:
+                        continue
                     dist = math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2)
                     if dist < a.size + b.radius:
-                        a.flash_timer = 6
-                        explosions.append(Explosion(a.x, a.y, ORANGE, 20))
-                        particles.extend([Particle(a.x, a.y, RED) for _ in range(8)])
-                        audio.sonido_explosion()
-                        asteroid_kills += 1
-                        objetivos_oleada += 1
                         stats_aciertos += 1
-                        score += a.size // 10 + 1
+                        _golpear_asteroide(a)
                         if not b.piercing:
                             b.active = False
-                        a.active = False
                         break
 
             for b in bullets[:]:
@@ -1683,6 +1698,8 @@ def main():
                 objetivo_tipo = None
                 mejor_dist = ship.lightning_radius
                 for a in asteroids:
+                    if not a.active:
+                        continue
                     dist = math.sqrt((a.x - ship.x) ** 2 + (a.y - ship.y) ** 2)
                     if dist < mejor_dist:
                         mejor_dist = dist
@@ -1708,10 +1725,7 @@ def main():
                     particles.extend([Particle(objetivo.x, objetivo.y, CYAN) for _ in range(6)])
                     audio.sonido_impacto()
                     if objetivo_tipo == "asteroide":
-                        asteroid_kills += 1
-                        objetivos_oleada += 1
-                        score += objetivo.size // 10 + 1
-                        objetivo.active = False
+                        _golpear_asteroide(objetivo)
                     elif objetivo_tipo == "alien":
                         # respeta el hp igual que un golpe de bala normal
                         # (ver AlienShip.take_damage): una bonus/mini-jefe
@@ -1763,6 +1777,8 @@ def main():
                     break
 
             for a in asteroids[:]:
+                if not a.active:
+                    continue
                 dist = math.sqrt((a.x - ship.x) ** 2 + (a.y - ship.y) ** 2)
                 if dist < a.size + SHIP_WIDTH // 2:
                     if ship.take_damage():
