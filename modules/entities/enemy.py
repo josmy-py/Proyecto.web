@@ -9,12 +9,16 @@ import pygame
 import random
 import math
 from modules.constants import (
-    LAVANDA, ROSA_CHICLE, MENTA, MELON, WHITE, AZUL, AMARILLO,
+    MELON, WHITE, AMARILLO,
     GAME_WIDTH, GAME_HEIGHT, SHIP_WIDTH, SHIP_HEIGHT,
 )
-from modules.systems import sprites
+from modules.systems import sprites, pixelfx
 from modules.skins import get_available_skins, get_skin_colors
 
+
+# Colores neon de los enemigos comunes: rojo, naranja, violeta y verde
+# acido, lejos del azul/magenta de la nave del jugador para leerlos rapido.
+COLORES_ENEMIGO = [(255, 70, 90), (255, 150, 40), (180, 90, 255), (120, 255, 90)]
 
 # Variantes de nave enemiga comun (sprites en assets/sprites/enemies).
 # Mueren de un solo golpe, sin hp propio (ver AlienShip.take_damage).
@@ -79,7 +83,7 @@ class AlienShip:
         else:
             self.variant = variant or random.choice(list(ENEMY_VARIANTS.keys()))
             cfg = ENEMY_VARIANTS[self.variant]
-            self.color = random.choice([LAVANDA, ROSA_CHICLE, AZUL, MENTA])
+            self.color = random.choice(COLORES_ENEMIGO)
             self.wing_color = tuple(int(c * 0.62) for c in self.color[:3])
             self.glow_color = None
             self.max_hp = 1
@@ -226,15 +230,15 @@ class AlienShip:
             pulse = 0.5 + 0.5 * math.sin(self.glow_phase)
             glow_r = int(self.size * (2.4 if self.is_miniboss else 2.1))
             glow_color = (255, 90, 70) if self.is_miniboss else AMARILLO
-            glow_surf = pygame.Surface((glow_r * 2, glow_r * 2), pygame.SRCALPHA)
-            for gi in range(3):
-                gr = glow_r - gi * 6
-                ga = int((95 if self.is_miniboss else 70) * pulse * (1 - gi * 0.3))
-                pygame.draw.circle(glow_surf, (*glow_color[:3], max(0, ga)), (glow_r, glow_r), max(1, gr))
-            screen.blit(glow_surf, (cx - glow_r, cy - glow_r))
+            k = (0.55 if self.is_miniboss else 0.4) * (0.6 + 0.4 * pulse)
+            pixelfx.dibujar_halo(screen, tuple(int(c * k) for c in glow_color[:3]), cx, cy, glow_r)
 
             width = int(self.size * 2.4)
             height = int(width * SHIP_HEIGHT / SHIP_WIDTH)
+            if sprites.es_nave_pixel(self.variant):
+                # agrandado en multiplos enteros para no deformar los pixeles
+                escala = max(2, round(width / SHIP_WIDTH))
+                width, height = sprites.tamano_pixel("ships", self.variant, escala)
             sprite = sprites.get_ship_surface(self.variant, self.color, self.wing_color, width, height)
         else:
             sprite = sprites.get_enemy_surface(self.variant, self.color, self.wing_color, self.size)
@@ -311,11 +315,10 @@ class AlienBullet:
     def draw(self, screen, offset_x=0, offset_y=0):
         cx = int(self.x) + offset_x
         cy = int(self.y) + offset_y
-        glow = pygame.Surface((self.radius * 6, self.radius * 6), pygame.SRCALPHA)
-        pygame.draw.circle(glow, (*self.color, 70), (self.radius * 3, self.radius * 3), self.radius * 3)
-        screen.blit(glow, (cx - self.radius * 3, cy - self.radius * 3))
-        pygame.draw.circle(screen, self.color, (cx, cy), self.radius)
-        pygame.draw.circle(screen, WHITE, (cx, cy), max(1, self.radius - 1))
+        pixelfx.dibujar_halo(screen, self.color, cx, cy, self.radius * 2.5 + 5)
+        self._fase = getattr(self, "_fase", 0) + 1
+        sprite = pixelfx.bala_enemiga(self.color, self.radius, (self._fase // 6) % 2)
+        screen.blit(sprite, (cx - sprite.get_width() // 2, cy - sprite.get_height() // 2))
 
 
 class AlienMissile:

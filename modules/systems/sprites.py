@@ -201,7 +201,8 @@ def get_ship_surface(ship_type, body_color, wing_color, width, height):
         return _composed_cache[key]
 
     if es_nave_pixel(ship_type):
-        surface = _compose_nave_pixel(ship_type, body_color, wing_color, width, height)
+        surface = _compose_pixel("ships", ship_type, body_color, wing_color,
+                                 width, height, color_neon(wing_color))
     else:
         surface = _compose_layers("ships", ship_type, body_color, wing_color, width, height)
     _composed_cache[key] = surface
@@ -211,14 +212,13 @@ def get_ship_surface(ship_type, body_color, wing_color, width, height):
 
 def get_ship_size(ship_type, base_width, base_height):
     if es_nave_pixel(ship_type):
-        grilla = load_raw("ships", f"{ship_type}_body.png")
-        return grilla.get_width() * SHIP_PIXEL, grilla.get_height() * SHIP_PIXEL
+        return tamano_pixel("ships", ship_type)
     scale = SHIP_SCALE.get(ship_type, 1.45)
     return int(base_width * scale), int(base_height * scale)
 
 
 # ---------------------------------------------------------------- naves pixel art
-# Las naves de tools/generate_pixel_ships.py traen una capa "_neon" (lineas
+# Las naves y enemigos de tools/generate_pixel_sprites.py traen una capa "_neon" (lineas
 # que brillan) y una "_glow" (halo suave a 4x). body/wing/neon/detail vienen
 # a la resolucion de la grilla y se agrandan sin suavizar; el halo si se
 # suaviza. Si una clase no tiene "_neon" se usa el camino viejo de arriba.
@@ -230,11 +230,22 @@ _nave_pixel_cache = {}
 _toberas_cache = {}
 
 
+def es_pixel(folder, kind):
+    clave = (folder, kind)
+    if clave not in _nave_pixel_cache:
+        _nave_pixel_cache[clave] = os.path.isfile(
+            os.path.join(SPRITES_DIR, folder, f"{kind}_neon.png"))
+    return _nave_pixel_cache[clave]
+
+
 def es_nave_pixel(ship_type):
-    if ship_type not in _nave_pixel_cache:
-        _nave_pixel_cache[ship_type] = os.path.isfile(
-            os.path.join(SPRITES_DIR, "ships", f"{ship_type}_neon.png"))
-    return _nave_pixel_cache[ship_type]
+    return es_pixel("ships", ship_type)
+
+
+def tamano_pixel(folder, kind, escala=SHIP_PIXEL):
+    """Tamaño en pantalla de un sprite pixel art agrandado escala veces."""
+    grilla = load_raw(folder, f"{kind}_body.png")
+    return grilla.get_width() * escala, grilla.get_height() * escala
 
 
 def color_neon(color):
@@ -242,14 +253,13 @@ def color_neon(color):
     return tuple(min(255, int(c * 0.45 + 140)) for c in color[:3])
 
 
-def _compose_nave_pixel(ship_type, body_color, wing_color, width, height):
-    canvas = _compose_layers("ships", ship_type, body_color, wing_color,
+def _compose_pixel(folder, kind, body_color, wing_color, width, height, tono):
+    canvas = _compose_layers(folder, kind, body_color, wing_color,
                              width, height, pixelado=True)
     if canvas is None:
         return None
-    neon = load_raw("ships", f"{ship_type}_neon.png")
-    glow = load_raw("ships", f"{ship_type}_glow.png")
-    tono = color_neon(wing_color)
+    neon = load_raw(folder, f"{kind}_neon.png")
+    glow = load_raw(folder, f"{kind}_glow.png")
     out = pygame.Surface(canvas.get_size(), pygame.SRCALPHA)
     if glow is not None:
         out.blit(tint(_scaled(glow, width, height), tono), (0, 0))
@@ -257,7 +267,7 @@ def _compose_nave_pixel(ship_type, body_color, wing_color, width, height):
     if neon is not None:
         out.blit(_scaled_pixelado(tint(neon, tono), width, height), (0, 0))
         # la capa de detalle (contorno, cabina) va siempre arriba del neon
-        detail = load_raw("ships", f"{ship_type}_detail.png")
+        detail = load_raw(folder, f"{kind}_detail.png")
         if detail is not None:
             out.blit(_scaled_pixelado(detail, width, height), (0, 0))
     return out
@@ -288,6 +298,16 @@ def get_ship_nozzles(ship_type):
 
 def get_enemy_surface(kind, body_color, wing_color, size):
     """Nave enemiga tintada. size = radio logico usado en las colisiones."""
+    if es_pixel("enemies", kind):
+        escala = max(1, round(size * ENEMY_SCALE / 28))
+        w, h = tamano_pixel("enemies", kind, escala)
+        key = ("enemy", kind, _quantize(body_color), _quantize(wing_color), w)
+        if key not in _composed_cache:
+            _composed_cache[key] = _compose_pixel(
+                "enemies", kind, body_color, wing_color, w, h, color_neon(body_color))
+            _cap(_composed_cache, _MAX_COMPOSED)
+        return _composed_cache[key]
+
     px = max(8, int(size * ENEMY_SCALE))
     key = ("enemy", kind, _quantize(body_color), _quantize(wing_color), px)
     if key in _composed_cache:

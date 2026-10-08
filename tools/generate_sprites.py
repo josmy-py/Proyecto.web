@@ -1969,18 +1969,14 @@ def generate_all(verbose=True):
     _ensure_dir(OUT_DIR)
     written = []
 
-    # Las naves del jugador ahora son pixel art neon y salen de
-    # tools/generate_pixel_ships.py (build_ship queda solo como referencia).
-    import generate_pixel_ships
-    generate_pixel_ships.main()
+    # Las naves y los enemigos comunes ahora son pixel art neon y salen de
+    # tools/generate_pixel_sprites.py (build_ship/build_enemy quedan solo
+    # como referencia).
+    import generate_pixel_sprites
+    generate_pixel_sprites.main()
 
     for i in range(ASTEROID_VARIANTS):
         written.append(save(build_asteroid(1000 + i), "asteroids", f"asteroid_{i}.png"))
-
-    for kind in ENEMY_KINDS:
-        layers = build_enemy(kind)
-        for layer_name, img in layers.items():
-            written.append(save(img, "enemies", f"{kind}_{layer_name}.png"))
 
     # "saucer" se guarda como "mothership" por compatibilidad con el nombre
     # de archivo que ya usaba el jefe Centinela Corrupto (ver

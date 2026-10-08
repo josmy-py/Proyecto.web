@@ -1,7 +1,8 @@
 """Bala disparada por la nave del jugador (ver Ship.shoot() en ship.py)."""
 
 import pygame
-from modules.constants import AMARILLO, WHITE, AZUL, MELON
+from modules.constants import AZUL, MELON
+from modules.systems import pixelfx
 
 
 class Bullet:
@@ -29,21 +30,17 @@ class Bullet:
             self.active = False
 
     def draw(self, screen, offset_x=0, offset_y=0):
-        base_color = self.color or AZUL
-        for i, (tx, ty) in enumerate(self.trail):
-            alpha = int(100 * (i / len(self.trail)))
-            size = max(1, int(self.radius * (i / len(self.trail))))
-            trail_surf = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
-            pygame.draw.circle(trail_surf, (*base_color, alpha), (size, size), size)
-            screen.blit(trail_surf, (int(tx) + offset_x - size, int(ty) + offset_y - size))
-
-        glow_surf = pygame.Surface((self.radius * 4, self.radius * 4), pygame.SRCALPHA)
-        glow_color = MELON if self.piercing else base_color
-        pygame.draw.circle(glow_surf, (*glow_color[:3], 60), (self.radius * 2, self.radius * 2), self.radius * 2)
-        screen.blit(glow_surf, (int(self.x) + offset_x - self.radius * 2, int(self.y) + offset_y - self.radius * 2))
-
-        bullet_color = MELON if self.piercing else (
-            tuple(min(255, c + 60) for c in base_color) if self.color else AMARILLO
-        )
-        pygame.draw.circle(screen, bullet_color, (int(self.x) + offset_x, int(self.y) + offset_y), self.radius)
-        pygame.draw.circle(screen, WHITE, (int(self.x) + offset_x, int(self.y) + offset_y), self.radius - 1)
+        base_color = MELON if self.piercing else (self.color or AZUL)
+        # estela: bloques de pixel que se apagan
+        n = len(self.trail)
+        for i, (tx, ty) in enumerate(self.trail[:-1]):
+            f = (i + 1) / n
+            c = tuple(int(v * f * 0.8) for v in base_color[:3])
+            lado = pixelfx.PIXEL
+            screen.fill(c, (int(tx) + offset_x - lado // 2, int(ty) + offset_y + 6, lado, self.speed),
+                        special_flags=pygame.BLEND_RGB_ADD)
+        cx = int(self.x) + offset_x
+        cy = int(self.y) + offset_y
+        pixelfx.dibujar_halo(screen, base_color, cx, cy, 10 if self.piercing else 7)
+        sprite = pixelfx.bala_jugador(base_color, self.piercing)
+        screen.blit(sprite, (cx - sprite.get_width() // 2, cy - sprite.get_height() // 2))

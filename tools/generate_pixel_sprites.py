@@ -1,9 +1,10 @@
 """
-Genera las naves del jugador en pixel art neon (assets/sprites/ships/).
+Genera en pixel art neon las naves (assets/sprites/ships/) y los enemigos
+comunes (assets/sprites/enemies/).
 
 Cada nave se dibuja a mano como un mapa de caracteres (solo la mitad
-izquierda; la derecha se obtiene en espejo) sobre una grilla chica. De ese
-mapa salen cinco PNG por clase:
+izquierda; la derecha se obtiene en espejo) sobre una grilla chica. Las naves
+miran hacia arriba y los enemigos hacia abajo. De cada mapa salen cinco PNG:
 
   <clase>_body.png    casco en escala de grises (se tinta con el color de casco)
   <clase>_wing.png    alas en escala de grises (se tinta con el color de alas)
@@ -16,7 +17,7 @@ mapa salen cinco PNG por clase:
 body/wing/neon/detail quedan a la resolucion de la grilla: el juego los agranda
 sin suavizar (pixeles en bloque, ver sprites.get_ship_surface).
 
-Uso:  python tools/generate_pixel_ships.py
+Uso:  python tools/generate_pixel_sprites.py
 """
 
 import os
@@ -25,7 +26,7 @@ import numpy as np
 from PIL import Image, ImageFilter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT_DIR = os.path.join(ROOT, "assets", "sprites", "ships")
+OUT_DIR = os.path.join(ROOT, "assets", "sprites")
 
 PAD = 3            # celdas libres alrededor para que entre el halo
 GLOW_SCALE = 4     # resolucion del halo respecto de la grilla
@@ -196,6 +197,100 @@ SHIPS = {
 }
 
 
+ENEMIES = {
+    "fighter": """
+..............
+..oo.......ooo
+.oNo......oeEE
+.oWvo.....oeeE
+.oWwvo....obBB
+..oWwvo..obBBB
+..oWwwvo.obBBB
+...oWwwvoobBBN
+...oWwwwvobBBB
+....oWwwvobBBB
+....oNWwvobBCC
+.....oNWvobBCh
+.....oNWvobBCC
+......oNvobBcC
+......oNvobBcc
+.......ovobBBB
+........oobBBN
+.........obBBB
+.........odbBB
+.........odbBB
+..........odbB
+..........odbB
+...........odN
+...........odB
+............oN
+.............o
+..............
+..............
+""",
+    "drone": """
+..............
+..............
+..............
+..........oooo
+........ooNNNN
+.......oNWWWWW
+......oNWwwwww
+.....oNWwwvvvv
+....oNWwwvoooo
+...oNWwwvobbbb
+...oWwwvobBBBB
+..oWwwvobBBddd
+..oWwwvobBdooo
+..oNwwvobBdoRR
+..oNwwvobBdoRh
+..oWwwvobBdoRR
+..oWwwvobBBdoo
+...oWwvvobBBBB
+...oNWwvvobbbb
+....oNWwvvoooo
+.....oNWwwvvvv
+......oNWWwwww
+.......ooNNNNN
+.........ooooo
+..............
+..............
+..............
+..............
+""",
+    "gunner": """
+..............
+..............
+...oooo.......
+..oNWWNo..oooo
+..oWwwvo.oeEEE
+..oWwwvoobBBBB
+..oWwwvobBBBBB
+..oWwwvobBddBB
+..oNwwvobBdoCC
+..oWwwvobBdoCh
+..oWwwvobBdoCC
+..oWwwvobBddBB
+..oWwwvobBBBBB
+..oNwwvobBBBBN
+...oWvoobBBBBB
+...oeeo.obBBBB
+...oeeo..obBBB
+...oeeo...obBB
+...oEEo....obB
+....EE......oN
+.............o
+..............
+..............
+..............
+..............
+..............
+..............
+..............
+""",
+}
+
+
 def parse(mapa):
     filas = [f for f in mapa.strip("\n").split("\n")]
     ancho = max(len(f) for f in filas)
@@ -207,8 +302,8 @@ def parse(mapa):
     return grilla
 
 
-def build(kind):
-    grilla = parse(SHIPS[kind])
+def build(mapa):
+    grilla = parse(mapa)
     h = len(grilla) + PAD * 2
     w = len(grilla[0]) + PAD * 2
     body = np.zeros((h, w, 4), np.uint8)
@@ -250,12 +345,14 @@ def build(kind):
 
 
 def main():
-    os.makedirs(OUT_DIR, exist_ok=True)
-    for kind in SHIPS:
-        capas = build(kind)
-        for nombre, img in capas.items():
-            img.save(os.path.join(OUT_DIR, f"{kind}_{nombre}.png"))
-        print(f"{kind}: {capas['body'].size[0]}x{capas['body'].size[1]}")
+    for carpeta, mapas in (("ships", SHIPS), ("enemies", ENEMIES)):
+        destino = os.path.join(OUT_DIR, carpeta)
+        os.makedirs(destino, exist_ok=True)
+        for kind, mapa in mapas.items():
+            capas = build(mapa)
+            for nombre, img in capas.items():
+                img.save(os.path.join(destino, f"{kind}_{nombre}.png"))
+            print(f"{carpeta}/{kind}: {capas['body'].size[0]}x{capas['body'].size[1]}")
 
 
 if __name__ == "__main__":
