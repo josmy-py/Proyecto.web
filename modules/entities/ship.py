@@ -365,7 +365,11 @@ class Ship:
         bar_w = 40
         bar_h = 5
         bar_x = cx - bar_w // 2
-        bar_y = cy - self.height // 2 - 14
+        # se ubica arriba del sprite (que trae margen para el halo) y deja
+        # un hueco visible entre la barra y la punta de la nave
+        sprite = self._get_sprite()
+        alto = sprite.get_height() if sprite is not None else self.height + 28
+        bar_y = cy - alto // 2 - bar_h - 4
 
         shake_x = 0
         shake_y = 0
