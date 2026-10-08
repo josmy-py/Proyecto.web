@@ -63,17 +63,22 @@ ESTRELLA_VERDE = (190, 255, 200)
 ALMOHADON = (255, 160, 210)
 ALMOHADON_BORDE = (190, 80, 150)
 
-# Gato OIIA (Ethel, el gato del meme): atigrado gris con hocico, babero y
-# patitas blancas, sentado derecho, la cabeza para arriba, los ojos
-# entrecerrados y la boca abierta cantando
-GATO_CONTORNO = (34, 30, 40)
-GATO_GRIS = (146, 142, 150)
-GATO_GRIS_OSCURO = (112, 108, 118)
-GATO_RAYA = (72, 68, 80)
-GATO_BLANCO = (246, 244, 238)
-GATO_SOMBRA = (206, 202, 200)
+# Gato OIIA: gato negro con casco espartano dorado (penacho rojo), sentado
+# derecho, ojos amarillos entrecerrados y la boca abierta cantando
+GATO_CONTORNO = (10, 8, 16)
+GATO_NEGRO = (38, 34, 46)
+GATO_NEGRO_LUZ = (70, 64, 86)
+GATO_OREJA = (110, 56, 80)
+GATO_OJO = (255, 214, 70)
+GATO_BLANCO = (238, 236, 232)
 GATO_ROSA = (240, 140, 160)
-GATO_BOCA = (70, 24, 40)
+GATO_BOCA = (90, 24, 44)
+CASCO = (206, 150, 48)
+CASCO_SOMBRA = (140, 92, 28)
+CASCO_LUZ = (246, 206, 104)
+CASCO_FILO = (255, 240, 180)
+PENACHO = (196, 36, 48)
+PENACHO_OSCURO = (120, 18, 34)
 
 
 # ------------------------------------------------------------------ arte
@@ -227,66 +232,75 @@ def _arte_gato_durmiendo(cuadro):
 def _arte_oiia(cuadro):
     """Gato OIIA de frente, como el recorte del meme. cuadro 0: boca chica
     ("O"), 1: abierta ("I"), 2: bien abierta con la cabeza para atras ("A")."""
-    s = pygame.Surface((26, 34), pygame.SRCALPHA)
+    s = pygame.Surface((26, 38), pygame.SRCALPHA)
     alza = 1 if cuadro == 2 else 0       # en la "A" levanta la cabeza
-    # cola enroscada al costado, rayada
-    cola = [(19, 32), (23, 30), (24, 26), (23, 22)]
+    # cola enroscada al costado
+    cola = [(19, 36), (23, 34), (24, 30), (23, 26)]
     pygame.draw.lines(s, GATO_CONTORNO, False, cola, 4)
-    pygame.draw.lines(s, GATO_GRIS, False, cola, 2)
-    _px(s, GATO_RAYA, 22, 29, 2, 1)
-    _px(s, GATO_RAYA, 23, 25, 2, 1)
-    # cuerpo sentado: pera gris con babero blanco
-    pygame.draw.ellipse(s, GATO_CONTORNO, (4, 14, 18, 20))
-    pygame.draw.ellipse(s, GATO_GRIS, (5, 15, 16, 18))
-    for y in (19, 23, 27):
-        _px(s, GATO_RAYA, 5, y, 3, 1)
-        _px(s, GATO_RAYA, 18, y, 3, 1)
-    pygame.draw.ellipse(s, GATO_BLANCO, (8, 14, 10, 17))
-    _px(s, GATO_SOMBRA, 12, 22, 2, 8)
-    # patas delanteras derechas y juntas, con patitas blancas
+    pygame.draw.lines(s, GATO_NEGRO, False, cola, 2)
+    _px(s, GATO_NEGRO_LUZ, 23, 27, 1, 3)
+    # cuerpo sentado
+    pygame.draw.ellipse(s, GATO_CONTORNO, (4, 18, 18, 20))
+    pygame.draw.ellipse(s, GATO_NEGRO, (5, 19, 16, 18))
+    _px(s, GATO_NEGRO_LUZ, 7, 22, 1, 6)
+    _px(s, GATO_NEGRO_LUZ, 8, 21, 2, 1)
+    # patas delanteras derechas y juntas
     for x in (9, 14):
-        _px(s, GATO_CONTORNO, x - 1, 24, 5, 10)
-        _px(s, GATO_GRIS, x, 24, 3, 5)
-        _px(s, GATO_BLANCO, x, 29, 3, 4)
-    # cabeza
+        _px(s, GATO_CONTORNO, x - 1, 28, 5, 10)
+        _px(s, GATO_NEGRO, x, 28, 3, 9)
+        _px(s, GATO_NEGRO_LUZ, x, 29, 1, 6)
+    _px(s, GATO_CONTORNO, 12, 30, 2, 8)
+    # cabeza (debajo del casco solo asoman las orejas)
     oy = -alza
-    for pts in ([(3, 9), (4, 0), (10, 4)], [(22, 9), (21, 0), (15, 4)]):
+    for pts, adentro in (([(2, 12), (3, 2), (9, 8)], [(4, 9), (4, 5), (7, 8)]),
+                         ([(23, 12), (22, 2), (16, 8)], [(21, 9), (21, 5), (18, 8)])):
         pygame.draw.polygon(s, GATO_CONTORNO, [(x, y + oy) for x, y in pts])
-    pygame.draw.polygon(s, GATO_GRIS_OSCURO, [(5, 7 + oy), (5, 2 + oy), (9, 5 + oy)])
-    pygame.draw.polygon(s, GATO_GRIS_OSCURO, [(20, 7 + oy), (20, 2 + oy), (16, 5 + oy)])
-    _px(s, GATO_ROSA, 6, 4 + oy, 1, 2)
-    _px(s, GATO_ROSA, 19, 4 + oy, 1, 2)
-    pygame.draw.ellipse(s, GATO_CONTORNO, (1, 3 + oy, 24, 16))
-    pygame.draw.ellipse(s, GATO_GRIS, (2, 4 + oy, 22, 14))
-    # "M" atigrada en la frente y rayas de los cachetes
-    for x, alto in ((9, 3), (11, 4), (14, 4), (16, 3)):
-        _px(s, GATO_RAYA, x, 4 + oy, 1, alto)
-    _px(s, GATO_RAYA, 12, 4 + oy, 2, 2)
-    for y in (10, 12):
-        _px(s, GATO_RAYA, 2, y + oy, 3, 1)
-        _px(s, GATO_RAYA, 21, y + oy, 3, 1)
-    # ojos entrecerrados (rayitas curvas)
+        pygame.draw.polygon(s, GATO_OREJA, [(x, y + oy) for x, y in adentro])
+    # penacho de adelante para atras
+    pygame.draw.ellipse(s, GATO_CONTORNO, (9, 0 + oy, 8, 12))
+    pygame.draw.ellipse(s, PENACHO, (10, 1 + oy, 6, 10))
+    _px(s, PENACHO_OSCURO, 14, 3 + oy, 1, 6)
+    _px(s, (240, 90, 96), 11, 3 + oy, 1, 4)
+    # casco: cupula y protectores de las mejillas
+    pygame.draw.ellipse(s, GATO_CONTORNO, (1, 6 + oy, 24, 17))
+    pygame.draw.polygon(s, GATO_CONTORNO, [(2, 13 + oy), (2, 22 + oy), (7, 26 + oy), (19, 26 + oy), (24, 22 + oy), (24, 13 + oy)])
+    pygame.draw.ellipse(s, CASCO, (2, 7 + oy, 22, 15))
+    pygame.draw.polygon(s, CASCO, [(3, 13 + oy), (3, 22 + oy), (7, 25 + oy), (19, 25 + oy), (23, 22 + oy), (23, 13 + oy)])
+    _px(s, CASCO_SOMBRA, 5, 23 + oy, 16, 2)
+    _px(s, CASCO_SOMBRA, 21, 15 + oy, 2, 8)
+    _px(s, CASCO_SOMBRA, 17, 8 + oy, 5, 1)
+    # brillo del metal
+    _px(s, CASCO_LUZ, 5, 9 + oy, 4, 1)
+    _px(s, CASCO_LUZ, 4, 10 + oy, 1, 2)
+    _px(s, CASCO_FILO, 6, 8 + oy, 2, 1)
+    _px(s, CASCO_LUZ, 4, 16 + oy, 1, 5)
+    _px(s, CASCO_LUZ, 3, 12 + oy, 20, 1)
+    # abertura en T: ranura de los ojos y de la boca, se ve el gato negro
+    _px(s, GATO_CONTORNO, 4, 13 + oy, 18, 4)
+    _px(s, GATO_NEGRO, 5, 14 + oy, 16, 2)
+    _px(s, GATO_CONTORNO, 9, 16 + oy, 8, 10)
+    _px(s, GATO_NEGRO, 10, 16 + oy, 6, 9)
+    _px(s, CASCO_FILO, 8, 17 + oy, 1, 7)
+    _px(s, CASCO_FILO, 17, 17 + oy, 1, 7)
+    _px(s, CASCO_FILO, 4, 17 + oy, 4, 1)
+    _px(s, CASCO_FILO, 18, 17 + oy, 4, 1)
+    # ojos amarillos entrecerrados
     for ex in (6, 16):
-        _px(s, GATO_CONTORNO, ex, 8 + oy, 4, 1)
-        _px(s, GATO_CONTORNO, ex - 1, 7 + oy)
-        _px(s, GATO_CONTORNO, ex + 4, 7 + oy)
-    # hocico y menton blancos
-    pygame.draw.ellipse(s, GATO_BLANCO, (6, 10 + oy, 14, 9 + alza))
-    _px(s, GATO_BLANCO, 12, 8 + oy, 2, 3)
+        _px(s, GATO_OJO, ex, 14 + oy, 4, 1)
+        _px(s, GATO_OJO, ex + 1, 15 + oy, 2, 1)
     # nariz
-    _px(s, GATO_ROSA, 12, 10 + oy, 2, 1)
-    _px(s, GATO_CONTORNO, 12, 11 + oy, 2, 1)
+    _px(s, GATO_ROSA, 12, 16 + oy, 2, 1)
     # boca abierta
     ancho, alto = ((2, 2), (4, 3), (6, 5))[cuadro]
-    bx, by = 13 - ancho // 2, 12 + oy
-    _px(s, GATO_CONTORNO, bx - 1, by, ancho + 2, alto + 1)
+    bx, by = 13 - ancho // 2, 18 + oy
+    _px(s, GATO_CONTORNO, bx - (1 if ancho < 6 else 0), by, ancho + (2 if ancho < 6 else 0), alto + 1)
     _px(s, GATO_BOCA, bx, by, ancho, alto)
     if alto >= 3:
         _px(s, GATO_ROSA, bx + 1, by + alto - 1, ancho - 2, 1)
-    # bigotes
-    for y in (12, 14):
-        _px(s, GATO_BLANCO, 0, y + oy, 4, 1)
-        _px(s, GATO_BLANCO, 22, y + oy, 4, 1)
+    # bigotes que salen por la ranura
+    for y in (18, 20):
+        _px(s, GATO_BLANCO, 0, y + oy, 9, 1)
+        _px(s, GATO_BLANCO, 17, y + oy, 9, 1)
     return s
 
 
@@ -1125,7 +1139,7 @@ class GatoPanBoss(JefeGatoBase):
         self.y = -120.0
         self.base_y = 160.0
         self.size = 58
-        self.alto_sprite = 34 * self.ESCALA
+        self.alto_sprite = 38 * self.ESCALA
         self.salto = None
         self.aplastado = 0
         self.timer_salto = 80
