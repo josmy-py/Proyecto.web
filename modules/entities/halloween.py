@@ -130,11 +130,13 @@ def _arte_calabaza(cuadro):
 # labios rojos, aro de oro, vestido de cuello alto con ribete neon y medias
 # negras) sentada de costado en su escoba, mirando a la derecha.
 _PALETA_BRUJA = {
-    'K': CONTORNO, 'H': (58, 28, 88), 'h': (110, 64, 160), 'B': VIOLETA, 'G': VERDE_TOXICO,
-    'P': (110, 46, 170), 'p': (70, 26, 120), 'L': (170, 110, 235),
-    'S': (255, 226, 206), 's': (236, 184, 168), 'W': WHITE, 'E': (180, 70, 255), 'e': (90, 20, 150),
-    'R': (220, 40, 90), 'O': ORO, 'D': (58, 22, 92), 'd': (104, 48, 156), 'b': (255, 150, 170),
-    'M': MADERA, 'm': MADERA_OSCURA, 'Y': PAJA, 'y': (190, 140, 60), 'N': (30, 18, 40), 'n': (84, 60, 110),
+    # sombrero azul noche, pelo largo gris azulado, piel palida, ojos
+    # blancos que brillan, vestido azul marino y constelaciones celestes
+    'K': CONTORNO, 'H': (26, 32, 74), 'h': (62, 80, 140), 'B': (40, 50, 104), 'G': (170, 236, 255),
+    'P': (84, 106, 146), 'p': (50, 64, 100), 'L': (146, 172, 212),
+    'S': (238, 232, 242), 's': (196, 190, 216), 'W': WHITE, 'E': (228, 250, 255), 'e': (120, 210, 255),
+    'R': (186, 64, 96), 'O': (150, 220, 255), 'D': (24, 28, 60), 'd': (56, 64, 112), 'b': (226, 180, 200),
+    'M': MADERA, 'm': MADERA_OSCURA, 'Y': PAJA, 'y': (190, 140, 60), 'N': (24, 24, 46), 'n': (66, 70, 110),
 }
 _ARTE_BRUJA = (
     "..............KKK...........................",
@@ -213,91 +215,103 @@ def _arte_bruja(cuadro):
 
 
 def _arte_bruja_gigante(cuadro):
-    """La Bruja Neon gigante de frente, del pecho para arriba (66x60): los
-    brazos se dibujan aparte (ver BrujaBoss._dibujar_brazo).
-    cuadro: 0 normal, 1 parpadeo, 2 risa (boca abierta), 3 furia (ojos verdes)."""
+    """La Bruja Neon gigante de frente, de la cintura para arriba (66x60):
+    sombrero enorme de ala caida, pelo largo gris azulado que le tapa un
+    ojo, ojos blancos que brillan, constelaciones celestes en los hombros,
+    vestido azul marino sin breteles y mangas transparentes. Los brazos se
+    dibujan aparte (ver BrujaBoss._dibujar_brazo).
+    cuadro: 0 normal, 1 parpadeo, 2 risa (ojos cerrados), 3 furia (los
+    ojos y las constelaciones brillan mas)."""
     pal = _PALETA_BRUJA
     sf = pygame.Surface((66, 60), pygame.SRCALPHA)
-    ox = 1
-    # pelo largo ondulado detras
-    izq = [(16, 17), (12, 24), (14, 30), (9, 38), (11, 45), (6, 52), (8, 58)]
-    der = [(64 - x, y) for x, y in izq]
-    pygame.draw.polygon(sf, pal['p'], [(x + ox, y) for x, y in izq] + [(x + ox, y) for x, y in reversed(der)])
-    for (x1, y1), (x2, y2) in zip(izq[1:], izq[2:]):
-        pygame.draw.line(sf, pal['P'], (x1 + ox + 3, y1), (x2 + ox + 3, y2))
-        pygame.draw.line(sf, pal['P'], (64 - x1 + ox - 3, y1), (64 - x2 + ox - 3, y2))
-    # capa, hombros y vestido de cuello alto
-    pygame.draw.polygon(sf, (32, 14, 52), [(4 + ox, 60), (10 + ox, 46), (22 + ox, 41), (42 + ox, 41), (54 + ox, 46), (60 + ox, 60)])
-    pygame.draw.polygon(sf, pal['D'], [(14 + ox, 60), (18 + ox, 46), (27 + ox, 42), (37 + ox, 42), (46 + ox, 46), (50 + ox, 60)])
-    pygame.draw.line(sf, pal['d'], (20 + ox, 47), (17 + ox, 59))
-    pygame.draw.line(sf, pal['d'], (44 + ox, 47), (47 + ox, 59))
-    pygame.draw.line(sf, pal['G'], (18 + ox, 46), (27 + ox, 42))
-    pygame.draw.line(sf, pal['G'], (46 + ox, 46), (37 + ox, 42))
-    _px(sf, pal['G'], 31 + ox, 44, 2, 16)
-    _px(sf, pal['s'], 29 + ox, 32, 6, 7)
-    _px(sf, pal['D'], 27 + ox, 37, 10, 5)
-    _px(sf, pal['G'], 27 + ox, 37, 10, 1)
-    _px(sf, pal['O'], 31 + ox, 39, 2, 2)
-    # mechones que caen delante de los hombros
-    _px(sf, pal['P'], 20 + ox, 19, 4, 22)
-    _px(sf, pal['P'], 40 + ox, 19, 4, 22)
-    _px(sf, pal['L'], 21 + ox, 22, 1, 10)
-    _px(sf, pal['L'], 42 + ox, 22, 1, 10)
-    pygame.draw.polygon(sf, pal['P'], [(20 + ox, 40), (24 + ox, 40), (22 + ox, 46)])
-    pygame.draw.polygon(sf, pal['P'], [(40 + ox, 40), (44 + ox, 40), (42 + ox, 46)])
-    # cara y flequillo
-    pygame.draw.ellipse(sf, pal['S'], (23 + ox, 17, 18, 15))
-    pygame.draw.polygon(sf, pal['S'], [(24 + ox, 26), (40 + ox, 26), (35 + ox, 34), (29 + ox, 34)])
-    _px(sf, pal['s'], 24 + ox, 27, 1, 3)
-    _px(sf, pal['s'], 39 + ox, 27, 1, 3)
-    pygame.draw.polygon(sf, pal['P'], [(22 + ox, 16), (42 + ox, 16), (42 + ox, 23), (39 + ox, 20), (36 + ox, 23),
-                                       (33 + ox, 19), (30 + ox, 23), (27 + ox, 20), (23 + ox, 23)])
-    _px(sf, pal['L'], 27 + ox, 17, 3, 1)
-    _px(sf, pal['L'], 35 + ox, 17, 2, 1)
-    # cejas y ojos
-    _px(sf, CONTORNO, 26 + ox, 22, 4, 1)
-    _px(sf, CONTORNO, 34 + ox, 22, 4, 1)
-    if cuadro == 3:
-        _px(sf, CONTORNO, 29 + ox, 23)
-        _px(sf, CONTORNO, 34 + ox, 23)
-    iris = VERDE_TOXICO if cuadro == 3 else pal['E']
-    for ex, sentido in ((26, -1), (34, 1)):
-        x0 = ex + ox
+    brillo = (240, 252, 255) if cuadro == 3 else pal['G']
+    # pelo largo que cae detras y se abre hacia abajo
+    pygame.draw.polygon(sf, pal['p'], [(17, 14), (13, 30), (10, 44), (5, 60), (61, 60), (56, 44), (53, 30), (49, 14)])
+    for x0, x1 in ((15, 8), (19, 13), (47, 53), (51, 58)):
+        pygame.draw.line(sf, pal['P'], (x0, 26), (x1, 58))
+    # hombros desnudos, cuello y vestido sin breteles
+    pygame.draw.polygon(sf, pal['S'], [(10, 60), (13, 50), (23, 45), (43, 45), (53, 50), (56, 60)])
+    _px(sf, pal['S'], 29, 35, 8, 11)
+    _px(sf, pal['s'], 29, 37, 8, 2)
+    pygame.draw.polygon(sf, pal['D'], [(16, 60), (18, 54), (26, 52), (33, 55), (40, 52), (48, 54), (50, 60)])
+    pygame.draw.line(sf, pal['d'], (18, 54), (26, 52))
+    pygame.draw.line(sf, pal['d'], (40, 52), (48, 54))
+    # constelaciones que brillan sobre los hombros y el cuello
+    for linea in (((14, 53), (18, 49), (23, 51), (26, 47)), ((40, 47), (43, 51), (48, 49), (52, 53)),
+                  ((31, 41), (33, 44), (36, 42))):
+        pygame.draw.lines(sf, brillo, False, linea)
+        for x, y in linea:
+            _px(sf, WHITE, x, y)
+    # mangas transparentes que caen de los hombros (solo se ve el borde)
+    for lado in (-1, 1):
+        x = 33 + lado * 21
+        velo = [(x - lado * 3, 49), (x + lado * 8, 53), (x + lado * 11, 60), (x - lado * 1, 60)]
+        pygame.draw.polygon(sf, (190, 204, 230, 55), velo)
+        pygame.draw.lines(sf, (214, 224, 244, 120), False, velo[:3])
+    # mechones que enmarcan la cara y caen delante de los hombros
+    for x0, inclina in ((17, -1), (44, 1)):
+        pygame.draw.polygon(sf, pal['P'], [(x0, 16), (x0 + 5, 16), (x0 + 4 + inclina * 2, 44), (x0 + 1 + inclina * 3, 50)])
+        pygame.draw.line(sf, pal['L'], (x0 + 2, 20), (x0 + 2 + inclina, 38))
+    # cara ovalada con el menton en punta
+    pygame.draw.ellipse(sf, pal['S'], (22, 15, 22, 19))
+    pygame.draw.polygon(sf, pal['S'], [(23, 27), (43, 27), (36, 37), (30, 37)])
+    _px(sf, pal['s'], 23, 28, 1, 3)
+    _px(sf, pal['s'], 42, 28, 1, 3)
+    # ojos almendrados blancos que brillan
+    for ex in (25, 36):
         if cuadro == 1:
-            _px(sf, CONTORNO, x0, 26, 4, 1)
-            _px(sf, CONTORNO, x0 + (4 if sentido > 0 else -1), 25)
-            continue
-        _px(sf, (150, 80, 200), x0, 23, 4, 1)  # sombra de ojos
-        _px(sf, CONTORNO, x0 - (1 if sentido < 0 else 0), 24, 5, 1)  # pestañas
-        _px(sf, CONTORNO, x0 + (4 if sentido > 0 else -1), 23)
-        _px(sf, iris, x0, 25, 4, 3)
-        _px(sf, pal['e'], x0 + 1, 26, 2, 2)
-        _px(sf, WHITE, x0 if sentido < 0 else x0 + 2, 25)
-        _px(sf, CONTORNO, x0, 28, 4, 1)
-    # nariz, rubor, boca y aros
-    _px(sf, pal['s'], 32 + ox, 29)
-    _px(sf, pal['b'], 25 + ox, 29, 2, 1)
-    _px(sf, pal['b'], 37 + ox, 29, 2, 1)
+            _px(sf, CONTORNO, ex, 26, 6, 1)
+        elif cuadro == 2:
+            # ojos cerrados de felicidad (curvas hacia arriba)
+            _px(sf, CONTORNO, ex, 26, 1, 1)
+            _px(sf, CONTORNO, ex + 1, 25, 4, 1)
+            _px(sf, CONTORNO, ex + 5, 26, 1, 1)
+        else:
+            _px(sf, CONTORNO, ex, 23, 6, 1)  # pestañas, mas largas hacia afuera
+            _px(sf, CONTORNO, ex + (6 if ex > 30 else -1), 22, 1, 1)
+            _px(sf, pal['e'], ex + (6 if ex > 30 else -1), 25, 1, 1)  # brillo que se escapa
+            _px(sf, pal['e'], ex, 24, 6, 3)
+            _px(sf, pal['E'], ex + 1, 24, 4, 2)
+            _px(sf, WHITE, ex + 2, 24, 2, 1)
+            _px(sf, CONTORNO, ex + 1, 27, 4, 1)
+            if cuadro == 3:
+                _px(sf, WHITE, ex, 25, 6, 1)
+    # nariz y boca: sonrisa de lado / risa abierta
+    _px(sf, pal['s'], 33, 29)
+    _px(sf, pal['s'], 33, 30)
     if cuadro == 2:
-        _px(sf, CONTORNO, 30 + ox, 31, 4, 1)
-        _px(sf, (200, 30, 80), 30 + ox, 32, 4, 2)
-        _px(sf, (120, 10, 40), 31 + ox, 32, 2, 1)
+        _px(sf, CONTORNO, 29, 32, 8, 1)
+        _px(sf, (150, 30, 70), 30, 33, 6, 2)
+        _px(sf, WHITE, 30, 33, 6, 1)
     else:
-        _px(sf, (200, 30, 80), 30 + ox, 32, 3, 1)
-        _px(sf, (200, 30, 80), 33 + ox, 31)
-    _px(sf, pal['O'], 22 + ox, 30, 1, 2)
-    _px(sf, pal['O'], 42 + ox, 30, 1, 2)
-    # sombrero de ala ancha con la punta doblada
-    pygame.draw.ellipse(sf, pal['H'], (3 + ox, 13, 58, 6))
-    _px(sf, pal['h'], 9 + ox, 14, 12, 1)
-    _px(sf, pal['h'], 44 + ox, 14, 8, 1)
-    pygame.draw.polygon(sf, pal['H'], [(20 + ox, 15), (44 + ox, 15), (41 + ox, 7), (46 + ox, 2), (51 + ox, 1),
-                                       (44 + ox, 0), (37 + ox, 3), (28 + ox, 7)])
-    _px(sf, pal['h'], 30 + ox, 8, 2, 4)
-    _px(sf, pal['h'], 38 + ox, 3, 3, 1)
-    _px(sf, pal['B'], 21 + ox, 11, 22, 3)
-    _px(sf, pal['G'], 30 + ox, 11, 4, 3)
-    _px(sf, pal['B'], 31 + ox, 12, 2, 1)
+        _px(sf, pal['R'], 30, 33, 5, 1)
+        _px(sf, pal['R'], 35, 32)
+    # flequillo en puntas y un mechon fino sobre el ojo derecho
+    pygame.draw.polygon(sf, pal['P'], [(21, 14), (45, 14), (45, 20), (42, 23), (40, 19), (37, 22), (34, 18),
+                                       (31, 21), (28, 18), (25, 22), (22, 20)])
+    pygame.draw.line(sf, pal['P'], (39, 19), (42, 29))
+    pygame.draw.line(sf, pal['L'], (40, 19), (43, 28))
+    _px(sf, pal['L'], 25, 15, 4, 1)
+    _px(sf, pal['L'], 36, 15, 3, 1)
+    # aros de luz
+    _px(sf, pal['O'], 21, 29, 1, 2)
+    _px(sf, pal['O'], 45, 29, 1, 2)
+    # sombrero: ala enorme caida y la punta doblada hacia un lado
+    pygame.draw.polygon(sf, pal['H'], [(0, 17), (8, 12), (22, 9), (44, 9), (58, 11), (66, 15), (60, 18),
+                                       (46, 15), (33, 14), (20, 15), (6, 19)])
+    pygame.draw.line(sf, pal['h'], (8, 13), (22, 10))
+    pygame.draw.line(sf, pal['h'], (46, 10), (58, 12))
+    for x, y in ((3, 18), (12, 16), (55, 16), (63, 17)):
+        _px(sf, (0, 0, 0, 0), x, y, 2, 1)  # ala rasgada
+    pygame.draw.polygon(sf, pal['H'], [(21, 11), (45, 11), (41, 5), (46, 2), (55, 0), (47, 0), (38, 2), (28, 5)])
+    pygame.draw.line(sf, pal['h'], (30, 5), (29, 10))
+    pygame.draw.line(sf, pal['h'], (40, 3), (47, 1))
+    _px(sf, pal['B'], 21, 9, 24, 2)
+    # dijes de cristal que cuelgan del ala
+    for x, y in ((10, 17), (52, 16)):
+        _px(sf, pal['O'], x, y, 1, 2)
+        _px(sf, pal['O'], x - 1, y + 2, 3, 1)
+        _px(sf, WHITE, x, y + 3)
     return _contornear(sf, CONTORNO, (66, 60))
 
 
@@ -1218,12 +1232,25 @@ class BrujaBoss(JefeHalloweenBase):
         hx, hy = self._hombro(mano['lado'])
         hx, hy = hx + ox, hy + oy
         mx, my = mano['x'] + ox, mano['y'] + oy
-        # manga: de hombro a muñeca, con contorno y el puño neon
-        pygame.draw.line(screen, CONTORNO, (hx, hy), (mx, my), 46)
-        pygame.draw.circle(screen, CONTORNO, (int(hx), int(hy)), 23)
-        pygame.draw.line(screen, (58, 22, 92), (hx, hy), (mx, my), 36)
-        pygame.draw.circle(screen, (58, 22, 92), (int(hx), int(hy)), 18)
-        pygame.draw.line(screen, (104, 48, 156), (hx, hy - 8), (mx, my - 8), 6)
+        # brazo palido con contorno, constelaciones y la manga transparente
+        pygame.draw.line(screen, CONTORNO, (hx, hy), (mx, my), 30)
+        pygame.draw.circle(screen, CONTORNO, (int(hx), int(hy)), 16)
+        pygame.draw.line(screen, (238, 232, 242), (hx, hy), (mx, my), 22)
+        pygame.draw.circle(screen, (238, 232, 242), (int(hx), int(hy)), 12)
+        brillo = (240, 252, 255) if self.furioso else (170, 236, 255)
+        puntos = [(hx + (mx - hx) * k + (6 if i % 2 else -6), hy + (my - hy) * k) for i, k in enumerate((0.1, 0.25, 0.4))]
+        pygame.draw.lines(screen, brillo, False, puntos, 3)
+        for px, py in puntos:
+            screen.fill(WHITE, (int(px) - 3, int(py) - 3, 6, 6))
+        largo = math.hypot(mx - hx, my - hy) or 1
+        nx, ny = -(my - hy) / largo, (mx - hx) / largo
+        manga = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        ondea = math.sin(self.t * 0.1) * 10
+        pygame.draw.polygon(manga, (190, 204, 230, 80), [
+            (hx + nx * 20, hy + ny * 20), (mx + nx * 40, my + ny * 40 + ondea),
+            (mx - nx * 40, my - ny * 40 + ondea), (hx - nx * 20, hy - ny * 20)])
+        pygame.draw.line(manga, (215, 225, 245, 140), (hx + nx * 20, hy + ny * 20), (mx + nx * 40, my + ny * 40 + ondea), 3)
+        screen.blit(manga, (0, 0))
         # la mano apunta hacia afuera del brazo (el arte la tiene "hacia arriba")
         angulo = math.degrees(math.atan2(-(my - hy), mx - hx)) - 90
         angulo = round(angulo / 15) * 15
@@ -1233,6 +1260,15 @@ class BrujaBoss(JefeHalloweenBase):
         _blit_centrado(screen, mano_spr, mx, my)
         if mano['pocion']:
             _blit_centrado(screen, sprite_halloween("pocion", 1, 5), mx, my - 46)
+
+    # constelaciones del aura de la bruja gigante (coordenadas del aura)
+    _CONSTELACIONES = (
+        ((40, 120), (90, 70), (130, 110), (170, 60)),
+        ((320, 60), (360, 110), (410, 80), (440, 140)),
+        ((30, 260), (70, 300), (60, 350)),
+        ((410, 280), (450, 240), (440, 330)),
+        ((200, 30), (240, 15), (280, 35)),
+    )
 
     def _dibujar_gigante(self, screen, ox, oy):
         e = self.especial
@@ -1247,9 +1283,14 @@ class BrujaBoss(JefeHalloweenBase):
             screen.fill(color, (tx - 2, ty - 74, 4, 24))
             screen.fill(color, (tx - 2, ty + 50, 4, 24))
         # aura que late detras
-        aura = pygame.Surface((440, 380), pygame.SRCALPHA)
-        alfa = 50 + int(30 * math.sin(self.t * 0.08))
-        pygame.draw.ellipse(aura, (150, 60, 220, alfa), aura.get_rect())
+        aura = pygame.Surface((480, 400), pygame.SRCALPHA)
+        alfa = 60 + int(30 * math.sin(self.t * 0.08))
+        pygame.draw.ellipse(aura, (40, 90, 200, alfa), aura.get_rect())
+        pygame.draw.ellipse(aura, (90, 160, 255, alfa // 2), aura.get_rect().inflate(-120, -100))
+        for linea in self._CONSTELACIONES:
+            pygame.draw.lines(aura, (200, 240, 255, 150 + alfa // 2), False, linea, 2)
+            for x, y in linea:
+                aura.fill((255, 255, 255, 230), (x - 3, y - 3, 6, 6))
         _blit_centrado(screen, aura, self.x + ox, self.y + oy + 20)
         if self.risa > 0:
             cuadro = 2

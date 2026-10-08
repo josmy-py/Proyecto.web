@@ -17,14 +17,17 @@ from modules.constants import GAME_WIDTH, GAME_HEIGHT, WHITE
 from modules.systems import neon
 from modules.entities.nyan_boss import PIXEL_BONUS, pixelar, _blit_centrado
 from modules.entities.halloween import (
-    BrujaBoss, FondoHalloween, sprite_halloween, VIOLETA, VIOLETA_CLARO, VERDE_TOXICO,
+    BrujaBoss, FondoHalloween, sprite_halloween, VERDE_TOXICO,
 )
 
 NEGRO = (0, 0, 0)
+# celeste de las constelaciones de la bruja (ver _PALETA_BRUJA)
+CELESTE = (170, 236, 255)
+AZUL_NOCHE = (60, 110, 230)
 
 
 def _globo(surface, texto, x, y):
-    neon.globo(surface, texto, x, y, VIOLETA_CLARO, cola_derecha=False, tam=22)
+    neon.globo(surface, texto, x, y, CELESTE, cola_derecha=False, tam=22)
 
 
 class CinematicaBrujaGigante:
@@ -147,15 +150,15 @@ class CinematicaBrujaGigante:
             for x, y, r, vida in self.burbujas:
                 pygame.draw.circle(mundo, VERDE_TOXICO, (int(x), int(y)), int(r), 2)
             for x, y, a, vida in self.chispas:
-                mundo.fill(VIOLETA_CLARO if int(a * 10) % 2 else VERDE_TOXICO, (int(x) - 3, int(y) - 3, 6, 6))
+                mundo.fill(CELESTE if int(a * 10) % 2 else VERDE_TOXICO, (int(x) - 3, int(y) - 3, 6, 6))
         else:
             self.gigante.draw(mundo)
         surface.blit(pixelar(mundo, PIXEL_BONUS), (0, 0))
 
         # destellos violeta / verde mientras crece
         if self.T_CRECE <= t < self.T_FLASH and (t // 6) % 2 == 0:
-            neon.velo(surface, VIOLETA if (t // 12) % 2 else VERDE_TOXICO, 70)
-        neon.franjas_cine(surface, t / 30, VIOLETA_CLARO, alto=48)
+            neon.velo(surface, AZUL_NOCHE if (t // 12) % 2 else VERDE_TOXICO, 70)
+        neon.franjas_cine(surface, t / 30, CELESTE, alto=48)
 
         # textos (nitidos, encima del pixelado)
         if 15 <= t < 75:
@@ -169,7 +172,7 @@ class CinematicaBrujaGigante:
             neon.titulo(surface, "¡¿QUE ME PASA?!", 44, VERDE_TOXICO, GAME_WIDTH / 2, 110)
         if t >= self.T_RISA:
             tam = 58 + int(4 * math.sin(t * 0.2))
-            neon.titulo(surface, "¡BRUJA NEON GIGANTE!", tam, VIOLETA_CLARO, GAME_WIDTH / 2, GAME_HEIGHT - 130)
+            neon.titulo(surface, "¡BRUJA NEON GIGANTE!", tam, CELESTE, GAME_WIDTH / 2, GAME_HEIGHT - 130)
             if t >= self.T_RISA + 20:
                 _globo(surface, "¡Ahora juguemos en serio!", GAME_WIDTH / 2 + 190, 120)
 
