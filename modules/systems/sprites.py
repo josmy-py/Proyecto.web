@@ -37,13 +37,12 @@ ENEMY_KINDS = ("fighter", "drone", "gunner")
 
 # body_type del jefe (ver modules/core/boss_system.py) -> prefijo de archivo
 # en assets/sprites/boss/. Los que tienen capa _neon son pixel art de
-# tools/generate_pixel_sprites.py ("centinela"); el resto todavia sale de
-# tools/generate_sprites.py.
+# tools/generate_pixel_sprites.py; el resto todavia sale de
+# tools/generate_sprites.py. Un kind que no figura aca se usa tal cual
+# como prefijo (dragon_a, titan_px, ...).
 BOSS_SPRITE_PREFIX = {
     "saucer": "centinela",
     "anomaly": "anomaly",
-    "dragon": "dragon",
-    "titan": "titan",
 }
 
 # Geometria del sprite del jefe final (debe coincidir con BOSS_* en
@@ -58,23 +57,6 @@ BOSS_PLATFORM_RX_FRAC = 0.1375
 BOSS_PLATFORM_RY_FRAC = 0.0882
 BOSS_RING_RX_FRAC = 0.3969       # radio del anillo de nodos (para las luces animadas)
 BOSS_RING_RY_FRAC = 0.2147
-
-# Titan (pulpo mecanico) no usa el anillo/cupula de arriba: es mas grande
-# (ver TITAN_DISPLAY_SCALE, aplicado sobre BOSS_DISPLAY_W/H solo para el) y
-# titan_boss.py dibuja la pupila -que sigue a la nave- centrada en
-# TITAN_OJO_*_FRAC, encima del aro/iris ya horneado en el sprite (debe
-# coincidir con TITAN_OJO_* en tools/generate_sprites.py). Una unica
-# fraccion de radio alcanza para x e y porque el sprite se escala siempre
-# de forma uniforme (mismo factor en ambos ejes).
-TITAN_DISPLAY_SCALE = 1.55
-TITAN_OJO_CX_FRAC = 0.5
-TITAN_OJO_CY_FRAC = 0.4437
-TITAN_OJO_R_FRAC = 0.08125
-
-# Segmento de tentaculo de Titan (ver TENTACULO_* en
-# tools/generate_sprites.py): aspecto nativo 96x40, apunta a lo largo de
-# +X con la base ancha en x=0 y la garra en el extremo derecho.
-TITAN_TENTACULO_W, TITAN_TENTACULO_H = 96, 40
 
 # La Anomalia (calavera glicheada) se dibuja "un poco" mas grande que el
 # resto de jefes normales, y boss.py dibuja DOS pupilas dinamicas (una por
@@ -390,22 +372,6 @@ def get_boss_surface(body_color, wing_color, width=BOSS_DISPLAY_W, height=BOSS_D
         surface = _compose_pixel("boss", prefix, body_color, wing_color, width, height, color_neon(wing_color))
     else:
         surface = _compose_layers("boss", prefix, body_color, wing_color, width, height)
-    _composed_cache[key] = surface
-    _cap(_composed_cache, _MAX_COMPOSED)
-    return surface
-
-
-def get_titan_tentaculo_surface(color, width, height):
-    """Segmento de tentaculo de Titan ya tintado y escalado (sin "wing":
-    con_ala=False, mismo truco que los power-ups). titan_boss.py encadena
-    varias copias rotadas y escaladas para armar cada tentaculo curvo en
-    tiempo real -no puede ser un unico PNG fijo porque el largo/curva
-    cambian segun a donde ataca."""
-    key = ("titan_tentaculo", _quantize(color), int(width), int(height))
-    if key in _composed_cache:
-        return _composed_cache[key]
-
-    surface = _compose_layers("boss", "titan_tentaculo", color, color, width, height, con_ala=False)
     _composed_cache[key] = surface
     _cap(_composed_cache, _MAX_COMPOSED)
     return surface

@@ -718,7 +718,66 @@ def dragon(alas=0):
     return _contorno(_espejar(img))
 
 
-JEFES = {"centinela": centinela(), "dragon_a": dragon(0), "dragon_b": dragon(1)}
+TITAN_W, TITAN_H = 76, 50
+
+
+def titan():
+    """Titan del Vacio: manto de pulpo blindado visto de frente, con un
+    gran ojo-camara en el centro (la pupila la dibuja el juego), hombros
+    con nucleos de energia y los muñones de donde salen los tentaculos."""
+    img = Image.new("L", (TITAN_W, TITAN_H), 0)
+    d = ImageDraw.Draw(img)
+    c = TITAN_W // 2
+
+    def E(caja, ch):
+        d.ellipse(caja, fill=_CH.index(ch))
+
+    def P(pts, ch):
+        d.polygon(pts, fill=_CH.index(ch))
+
+    def L(pts, ch, ancho=1):
+        d.line(pts, fill=_CH.index(ch), width=ancho)
+
+    # muñones de tentaculos (abajo, detras del cuerpo)
+    for x, y in ((c - 20, 40), (c - 12, 44), (c - 4, 46)):
+        E([x - 4, y - 4, x + 4, y + 4], "v")
+        E([x - 2, y - 1, x + 2, y + 3], "u")
+    # hombros: esferas con nucleo de energia
+    E([c - 36, 22, c - 20, 38], "w")
+    E([c - 34, 23, c - 24, 33], "W")
+    E([c - 31, 27, c - 25, 33], "o")
+    E([c - 30, 28, c - 26, 32], "E")
+    # manto (la cabeza del pulpo)
+    E([c - 24, 0, c + 24, 40], "d")
+    E([c - 23, 1, c + 20, 37], "b")
+    E([c - 20, 2, c + 8, 26], "B")
+    # placas del blindaje: costuras oscuras y remaches neon
+    for y in (12, 20):
+        L([(c - 22, y + 4), (c - 14, y), (c - 6, y - 1), (c, y - 1)], "x")
+    L([(c - 12, 3), (c - 14, 12)], "x")
+    L([(c - 5, 1), (c - 6, 11)], "x")
+    for x, y in ((c - 18, 9), (c - 10, 6), (c - 19, 17), (c - 3, 15)):
+        d.point((x, y), fill=_CH.index("N"))
+    # cresta neon en la frente
+    L([(c - 2, 0), (c - 2, 9)], "N")
+    L([(c - 1, 0), (c - 1, 9)], "N")
+    # placa de la cara
+    E([c - 18, 22, c + 17, 44], "x")
+    E([c - 17, 23, c + 15, 42], "d")
+    # ojo-camara: aro metalico y cuenca oscura
+    E([c - 11, 22, c + 10, 43], "o")
+    E([c - 10, 23, c + 9, 42], "W")
+    E([c - 8, 25, c + 7, 40], "o")
+    E([c - 7, 26, c + 6, 39], "e")
+    # pico
+    P([(c - 3, 43), (c, 49), (c, 43)], "K")
+    # luces bajo el ojo
+    for x in (c - 14, c - 16):
+        d.point((x, 37 + (x == c - 16)), fill=_CH.index("R"))
+    return _contorno(_espejar(img))
+
+
+JEFES = {"centinela": centinela(), "dragon_a": dragon(0), "dragon_b": dragon(1), "titan_px": titan()}
 
 
 def parse(mapa):

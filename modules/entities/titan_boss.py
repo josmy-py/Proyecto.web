@@ -1,104 +1,59 @@
 """
-Titan del Vacio (oleada 30): jefe unico como FinalBoss/MegaBoss, no un
-WaveBoss generico armado solo con BossDefinition. Pulpo mecanico corpulento
-(sprite "titan": cresta blindada angular con hombros/pauldrones redondeados
-bien anchos a los costados y un ojo-camara mecanico central, ver
-tools/generate_sprites.py) que se queda en la mitad superior de la
-pantalla en vez de recorrerla entera como los demas jefes, para que se
-sienta un depredador que domina el campo desde arriba, no una nave que
-vuela por ahi.
+Titan del Vacio (oleada 30): pulpo mecanico en pixel art neon (arte "titan"
+en tools/generate_pixel_sprites.py) que domina la mitad de arriba de la
+pantalla. No dispara: pelea con los tentaculos, que se dibujan en pixeles
+segmento a segmento y se estiran de verdad hasta el lugar que golpean.
 
-No dispara ni un solo proyectil: pelea puramente cuerpo a cuerpo con sus
-tentaculos, que son sprites articulados (varias copias de
-titan_tentaculo_*.png encadenadas y rotadas en tiempo real, ver
-_dibujar_tentaculo_sprite) en vez de lineas vectoriales. TODOS -los idle y
-los de ataque/guardia- salen de anclajes fijos sobre el propio cuerpo
-(hombros, flancos, vientre, cresta; ver _ANCLA_*/_ancla_mundo), nunca de
-afuera de pantalla: se ve claramente que son parte del pulpo. Los ataques
-son lentos y muy telegrafiados -mucho tiempo de aviso para leerlos y
-reposicionarse, salvo la emboscada que es deliberadamente mas corta- y
-golpean con una zona de impacto real en el lugar y el instante exactos en
-que el tentaculo llega, en vez de lanzar nada a distancia:
+Cada golpe se marca antes en el piso (una mira que se cierra) y el
+tentaculo tarda en llegar, asi que siempre se puede salir:
 
-  SISMO (desde la cresta, arriba): un tentaculo baja desde la cresta hasta
-  el punto marcado (la posicion de la nave al arrancar el aviso), se toma
-  ~1.8s en estirarse del todo, golpea, y se retira despacio.
+  SISMO: un tentaculo baja desde el vientre hasta donde estaba la nave.
+  BRAZO: sale de un hombro siguiendo la altura de la nave y barre de
+  costado hasta el otro lado.
+  EMBOSCADA (fase 2+): puñalada corta desde el vientre, con menos aviso.
+  ENJAMBRE: los seis tentaculos a la vez en abanico a la altura de la
+  nave; las miras muestran los huecos por donde pasar.
+  GUARDIA: cruza dos tentaculos delante del ojo y bloquea los disparos
+  que caen ahi (bloquea_disparo); hay que rodearla para pegarle al ojo.
 
-  BRAZO (desde un flanco, a los costados): un tentaculo sale del hombro
-  izquierdo o derecho del propio cuerpo (al azar) siguiendo la altura de
-  la nave durante ~1.8s y despues lanza un golpe corto y decisivo mas alla
-  de donde llego arrastrandose.
+En fase 3 cada golpe del sismo suelta ademas un anillo lento de tinta.
+Solo hay un golpe grande a la vez (sismo, brazo o enjambre); la emboscada
+y la guardia pueden coincidir con ellos."""
 
-  EMBOSCADA (desde el vientre, abajo): una puñalada rapida con mucho menos
-  aviso que las otras dos -otro ritmo, no se puede leer solo con la
-  memoria del sismo- para que no todos los golpes vengan siempre del
-  mismo punto del cuerpo ni con el mismo tiempo de reaccion.
-
-  ENJAMBRE (los 6 anclajes idle a la vez, ver _iniciar_enjambre): el
-  ataque "definitivo" -cada uno de los tentaculos que normalmente se mecen
-  solos en reposo se estira al mismo tiempo hacia su propio blanco, en
-  abanico parejo por casi todo el ancho de pantalla a la altura de la
-  nave. Cooldown bien largo (no es un ataque mas, es un evento) y el
-  aviso mas extendido de todos, para poder leer donde quedan los huecos
-  entre un tentaculo y el siguiente antes de que golpeen juntos.
-
-Ademas puede CRUZAR dos tentaculos -uno por hombro- en X delante del
-cuerpo, como brazos cruzados bloqueando un golpe (ver
-guardia_state/bloquea_disparo/_guardia_puntas): bloquea los disparos del
-jugador que caigan cerca de donde se cruzan, la unica forma de dañarlo es
-esquivar la guardia y darle al ojo. Ese ojo, aparte, sigue a la nave con
-la mirada en tiempo real (pupila 100% dinamica sobre el zocalo ya horneado
-en el sprite, ver _dibujar_ojo)."""
-
-import random
 import math
-
-from modules.constants import (
-    ROSA, AMARILLO, MELON, WHITE, GAME_WIDTH, GAME_HEIGHT,
-)
-from modules.systems.fonts import render_text
-from modules.systems import sprites
+import random
 
 import pygame
 
-# Tinte (color_casco, color_secundario) segun la fase del jefe.
-TINTES_POR_FASE = {
-    1: ((140, 100, 220), (200, 160, 255)),
-    2: ((190, 90, 150), (240, 150, 190)),
-    3: ((230, 80, 70), (255, 150, 110)),
+from modules.constants import AMARILLO, GAME_HEIGHT, GAME_WIDTH, MELON, ROSA, WHITE
+from modules.core.boss_system import WaveBossBullet
+from modules.systems import pixelfx, sprites
+from modules.systems.fonts import render_text
+
+# (casco, tentaculos) por fase
+COLORES_FASE = {
+    1: ((140, 100, 220), (110, 80, 190)),
+    2: ((200, 90, 160), (160, 70, 140)),
+    3: ((230, 80, 70), (180, 60, 70)),
 }
+TINTA = (120, 60, 200)
 
-# Anclajes de los tentaculos sobre el propio cuerpo (fracciones del
-# rectangulo del sprite ya escalado, ver TitanBoss._ancla_mundo): TODOS
-# los tentaculos -idle, ataques y guardia- salen de puntos del cuerpo,
-# nunca de afuera de pantalla, para que se vea claramente que son parte
-# del pulpo y no algo que aparece de la nada.
-_ANCLA_HOMBRO_IZQ = (0.10, 0.58)
-_ANCLA_HOMBRO_DER = (0.90, 0.58)
-_ANCLA_FLANCO_IZQ = (0.02, 0.80)
-_ANCLA_FLANCO_DER = (0.98, 0.80)
-_ANCLA_VIENTRE_IZQ = (0.32, 0.99)
-_ANCLA_VIENTRE_DER = (0.68, 0.99)
-_ANCLA_VIENTRE_CENTRO = (0.50, 0.99)
-_ANCLA_CRESTA = (0.50, 0.03)
-
-# Los 6 anclajes que se mecen solos en reposo (ver _dibujar_tentaculos_idle)
-# son tambien los que se suman TODOS a la vez en el Enjambre -el ataque
-# "definitivo", ver _iniciar_enjambre-, cada uno con su angulo base propio
-# para el balanceo idle.
-_ANCLAS_IDLE = (
-    (_ANCLA_HOMBRO_IZQ, -150), (_ANCLA_HOMBRO_DER, -30),
-    (_ANCLA_FLANCO_IZQ, -172), (_ANCLA_FLANCO_DER, -8),
-    (_ANCLA_VIENTRE_IZQ, -100), (_ANCLA_VIENTRE_DER, -80),
+# Raices de los tentaculos en px de pantalla respecto del centro del
+# sprite (salen de los muñones y los hombros del arte)
+RAIZ_HOMBROS = ((-90, 18), (90, 18))
+RAIZ_VIENTRE = (0, 62)
+# los seis de reposo/enjambre con su angulo de reposo en grados
+RAICES_IDLE = (
+    ((-60, 48), 125), ((60, 48), 55),
+    ((-36, 60), 110), ((36, 60), 70),
+    ((-12, 66), 98), ((12, 66), 82),
 )
 
 
 class TentaculoImpacto:
-    """Zona de golpe de un tentaculo: no es un disparo, aparece ya en el
-    lugar exacto donde el tentaculo llega en el instante en que llega, no
-    viaja ni se lanza, y dura unos pocos frames nomas. Mismo "duck typing"
-    que WaveBossBullet (x/y/radius/active/update/draw) para poder ir
-    directo a la lista boss_bullets de main.py sin tocar nada ahi."""
+    """Zona de golpe de un tentaculo: aparece donde y cuando llega la
+    punta y dura pocos cuadros. Tiene la forma de una bala (x, y, radius,
+    active, update, draw) para ir a boss_bullets de main.py."""
 
     def __init__(self, x, y, radius=46, color=MELON, vida=16):
         self.x = x
@@ -115,756 +70,436 @@ class TentaculoImpacto:
             self.active = False
 
     def draw(self, screen, offset_x=0, offset_y=0):
-        t = max(0.0, self._vida / self._vida_max)
+        k = max(0.0, self._vida / self._vida_max)
         cx, cy = int(self.x) + offset_x, int(self.y) + offset_y
-        r = int(self.radius * (0.55 + 0.45 * (1 - t)))
-        surf = pygame.Surface((r * 2 + 12, r * 2 + 12), pygame.SRCALPHA)
-        centro = r + 6
-        pygame.draw.circle(surf, (*self.color[:3], int(70 * t)), (centro, centro), r)
-        pygame.draw.circle(surf, (*self.color[:3], int(200 * t)), (centro, centro), r, 4)
-        pygame.draw.circle(surf, (255, 255, 255, int(160 * t)), (centro, centro), max(1, int(r * 0.35)))
-        screen.blit(surf, (cx - centro, cy - centro))
+        r = int(self.radius * (0.6 + 0.6 * (1 - k)))
+        pixelfx.dibujar_halo(screen, self.color, cx, cy, r)
+        # onda expansiva en bloques
+        for i in range(16):
+            a = i * math.pi / 8
+            x = cx + int(math.cos(a) * r) // 4 * 4
+            y = cy + int(math.sin(a) * r * 0.6) // 4 * 4
+            screen.fill(pixelfx.aclarar(self.color, 0.5), (x - 3, y - 3, 6, 6))
+
+
+def _segmento(radio, color, ventosa):
+    """Disco de tentaculo en pixel art (cacheado)."""
+    clave = ("titan_seg", radio, color, ventosa)
+    surf = pixelfx._cache.get(clave)
+    if surf is not None:
+        return surf
+    n = radio * 2 + 3
+    base = pygame.Surface((n, n), pygame.SRCALPHA)
+    c = n // 2
+    pygame.draw.circle(base, pixelfx.CONTORNO, (c, c), radio + 1)
+    pygame.draw.circle(base, color, (c, c), radio)
+    claro = pixelfx.aclarar(color, 0.35)
+    pygame.draw.circle(base, claro, (c - max(1, radio // 3), c - max(1, radio // 3)), max(1, radio // 2))
+    if ventosa:
+        base.fill((240, 210, 230), (c, c + radio // 2, 1, 1))
+    surf = pygame.transform.scale(base, (n * 3, n * 3))
+    return pixelfx._guardar(clave, surf)
 
 
 class TitanBoss:
-    """Jefe de la oleada 30. take_damage() sube de fase (1->2->3) al pasar
-    los umbrales de 66%/33% de vida, igual que FinalBoss. Usa el sprite
-    "titan" (cresta de pulpo mecanico con ojo central) de assets/sprites/boss
-    si esta disponible, escalado mas grande que los demas jefes (ver
-    sprites.TITAN_DISPLAY_SCALE)."""
+    ESCALA = 3
+    OJO = (0, 32)
 
     def __init__(self, dificultad=1.0):
-        self.x = GAME_WIDTH // 2
-        self.y = 130
+        self.x = GAME_WIDTH / 2
+        self.y = -150.0
         self.target_x = self.x
-        self.target_y = self.y
+        self.target_y = 130.0
         self.active = True
-        # La dificultad elegida en el menu tambien lo escala (igual que
-        # WaveBoss/FinalBoss/MegaBoss), aunque ya no tenga cadencia de
-        # disparo propia: acelera el ritmo de sus ataques de tentaculo.
+        self._dificultad = dificultad
         self.max_hp = max(1, int(550 * (1.0 + (dificultad - 1.0) * 0.5)))
         self.hp = self.max_hp
-        self.display_hp = float(self.max_hp)
-        self.rotation = 0
-        self.rot_speed = 0.18
+        self.size = 66
         self.speed = 0.5 * dificultad
-        self._dificultad = dificultad
+        self.name = "TITAN DEL VACIO"
         self.phase = 1
-        self.damaged_timer = 0
-        self.particles = []
+        self.rewarded = False
+        self.t = 0
+        self.enter_timer = 100
         self.move_timer = 0
-        self.move_cooldown = 130
+        self.damaged_timer = 0
         self.health_shake = 0
         self.health_deplete_anim = 1.0
         self.phase_transition = False
         self.phase_timer = 0
-        self.name = "TITÁN DEL VACÍO"
-        self.rewarded = False
-        self._ship_x, self._ship_y = self.x, self.y + 400
-
-        # Sismo: aviso (se estira) -> golpe (impacto, una vez) -> retiro
-        # (se repliega). Todo lento: se puede leer y reposicionarse.
-        dur = 1.0 / dificultad
-        self._sismo_dur_aviso = 110
-        self._sismo_dur_golpe = 18
-        self._sismo_dur_retiro = 55
-        self.sismo_cooldown = random.randint(220, 280) * dur
-        self.sismo_state = None
-        self.sismo_timer = 0
-        self.sismo_x = self.x
-        self.sismo_y = self.y + 400
-
-        # Brazo lateral: mismo esquema de 3 fases, saliendo de un flanco
-        # del propio cuerpo (izquierdo o derecho, al azar).
-        self._brazo_dur_aviso = 110
-        self._brazo_dur_golpe = 16
-        self._brazo_dur_retiro = 55
-        self.brazo_cooldown = random.randint(260, 330) * dur
-        self.brazo_state = None
-        self.brazo_timer = 0
-        self.brazo_lado = "left"
-        self.brazo_target_y = self.y + 400
-        self.brazo_golpe_x = self.x
-
-        # Emboscada: puñalada rapida desde el vientre (parte baja del
-        # cuerpo, en vez de la cresta de arriba que usa el sismo) con
-        # mucho menos aviso -otro ritmo, no se puede leer solo con la
-        # memoria del sismo- para que los ataques no salgan siempre del
-        # mismo punto del cuerpo ni con el mismo tiempo de reaccion.
-        self._emboscada_dur_aviso = 46
-        self._emboscada_dur_golpe = 10
-        self._emboscada_dur_retiro = 30
-        self.emboscada_cooldown = random.randint(200, 260) * dur
-        self.emboscada_state = None
-        self.emboscada_timer = 0
-        self.emboscada_x = self.x
-        self.emboscada_y = self.y + 400
-
-        # Guardia: levanta un tentaculo por delante del cuerpo que bloquea
-        # los disparos del jugador que le peguen a el (ver
-        # bloquea_disparo). Apunta hacia donde estaba la nave al alzarse y
-        # se queda fijo ahi mientras dura - hay que salir de esa linea para
-        # poder pegarle al ojo.
-        self._guardia_dur_subida = 22
-        self._guardia_dur_activa = 130
-        self._guardia_dur_bajada = 22
-        self.guardia_cooldown = random.randint(240, 300) * dur
-        self.guardia_state = None
-        self.guardia_timer = 0
-        self.guardia_x = self.x
-        self.guardia_y = self.y + 160
+        self.particles = []
+        self._ship = None
+        self._ship_x, self._ship_y = self.x, GAME_HEIGHT - 80
+        # golpe grande en curso (sismo / brazo / enjambre)
+        self.golpe = None
+        self.timer_golpe = 120
+        self.ultimo_golpe = None
+        self.emboscada = None
+        self.timer_emboscada = 260
+        self.guardia = None
+        self.timer_guardia = 300
         self._guardia_radio = 34
 
-        # Enjambre: el ataque "definitivo" -los mismos 6 anclajes del idle
-        # (_ANCLAS_IDLE) golpean TODOS a la vez, en abanico por casi todo
-        # el ancho de pantalla. Mucho mas telegrafiado que los demas (es
-        # el mas peligroso) y con un cooldown bien largo: no es un ataque
-        # mas, es un evento que obliga a repensar toda la posicion.
-        self._enjambre_dur_aviso = 130
-        self._enjambre_dur_golpe = 18
-        self._enjambre_dur_retiro = 50
-        self.enjambre_cooldown = random.randint(360, 440) * dur
-        self.enjambre_state = None
-        self.enjambre_timer = 0
-        self.enjambre_targets = []
+    # ------------------------------------------------------------ estado
 
     def take_damage(self, amount=1):
-        prev_hp = self.hp
+        if self.enter_timer > 0:
+            return
+        prev = self.hp
         self.hp = max(0, self.hp - amount)
-        if prev_hp > self.hp:
-            self.health_deplete_anim = prev_hp / self.max_hp
-        self.damaged_timer = 10
-        self.health_shake = 10
+        if prev > self.hp:
+            self.health_deplete_anim = max(self.health_deplete_anim, prev / self.max_hp)
+        self.damaged_timer = 6
+        self.health_shake = 4
         if self.hp <= 0:
             self.active = False
-        if self.hp < self.max_hp * 0.66 and self.phase == 1:
-            self.phase = 2
+            return
+        ratio = self.hp / self.max_hp
+        if (ratio < 0.66 and self.phase == 1) or (ratio < 0.33 and self.phase == 2):
+            self.phase += 1
             self.phase_transition = True
-            self.phase_timer = 60
-        elif self.hp < self.max_hp * 0.33 and self.phase == 2:
-            self.phase = 3
-            self.phase_transition = True
-            self.phase_timer = 60
+            self.phase_timer = 70
+            self.golpe = None
+            self.emboscada = None
+            self._chispas(30)
 
     def bloquea_disparo(self, x, y):
-        """True si el punto (x, y) -tipicamente la bala del jugador- cae
-        dentro de alguno de los dos tentaculos de guardia ya cruzados en
-        X delante del cuerpo (ver _guardia_puntas): main.py la descarta
-        ahi (parry) en vez de dejarla llegar al cuerpo/ojo."""
-        if self.guardia_state != "activa":
+        g = self.guardia
+        if g is None or g["fase"] != "activa":
             return False
-        for cx_, cy_ in self._guardia_zonas_bloqueo():
-            dx, dy = x - cx_, y - cy_
-            if (dx * dx + dy * dy) < self._guardia_radio ** 2:
+        for zx in (g["x"] - 22, g["x"] + 22):
+            if (x - zx) ** 2 + (y - g["y"]) ** 2 < self._guardia_radio ** 2:
                 return True
         return False
 
-    def _guardia_zonas_bloqueo(self):
-        return (
-            (self.guardia_x - 22, self.guardia_y),
-            (self.guardia_x + 22, self.guardia_y),
-        )
-
     def update(self, ship=None):
-        bullets = []
-        self._ship_x = ship.x if ship is not None else self.x
-        self._ship_y = ship.y if ship is not None else self.y + 400
+        self.t += 1
+        self._ship = ship
+        if ship is not None:
+            self._ship_x, self._ship_y = ship.x, ship.y
+        self.damaged_timer = max(0, self.damaged_timer - 1)
+        if self.health_deplete_anim > self.hp / self.max_hp:
+            self.health_deplete_anim = max(self.hp / self.max_hp, self.health_deplete_anim - 0.01)
+        self._avanzar_particulas()
 
+        if self.enter_timer > 0:
+            self.enter_timer -= 1
+            self.y += (self.target_y - self.y) * 0.04
+            return []
         if self.phase_transition:
             self.phase_timer -= 1
+            if self.phase_timer % 8 == 0:
+                self._chispas(5)
             if self.phase_timer <= 0:
                 self.phase_transition = False
+            return []
 
-        self._update_movement()
-        self.rotation += self.rot_speed
-        self.damaged_timer = max(0, self.damaged_timer - 1)
+        if self.golpe is None:
+            self._mover()
+        balas = []
+        balas += self._actualizar_golpe()
+        balas += self._actualizar_emboscada()
+        self._actualizar_guardia()
+        return balas
 
-        if not self.phase_transition:
-            if self.sismo_state is not None:
-                bullets.extend(self._actualizar_sismo())
-            else:
-                self.sismo_cooldown -= 1
-                if self.sismo_cooldown <= 0:
-                    self._iniciar_sismo()
+    def _mover(self):
+        dx, dy = self.target_x - self.x, self.target_y - self.y
+        dist = math.hypot(dx, dy)
+        if dist < 6:
+            self.move_timer += 1
+            if self.move_timer > 120:
+                self.move_timer = 0
+                self.target_x = random.randint(170, GAME_WIDTH - 170)
+                self.target_y = random.randint(110, 150)
+        else:
+            paso = min(dist, self.speed)
+            self.x += dx / dist * paso
+            self.y += dy / dist * paso
 
-            if self.brazo_state is not None:
-                bullets.extend(self._actualizar_brazo())
-            else:
-                self.brazo_cooldown -= 1
-                if self.brazo_cooldown <= 0:
-                    self._iniciar_brazo()
+    def _ritmo(self):
+        return {1: 1.0, 2: 0.8, 3: 0.65}[self.phase] / self._dificultad
 
-            if self.emboscada_state is not None:
-                bullets.extend(self._actualizar_emboscada())
-            else:
-                self.emboscada_cooldown -= 1
-                if self.emboscada_cooldown <= 0:
-                    self._iniciar_emboscada()
+    # ------------------------------------------------------------ golpes
 
-            if self.guardia_state is not None:
-                self._actualizar_guardia()
-            else:
-                self.guardia_cooldown -= 1
-                if self.guardia_cooldown <= 0:
-                    self._iniciar_guardia()
+    def _iniciar_golpe(self):
+        opciones = ["sismo", "brazo"] + (["enjambre"] if self.phase >= 2 else [])
+        if self.ultimo_golpe in opciones:
+            opciones.remove(self.ultimo_golpe)
+        tipo = self.ultimo_golpe = random.choice(opciones)
+        sy = min(GAME_HEIGHT - 50, self._ship_y)
+        if tipo == "sismo":
+            self.golpe = {"tipo": tipo, "fase": "aviso", "t": 0, "dur": 90,
+                          "raices": [RAIZ_VIENTRE], "blancos": [(self._ship_x, sy)]}
+        elif tipo == "brazo":
+            lado = -1 if self._ship_x > GAME_WIDTH / 2 else 1
+            raiz = RAIZ_HOMBROS[0 if lado < 0 else 1]
+            x0 = 60 if lado < 0 else GAME_WIDTH - 60
+            self.golpe = {"tipo": tipo, "fase": "aviso", "t": 0, "dur": 95, "lado": lado,
+                          "raices": [raiz], "blancos": [(x0, sy)]}
+        else:
+            margen = 90
+            paso = (GAME_WIDTH - 2 * margen) / 5
+            self.golpe = {"tipo": tipo, "fase": "aviso", "t": 0, "dur": 120,
+                          "raices": [r for r, _ in RAICES_IDLE],
+                          "blancos": [(margen + i * paso, sy) for i in range(6)]}
 
-            if self.enjambre_state is not None:
-                bullets.extend(self._actualizar_enjambre())
-            else:
-                self.enjambre_cooldown -= 1
-                if self.enjambre_cooldown <= 0:
-                    self._iniciar_enjambre()
+    def _actualizar_golpe(self):
+        g = self.golpe
+        if g is None:
+            self.timer_golpe -= 1
+            if self.timer_golpe <= 0:
+                self._iniciar_golpe()
+            return []
+        g["t"] += 1
+        if g["fase"] == "aviso":
+            if g["tipo"] == "brazo":
+                # sigue la altura de la nave con retraso
+                bx, by = g["blancos"][0]
+                g["blancos"][0] = (bx, by + (min(GAME_HEIGHT - 50, self._ship_y) - by) * 0.04)
+            if g["t"] >= g["dur"]:
+                g["fase"], g["t"] = "golpe", 0
+                if g["tipo"] == "brazo":
+                    return []
+                return self._impactos(g)
+            return []
+        if g["fase"] == "golpe":
+            if g["tipo"] == "brazo":
+                # barre de costado hasta el otro lado
+                bx, by = g["blancos"][0]
+                bx -= g["lado"] * 26
+                g["blancos"][0] = (bx, by)
+                if g["t"] % 2 == 0:
+                    return [TentaculoImpacto(bx, by, 40, ROSA, 6)]
+                if bx < 40 or bx > GAME_WIDTH - 40:
+                    g["fase"], g["t"] = "retiro", 0
+                return []
+            if g["t"] >= 14:
+                g["fase"], g["t"] = "retiro", 0
+            return []
+        if g["t"] >= 40:
+            self.golpe = None
+            self.timer_golpe = int(random.randint(70, 110) * self._ritmo())
+        return []
 
-        if self.hp <= 0:
-            self.active = False
+    def _impactos(self, g):
+        color = MELON if g["tipo"] == "sismo" else AMARILLO
+        radio = 52 if g["tipo"] == "sismo" else 40
+        balas = [TentaculoImpacto(x, y, radio, color, 16) for x, y in g["blancos"]]
+        if g["tipo"] == "sismo" and self.phase == 3:
+            x, y = g["blancos"][0]
+            desfase = random.uniform(0, math.pi)
+            balas += [WaveBossBullet(x, y, math.cos(a) * 2.0, math.sin(a) * 2.0, TINTA, 5)
+                      for a in (desfase + i * math.pi / 5 for i in range(10))]
+        return balas
 
-        if self.damaged_timer > 0 and random.random() < 0.4:
-            self.particles.append({
-                'x': self.x + random.uniform(-15, 15),
-                'y': self.y + random.uniform(-10, 10),
-                'vx': random.uniform(-2, 2),
-                'vy': random.uniform(-2, 2),
-                'life': random.randint(15, 35),
-                'max_life': 35,
-                'radius': random.randint(2, 5),
-            })
+    def _actualizar_emboscada(self):
+        e = self.emboscada
+        if e is None:
+            if self.phase >= 2:
+                self.timer_emboscada -= 1
+                if self.timer_emboscada <= 0:
+                    sy = min(GAME_HEIGHT - 50, self._ship_y)
+                    self.emboscada = {"fase": "aviso", "t": 0, "dur": 46, "blanco": (self._ship_x, sy)}
+            return []
+        e["t"] += 1
+        if e["fase"] == "aviso" and e["t"] >= e["dur"]:
+            e["fase"], e["t"] = "golpe", 0
+            return [TentaculoImpacto(e["blanco"][0], e["blanco"][1], 38, AMARILLO, 12)]
+        if e["fase"] == "golpe" and e["t"] >= 10:
+            e["fase"], e["t"] = "retiro", 0
+        if e["fase"] == "retiro" and e["t"] >= 26:
+            self.emboscada = None
+            self.timer_emboscada = int(random.randint(200, 260) * self._ritmo())
+        return []
 
-        alive_particles = []
+    def _actualizar_guardia(self):
+        g = self.guardia
+        if g is None:
+            self.timer_guardia -= 1
+            if self.timer_guardia <= 0 and self.golpe is None:
+                self.guardia = {"fase": "subida", "t": 0,
+                                "x": max(220, min(GAME_WIDTH - 220, self._ship_x)), "y": self.y + 150}
+            return
+        g["t"] += 1
+        if g["fase"] == "subida" and g["t"] >= 22:
+            g["fase"], g["t"] = "activa", 0
+        elif g["fase"] == "activa" and g["t"] >= 140:
+            g["fase"], g["t"] = "bajada", 0
+        elif g["fase"] == "bajada" and g["t"] >= 22:
+            self.guardia = None
+            self.timer_guardia = int(random.randint(280, 360) * self._ritmo())
+
+    # ------------------------------------------------------------ efectos
+
+    def _chispas(self, n):
+        for _ in range(n):
+            a = random.uniform(0, 2 * math.pi)
+            v = random.uniform(0.5, 3.5)
+            self.particles.append({'x': self.x + random.uniform(-70, 70), 'y': self.y + random.uniform(-50, 50),
+                                   'vx': math.cos(a) * v, 'vy': math.sin(a) * v,
+                                   'life': random.randint(16, 30), 'max_life': 30})
+
+    def _avanzar_particulas(self):
+        if self.damaged_timer > 0 and random.random() < 0.5:
+            self._chispas(1)
+        vivas = []
         for p in self.particles:
             p['x'] += p['vx']
             p['y'] += p['vy']
             p['life'] -= 1
             if p['life'] > 0:
-                alive_particles.append(p)
-        self.particles = alive_particles
+                vivas.append(p)
+        self.particles = vivas
 
-        if self.health_deplete_anim > self.hp / self.max_hp:
-            self.health_deplete_anim = max(self.hp / self.max_hp, self.health_deplete_anim - 0.025)
+    # ------------------------------------------------------------ dibujo
 
-        return bullets
-
-    def _update_movement(self):
-        """A diferencia de los demas jefes, Titan se queda en la mitad
-        superior de la pantalla (target_y acotado bien arriba): domina el
-        campo desde ahi en vez de recorrerlo entero."""
-        dx = self.target_x - self.x
-        dy = self.target_y - self.y
-        dist = math.sqrt(dx * dx + dy * dy)
-        if dist < 10:
-            self.move_timer += 1
-            if self.move_timer >= self.move_cooldown:
-                self.move_timer = 0
-                padding = 130
-                self.target_x = random.randint(padding, GAME_WIDTH - padding)
-                self.target_y = random.randint(90, 160)
-        else:
-            self.x += (dx / dist) * self.speed
-            self.y += (dy / dist) * self.speed
-        self.x = max(110, min(GAME_WIDTH - 110, self.x))
-        self.y = max(80, min(170, self.y))
-
-    def _ancla_mundo(self, frac_x, frac_y):
-        """Punto del propio cuerpo en coordenadas de mundo (sin offset de
-        pantalla) segun una fraccion (frac_x, frac_y) del rectangulo del
-        sprite ya escalado -mismo calculo que hace draw() para ubicar
-        rect_sprite, pero disponible tambien fuera de draw() para que
-        update()/_iniciar_* puedan anclar ahi el origen de un tentaculo."""
-        ancho = sprites.BOSS_DISPLAY_W * sprites.TITAN_DISPLAY_SCALE
-        alto = sprites.BOSS_DISPLAY_H * sprites.TITAN_DISPLAY_SCALE
-        left = self.x - ancho / 2.0
-        top = (self.y + 15) - alto / 2.0
-        return left + ancho * frac_x, top + alto * frac_y
-
-    # ------------------------------------------------------------ sismo
-
-    def _iniciar_sismo(self):
-        self.sismo_state = "aviso"
-        self.sismo_timer = self._sismo_dur_aviso
-        self.sismo_x = self._ship_x
-        self.sismo_y = min(GAME_HEIGHT - 40, self._ship_y)
-        self.sismo_cooldown = random.randint(220, 300) / self._dificultad
-
-    def _actualizar_sismo(self):
-        self.sismo_timer -= 1
-        if self.sismo_state == "aviso":
-            if self.sismo_timer <= 0:
-                self.sismo_state = "golpe"
-                self.sismo_timer = self._sismo_dur_golpe
-                return [TentaculoImpacto(self.sismo_x, self.sismo_y, radius=52, color=MELON, vida=16)]
-            return []
-        if self.sismo_state == "golpe":
-            if self.sismo_timer <= 0:
-                self.sismo_state = "retiro"
-                self.sismo_timer = self._sismo_dur_retiro
-            return []
-        # "retiro"
-        if self.sismo_timer <= 0:
-            self.sismo_state = None
-        return []
-
-    def _sismo_extension(self):
-        """0..1: cuanto tentaculo hay afuera ahora mismo, para el dibujo."""
-        if self.sismo_state == "aviso":
-            return 1.0 - max(0.0, self.sismo_timer / self._sismo_dur_aviso)
-        if self.sismo_state == "golpe":
+    @staticmethod
+    def _extension(estado):
+        if estado is None:
+            return 0.0
+        if estado["fase"] == "aviso":
+            k = estado["t"] / estado["dur"]
+            return 0.15 + 0.6 * k * k       # se asoma y despues se estira
+        if estado["fase"] in ("golpe", "activa"):
             return 1.0
-        if self.sismo_state == "retiro":
-            return max(0.0, self.sismo_timer / self._sismo_dur_retiro)
-        return 0.0
+        if estado["fase"] == "subida":
+            return estado["t"] / 22
+        if estado["fase"] == "bajada":
+            return 1 - estado["t"] / 22
+        return max(0.0, 1 - estado["t"] / 30)
 
-    # ------------------------------------------------------------ brazo
+    def _tentaculo(self, screen, x0, y0, x1, y1, ext, color, grosor=11, onda=8.0, ox=0, oy=0):
+        """Cadena de discos desde la raiz hasta ext (0..1) del camino a la
+        punta, con una ondulacion que se apaga en la punta."""
+        if ext <= 0.01:
+            return
+        dx, dy = x1 - x0, y1 - y0
+        largo = math.hypot(dx, dy) or 1.0
+        nx, ny = -dy / largo, dx / largo
+        n = max(4, int(largo * ext / 13))
+        for i in range(n, -1, -1):
+            f = i / n
+            k = f * ext
+            ondula = math.sin(self.t * 0.12 + f * 5) * onda * math.sin(math.pi * f)
+            x = x0 + dx * k + nx * ondula
+            y = y0 + dy * k + ny * ondula
+            r = max(2, round(grosor * (1 - 0.6 * f) / 3))
+            seg = _segmento(r, color, i % 2 == 0)
+            screen.blit(seg, (int(x) + ox - seg.get_width() // 2, int(y) + oy - seg.get_height() // 2))
 
-    def _iniciar_brazo(self):
-        self.brazo_state = "aviso"
-        self.brazo_timer = self._brazo_dur_aviso
-        self.brazo_lado = random.choice(["left", "right"])
-        self.brazo_target_y = self._ship_y
-        self.brazo_cooldown = random.randint(280, 360) / self._dificultad
+    def _mira(self, screen, x, y, prog, color):
+        """Marca del golpe: un cuadrado que se cierra sobre el blanco."""
+        lado = int(70 - 46 * prog) // 2 * 2
+        c = color if (self.t // 4) % 2 else pixelfx.aclarar(color, 0.5)
+        x, y = int(x), int(y)
+        for sx in (-1, 1):
+            for sy in (-1, 1):
+                ex, ey = x + sx * lado // 2, y + sy * lado // 2
+                screen.fill(c, (min(ex, ex - sx * 12), ey - 2, 12, 4))
+                screen.fill(c, (ex - 2, min(ey, ey - sy * 12), 4, 12))
+        screen.fill(c, (x - 2, y - 2, 4, 4))
+        pixelfx.dibujar_halo(screen, color, x, y, 16 + 14 * prog)
 
-    def _actualizar_brazo(self):
-        self.brazo_timer -= 1
-        if self.brazo_state == "aviso":
-            # suavizado (no 1:1 instantaneo): deja un margen real para que
-            # moverse rapido saque el blanco de la altura marcada.
-            self.brazo_target_y += (self._ship_y - self.brazo_target_y) * 0.05
-            if self.brazo_timer <= 0:
-                self.brazo_state = "golpe"
-                self.brazo_timer = self._brazo_dur_golpe
-                largo = GAME_WIDTH * 0.86
-                self.brazo_golpe_x = largo if self.brazo_lado == "left" else GAME_WIDTH - largo
-                return [TentaculoImpacto(self.brazo_golpe_x, self.brazo_target_y, radius=44, color=ROSA, vida=14)]
-            return []
-        if self.brazo_state == "golpe":
-            if self.brazo_timer <= 0:
-                self.brazo_state = "retiro"
-                self.brazo_timer = self._brazo_dur_retiro
-            return []
-        if self.brazo_timer <= 0:
-            self.brazo_state = None
-        return []
-
-    def _brazo_extremos(self):
-        """(x0, y0, x1_actual, y1_actual) del tentaculo lateral ahora
-        mismo, para el dibujo: sale del flanco del propio cuerpo (x0, y0 -
-        ver _ANCLA_FLANCO_IZQ/DER) y llega hasta (x1, y1), nunca desde
-        afuera de pantalla."""
-        frac = _ANCLA_FLANCO_IZQ if self.brazo_lado == "left" else _ANCLA_FLANCO_DER
-        x0, y0 = self._ancla_mundo(*frac)
-        alcance_aviso = GAME_WIDTH * 0.62
-        x_aviso = alcance_aviso if self.brazo_lado == "left" else GAME_WIDTH - alcance_aviso
-        if self.brazo_state == "aviso":
-            t = 1.0 - max(0.0, self.brazo_timer / self._brazo_dur_aviso)
-            return x0, y0, x0 + (x_aviso - x0) * t, y0 + (self.brazo_target_y - y0) * t
-        if self.brazo_state == "golpe":
-            # sigue desde donde llego el aviso (x_aviso, brazo_target_y),
-            # no desde el flanco: el golpe es la lunge final, no un
-            # segundo estirón completo.
-            t = 1.0 - max(0.0, self.brazo_timer / self._brazo_dur_golpe)
-            return x0, y0, x_aviso + (self.brazo_golpe_x - x_aviso) * t, self.brazo_target_y
-        if self.brazo_state == "retiro":
-            t = max(0.0, self.brazo_timer / self._brazo_dur_retiro)
-            return x0, y0, x0 + (self.brazo_golpe_x - x0) * t, y0 + (self.brazo_target_y - y0) * t
-        return x0, y0, x0, y0
-
-    # -------------------------------------------------------- emboscada
-
-    def _iniciar_emboscada(self):
-        self.emboscada_state = "aviso"
-        self.emboscada_timer = self._emboscada_dur_aviso
-        self.emboscada_x = self._ship_x
-        self.emboscada_y = min(GAME_HEIGHT - 40, self._ship_y)
-        self.emboscada_cooldown = random.randint(200, 280) / self._dificultad
-
-    def _actualizar_emboscada(self):
-        self.emboscada_timer -= 1
-        if self.emboscada_state == "aviso":
-            if self.emboscada_timer <= 0:
-                self.emboscada_state = "golpe"
-                self.emboscada_timer = self._emboscada_dur_golpe
-                return [TentaculoImpacto(self.emboscada_x, self.emboscada_y, radius=40, color=AMARILLO, vida=14)]
-            return []
-        if self.emboscada_state == "golpe":
-            if self.emboscada_timer <= 0:
-                self.emboscada_state = "retiro"
-                self.emboscada_timer = self._emboscada_dur_retiro
-            return []
-        # "retiro"
-        if self.emboscada_timer <= 0:
-            self.emboscada_state = None
-        return []
-
-    def _emboscada_extension(self):
-        if self.emboscada_state == "aviso":
-            return 1.0 - max(0.0, self.emboscada_timer / self._emboscada_dur_aviso)
-        if self.emboscada_state == "golpe":
-            return 1.0
-        if self.emboscada_state == "retiro":
-            return max(0.0, self.emboscada_timer / self._emboscada_dur_retiro)
-        return 0.0
-
-    # -------------------------------------------------------- enjambre
-
-    def _iniciar_enjambre(self):
-        """Reparte un blanco por cada uno de los 6 anclajes idle
-        (_ANCLAS_IDLE), en abanico parejo por casi todo el ancho de
-        pantalla a la altura actual de la nave: cuando golpeen todos
-        juntos (ver _actualizar_enjambre) van a cubrir casi toda la
-        cancha, asi que el aviso tiene que ser bien largo para poder leer
-        donde quedan los huecos entre un tentaculo y el siguiente."""
-        self.enjambre_state = "aviso"
-        self.enjambre_timer = self._enjambre_dur_aviso
-        n = len(_ANCLAS_IDLE)
-        margen = 90
-        paso = (GAME_WIDTH - margen * 2) / (n - 1)
-        y_objetivo = min(GAME_HEIGHT - 50, self._ship_y)
-        self.enjambre_targets = [(margen + i * paso, y_objetivo) for i in range(n)]
-        self.enjambre_cooldown = random.randint(360, 440) / self._dificultad
-
-    def _actualizar_enjambre(self):
-        self.enjambre_timer -= 1
-        if self.enjambre_state == "aviso":
-            if self.enjambre_timer <= 0:
-                self.enjambre_state = "golpe"
-                self.enjambre_timer = self._enjambre_dur_golpe
-                return [TentaculoImpacto(tx, ty, radius=42, color=AMARILLO, vida=16)
-                        for tx, ty in self.enjambre_targets]
-            return []
-        if self.enjambre_state == "golpe":
-            if self.enjambre_timer <= 0:
-                self.enjambre_state = "retiro"
-                self.enjambre_timer = self._enjambre_dur_retiro
-            return []
-        # "retiro"
-        if self.enjambre_timer <= 0:
-            self.enjambre_state = None
-        return []
-
-    def _enjambre_extension(self):
-        if self.enjambre_state == "aviso":
-            return 1.0 - max(0.0, self.enjambre_timer / self._enjambre_dur_aviso)
-        if self.enjambre_state == "golpe":
-            return 1.0
-        if self.enjambre_state == "retiro":
-            return max(0.0, self.enjambre_timer / self._enjambre_dur_retiro)
-        return 0.0
-
-    # ---------------------------------------------------------- guardia
-
-    def _iniciar_guardia(self):
-        self.guardia_state = "subida"
-        self.guardia_timer = self._guardia_dur_subida
-        self.guardia_x = max(200, min(GAME_WIDTH - 200, self._ship_x))
-        self.guardia_y = self.y + 150
-
-    def _actualizar_guardia(self):
-        self.guardia_timer -= 1
-        if self.guardia_timer <= 0:
-            if self.guardia_state == "subida":
-                self.guardia_state = "activa"
-                self.guardia_timer = self._guardia_dur_activa
-            elif self.guardia_state == "activa":
-                self.guardia_state = "bajada"
-                self.guardia_timer = self._guardia_dur_bajada
-            else:
-                self.guardia_state = None
-                self.guardia_cooldown = random.randint(260, 340) / self._dificultad
-
-    def _guardia_extension(self):
-        if self.guardia_state == "subida":
-            return 1.0 - max(0.0, self.guardia_timer / self._guardia_dur_subida)
-        if self.guardia_state == "activa":
-            return 1.0
-        if self.guardia_state == "bajada":
-            return max(0.0, self.guardia_timer / self._guardia_dur_bajada)
-        return 0.0
-
-    def _guardia_puntas(self):
-        """Los dos tentaculos de guardia salen cada uno de un hombro y
-        terminan del lado CONTRARIO al que salieron -se cruzan en X
-        delante del cuerpo, como brazos cruzados bloqueando un golpe, en
-        vez de un unico tentaculo alzado- convergiendo en (guardia_x,
-        guardia_y)."""
-        ancla_izq = self._ancla_mundo(*_ANCLA_HOMBRO_IZQ)
-        ancla_der = self._ancla_mundo(*_ANCLA_HOMBRO_DER)
-        punta_izq = (self.guardia_x + 22, self.guardia_y)
-        punta_der = (self.guardia_x - 22, self.guardia_y)
-        return ancla_izq, punta_izq, ancla_der, punta_der
-
-    # ---------------------------------------------------------------- draw
+    def _sprite(self):
+        casco, _ = COLORES_FASE[self.phase]
+        w, h = sprites.tamano_pixel("boss", "titan_px", self.ESCALA)
+        return sprites.get_boss_surface(casco, pixelfx.aclarar(casco, 0.3), w, h, kind="titan_px")
 
     def draw(self, screen, offset_x=0, offset_y=0):
         cx = int(self.x) + offset_x
         cy = int(self.y) + offset_y
+        _, color_t = COLORES_FASE[self.phase]
+        ox, oy = cx - self.x, cy - self.y
 
-        sombra_surf = pygame.Surface((220, 40), pygame.SRCALPHA)
-        pygame.draw.ellipse(sombra_surf, (0, 0, 0, 55), (0, 0, 220, 40))
-        screen.blit(sombra_surf, (cx - 110, cy + 78))
+        # tentaculos de reposo (los que no estan en el enjambre)
+        enjambre = self.golpe is not None and self.golpe["tipo"] == "enjambre"
+        if not enjambre:
+            for i, ((rx, ry), ang) in enumerate(RAICES_IDLE):
+                a = math.radians(ang + math.sin(self.t * 0.03 + i * 1.3) * 12)
+                largo = 70 + 12 * math.sin(self.t * 0.04 + i)
+                x0, y0 = self.x + rx, self.y + ry
+                self._tentaculo(screen, x0, y0, x0 + math.cos(a) * largo, y0 + math.sin(a) * largo,
+                                1.0, color_t, 12, 6, ox, oy)
 
-        color_casco, color_secundario = TINTES_POR_FASE.get(self.phase, TINTES_POR_FASE[1])
-        ancho_sprite = int(sprites.BOSS_DISPLAY_W * sprites.TITAN_DISPLAY_SCALE)
-        alto_sprite = int(sprites.BOSS_DISPLAY_H * sprites.TITAN_DISPLAY_SCALE)
-        sprite = sprites.get_boss_surface(color_casco, color_secundario, ancho_sprite, alto_sprite, kind="titan")
+        # marcas de los golpes en el piso
+        g = self.golpe
+        if g is not None and g["fase"] == "aviso":
+            prog = g["t"] / g["dur"]
+            for bx, by in g["blancos"]:
+                self._mira(screen, bx + offset_x, by + offset_y, prog, (255, 80, 110))
+            if g["tipo"] == "brazo":
+                bx, by = g["blancos"][0]
+                for x in range(40, GAME_WIDTH - 40, 24):
+                    if (x // 24 + self.t // 4) % 2:
+                        screen.fill((255, 80, 110), (x + offset_x, int(by) + offset_y + 26, 12, 3))
+        e = self.emboscada
+        if e is not None and e["fase"] == "aviso":
+            self._mira(screen, e["blanco"][0] + offset_x, e["blanco"][1] + offset_y, e["t"] / e["dur"], AMARILLO)
 
-        if sprite is not None:
-            rect_sprite = sprite.get_rect(center=(cx, cy + 15))
-            screen.blit(sprite, rect_sprite)
-            manto_cx = rect_sprite.centerx
-            manto_top = rect_sprite.top
-            ojo_x = rect_sprite.left + ancho_sprite * sprites.TITAN_OJO_CX_FRAC
-            ojo_y = rect_sprite.top + alto_sprite * sprites.TITAN_OJO_CY_FRAC
-            ojo_r = ancho_sprite * sprites.TITAN_OJO_R_FRAC
+        sprite = self._sprite()
+        rect = sprite.get_rect(center=(cx, cy))
+        if self.enter_timer > 0:
+            copia = sprite.copy()
+            copia.set_alpha(int(255 * (1 - self.enter_timer / 100)))
+            screen.blit(copia, rect)
         else:
-            # Sin PNG en assets/sprites/boss no se dibuja un casco de
-            # respaldo por codigo: se mantienen coordenadas relativas
-            # razonables para que la barra de vida/tentaculos/ojo sigan en
-            # su lugar.
-            manto_cx = cx
-            manto_top = cy - 60
-            ojo_x, ojo_y, ojo_r = cx, cy - 10, 22
+            screen.blit(sprite, rect)
+            if self.damaged_timer > 3 or (self.phase_transition and (self.phase_timer // 4) % 2 == 0):
+                blanco = pixelfx.silueta_blanca(sprite)
+                blanco.set_alpha(170)
+                screen.blit(blanco, rect)
+        self._dibujar_ojo(screen, cx + self.OJO[0], cy + self.OJO[1])
 
-        self._dibujar_tentaculos_idle(screen, offset_x, offset_y)
-        self._dibujar_ojo(screen, ojo_x, ojo_y, ojo_r)
-
-        if self.sismo_state is not None:
-            self._dibujar_sismo(screen, offset_x, offset_y)
-        if self.brazo_state is not None:
-            self._dibujar_brazo(screen, offset_x, offset_y)
-        if self.emboscada_state is not None:
-            self._dibujar_emboscada(screen, offset_x, offset_y)
-        if self.enjambre_state is not None:
-            self._dibujar_enjambre(screen, offset_x, offset_y)
-        if self.guardia_state is not None:
-            self._dibujar_guardia(screen, offset_x, offset_y)
-
-        barra_w = 160
-        barra_h = 14
-        barra_x = manto_cx - barra_w // 2
-        barra_y = manto_top - 26
-        proporcion_vida = max(0, self.hp / self.max_hp)
-        proporcion_mostrada = self.health_deplete_anim
-
-        temblor_x = temblor_y = 0
-        if self.health_shake > 0:
-            temblor_x = random.randint(-self.health_shake, self.health_shake)
-            temblor_y = random.randint(-self.health_shake, self.health_shake)
-            self.health_shake -= 1
-
-        barra_dibujo_x = barra_x + temblor_x
-        barra_dibujo_y = barra_y + temblor_y
-
-        sombra_barra_surf = pygame.Surface((barra_w + 6, barra_h + 6), pygame.SRCALPHA)
-        pygame.draw.rect(sombra_barra_surf, (0, 0, 0, 60), (3, 3, barra_w, barra_h), border_radius=barra_h // 2)
-        screen.blit(sombra_barra_surf, (barra_dibujo_x - 3, barra_dibujo_y - 3))
-
-        fondo_barra_rect = (barra_dibujo_x, barra_dibujo_y, barra_w, barra_h)
-        pygame.draw.rect(screen, (20, 20, 35), fondo_barra_rect, border_radius=barra_h // 2)
-
-        ancho_relleno = int((barra_w - 2) * proporcion_mostrada)
-        if ancho_relleno > 0:
-            if proporcion_vida > 0.66:
-                color_vida = ROSA
-            elif proporcion_vida > 0.33:
-                color_vida = AMARILLO
-            else:
-                color_vida = MELON
-            pygame.draw.rect(screen, color_vida, (barra_dibujo_x + 1, barra_dibujo_y + 1, ancho_relleno, barra_h - 2), border_radius=barra_h // 2)
-
-        pygame.draw.rect(screen, WHITE, fondo_barra_rect, width=1, border_radius=barra_h // 2)
-
-        porcentaje = f"{int(proporcion_vida * 100)}%"
-        porcentaje_surf = render_text(porcentaje, 10, WHITE)
-        screen.blit(porcentaje_surf, (cx - porcentaje_surf.get_width() // 2, barra_dibujo_y - 14))
-
-        if self.phase_transition:
-            destello_w, destello_h = ancho_sprite, alto_sprite
-            alfa_transicion = int(150 * (0.5 + 0.5 * math.sin(self.phase_timer * 0.5)))
-            transicion_surf = pygame.Surface((destello_w + 40, destello_h + 40), pygame.SRCALPHA)
-            pygame.draw.rect(transicion_surf, (255, 255, 255, alfa_transicion), (20, 20, destello_w, destello_h), border_radius=10)
-            screen.blit(transicion_surf, (manto_cx - destello_w // 2 - 20, manto_top - 20))
-
-        if self.damaged_timer > 0:
-            alfa_impacto = int(140 * (self.damaged_timer / 10))
-            impacto_surf = pygame.Surface((90, 90), pygame.SRCALPHA)
-            pygame.draw.circle(impacto_surf, (255, 130, 150, alfa_impacto), (45, 45), 45)
-            screen.blit(impacto_surf, (cx - 45, cy - 20))
+        # tentaculos de ataque (encima del cuerpo)
+        if g is not None:
+            ext = self._extension(g)
+            for (rx, ry), (bx, by) in zip(g["raices"], g["blancos"]):
+                self._tentaculo(screen, self.x + rx, self.y + ry, bx, by, ext, color_t, 16,
+                                0 if g["fase"] == "golpe" else 10, ox, oy)
+        if e is not None:
+            # sale del muñon mas cercano al blanco
+            rx, ry = min((r for r, _ in RAICES_IDLE), key=lambda r: abs(self.x + r[0] - e["blanco"][0]))
+            self._tentaculo(screen, self.x + rx, self.y + ry,
+                            e["blanco"][0], e["blanco"][1], self._extension(e), color_t, 13, 6, ox, oy)
+        gd = self.guardia
+        if gd is not None:
+            ext = self._extension(gd)
+            claro = pixelfx.aclarar(color_t, 0.25)
+            for (rx, ry), lado in zip(RAIZ_HOMBROS, (1, -1)):
+                self._tentaculo(screen, self.x + rx, self.y + ry, gd["x"] + lado * 30, gd["y"], ext,
+                                claro, 16, 0, ox, oy)
+            if gd["fase"] == "activa":
+                for zx in (gd["x"] - 22, gd["x"] + 22):
+                    pixelfx.dibujar_halo(screen, claro, zx + offset_x, gd["y"] + offset_y, 30)
 
         for p in self.particles:
-            alpha = p['life'] / p['max_life']
-            size = max(1, int(p['radius'] * alpha))
-            c = (int(230 * alpha), int(180 * alpha), int(255 * alpha))
-            pygame.draw.circle(screen, c, (int(p['x']) + offset_x, int(p['y']) + offset_y), size)
+            k = p['life'] / p['max_life']
+            c = (int(200 + 55 * k), int(150 + 100 * k), 255)
+            lado = 4 if k > 0.5 else 2
+            screen.fill(c, (int(p['x']) + offset_x, int(p['y']) + offset_y, lado, lado))
 
-    def _dibujar_ojo(self, screen, ojo_x, ojo_y, ojo_r):
-        """La pupila es 100% dinamica (el aro/iris ya viene horneado en el
-        sprite, ver _detalle_extra_casco en tools/generate_sprites.py):
-        se desplaza cada frame hacia la nave, clampeada dentro del zocalo,
-        para que el ojo la siga con la mirada en tiempo real."""
-        zocalo_r = ojo_r * 0.42
-        dx, dy = self._ship_x - ojo_x, self._ship_y - ojo_y
+        if self.enter_timer <= 0:
+            temblor = (0, 0)
+            if self.health_shake > 0:
+                temblor = (random.randint(-self.health_shake, self.health_shake), 0)
+                self.health_shake -= 1
+            ratio = max(0.0, self.hp / self.max_hp)
+            y_barra = max(14, cy - sprite.get_height() // 2 - 2)
+            pixelfx.barra_jefe(screen, cx, y_barra, 160, ratio, self.health_deplete_anim,
+                               COLORES_FASE[self.phase][0], temblor)
+            etiqueta = render_text(self.name, 11, WHITE)
+            screen.blit(etiqueta, (cx - etiqueta.get_width() // 2, y_barra - 18))
+
+    def _dibujar_ojo(self, screen, ox, oy):
+        """Pupila en pixeles que sigue a la nave dentro de la cuenca."""
+        dx, dy = self._ship_x - ox, self._ship_y - oy
         dist = math.hypot(dx, dy) or 1.0
-        alcance = zocalo_r * 0.55
-        despl_x = dx / dist * min(alcance, dist * 0.06)
-        despl_y = dy / dist * min(alcance, dist * 0.06)
-        px, py = ojo_x + despl_x, ojo_y + despl_y
-        pulse = 0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.004)
-        glow_color = (255, 60, 50) if self.phase < 3 else (255, 90, 40)
-        glow = pygame.Surface((int(zocalo_r * 3), int(zocalo_r * 3)), pygame.SRCALPHA)
-        pygame.draw.circle(glow, (*glow_color, int(70 + 40 * pulse)), (glow.get_width() // 2, glow.get_height() // 2), int(zocalo_r * 1.3))
-        screen.blit(glow, (px - glow.get_width() // 2, py - glow.get_height() // 2))
-        pygame.draw.circle(screen, (18, 6, 8), (int(px), int(py)), int(zocalo_r * 0.85))
-        pygame.draw.circle(screen, glow_color, (int(px), int(py)), max(2, int(zocalo_r * 0.4)))
-        pygame.draw.circle(screen, WHITE, (int(px - zocalo_r * 0.22), int(py - zocalo_r * 0.22)), max(1, int(zocalo_r * 0.16)))
-
-    # ------------------------------------------------------ tentaculos (sprites)
-
-    def _dibujar_tentaculo_sprite(self, screen, x0, y0, x1, y1, t, color, offset_x=0, offset_y=0,
-                                  grosor=1.0, ondulado=True, n_segmentos=7):
-        """Encadena copias rotadas/escaladas de titan_tentaculo_*.png entre
-        (x0,y0) y una fraccion t (0..1) del camino a (x1,y1): con t
-        creciendo en el tiempo se ve al tentaculo estirarse de verdad en
-        vez de una linea vectorial. Reutilizado por el sismo, el brazo, la
-        guardia y los tentaculos idle - son sprites, no dibujo a mano."""
-        if t <= 0.001:
-            return
-        dx, dy = x1 - x0, y1 - y0
-        largo_total = math.hypot(dx, dy) or 1.0
-        nx, ny = -dy / largo_total, dx / largo_total
-        fase = pygame.time.get_ticks() * 0.004
-        puntos = []
-        for i in range(n_segmentos + 1):
-            frac = (i / n_segmentos) * t
-            px = x0 + dx * frac
-            py = y0 + dy * frac
-            if ondulado:
-                onda = math.sin(fase + i * 0.9) * 5 * frac
-                px += nx * onda
-                py += ny * onda
-            puntos.append((px + offset_x, py + offset_y))
-
-        for i in range(len(puntos) - 1):
-            ax, ay = puntos[i]
-            bx, by = puntos[i + 1]
-            seg_dx, seg_dy = bx - ax, by - ay
-            seg_len = math.hypot(seg_dx, seg_dy)
-            if seg_len < 1:
-                continue
-            angulo = math.degrees(math.atan2(seg_dy, seg_dx))
-            factor = grosor * (1.0 - (i / n_segmentos) * 0.55)
-            ancho_spr = max(12, (int(seg_len * 1.3) // 4) * 4)
-            alto_spr = max(8, int(sprites.TITAN_TENTACULO_H * (ancho_spr / sprites.TITAN_TENTACULO_W) * factor))
-            spr = sprites.get_titan_tentaculo_surface(color, ancho_spr, alto_spr)
-            if spr is None:
-                continue
-            rotado = pygame.transform.rotate(spr, -angulo)
-            rect = rotado.get_rect(center=(int(ax + seg_dx * 0.5), int(ay + seg_dy * 0.5)))
-            screen.blit(rotado, rect)
-
-    def _dibujar_tentaculos_idle(self, screen, offset_x, offset_y):
-        """Tentaculos grandes y gruesos que salen de TODO el cuerpo -de
-        los hombros, los flancos y el vientre, no solo en fila desde
-        abajo del manto- y se mecen solos, cada uno con su propio angulo
-        base, cuando no esta atacando: la firma visual de "pulpo vivo",
-        intimidante incluso en reposo."""
-        color_casco, _ = TINTES_POR_FASE.get(self.phase, TINTES_POR_FASE[1])
-        color = tuple(max(0, c - 30) for c in color_casco)
-        for i, (frac, ang_base_grados) in enumerate(_ANCLAS_IDLE):
-            x0, y0 = self._ancla_mundo(*frac)
-            fase = self.rotation * 4 + i * 1.3
-            balanceo_grados = math.sin(fase) * 14
-            # largos y pocos segmentos (no muchos chicos): asi se leen
-            # como miembros gruesos de verdad, no una fila de puntitos.
-            largo = 100 + 18 * math.sin(self.rotation * 1.4 + i * 0.7)
-            ang = math.radians(ang_base_grados + balanceo_grados)
-            x1 = x0 + math.cos(ang) * largo
-            y1 = y0 + math.sin(ang) * largo
-            self._dibujar_tentaculo_sprite(screen, x0, y0, x1, y1, 1.0, color, offset_x, offset_y,
-                                           grosor=2.1, n_segmentos=3)
-
-    def _dibujar_sismo(self, screen, offset_x, offset_y):
-        t = self._sismo_extension()
-        color_casco, _ = TINTES_POR_FASE.get(self.phase, TINTES_POR_FASE[1])
-        x0, y0 = self._ancla_mundo(*_ANCLA_CRESTA)
-        self._dibujar_tentaculo_sprite(
-            screen, x0, y0, self.sismo_x, self.sismo_y, t, color_casco, offset_x, offset_y,
-            grosor=1.6, n_segmentos=8,
-        )
-        if self.sismo_state == "aviso":
-            pulse = 0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.02)
-            radio = 14 + 10 * pulse
-            ax, ay = (x0 + (self.sismo_x - x0) * t) + offset_x, (y0 + (self.sismo_y - y0) * t) + offset_y
-            pygame.draw.circle(screen, (255, 220, 120), (int(ax), int(ay)), int(radio), 3)
-
-    def _dibujar_brazo(self, screen, offset_x, offset_y):
-        # _brazo_extremos() ya resuelve el x1/y1 actual (la interpolacion
-        # segun el estado/timer vive ahi), asi que aca siempre se dibuja
-        # el segmento entero x0->x1 (t=1.0), no una segunda interpolacion.
-        x0, y0, x1, y1 = self._brazo_extremos()
-        color_casco, _ = TINTES_POR_FASE.get(self.phase, TINTES_POR_FASE[1])
-        self._dibujar_tentaculo_sprite(
-            screen, x0, y0, x1, y1, 1.0, color_casco, offset_x, offset_y,
-            grosor=1.6, n_segmentos=8, ondulado=self.brazo_state != "golpe",
-        )
-        if self.brazo_state == "aviso":
-            pulse = 0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.02)
-            pygame.draw.circle(screen, (255, 150, 190), (int(x1) + offset_x, int(y1) + offset_y), int(10 + 6 * pulse), 3)
-
-    def _dibujar_emboscada(self, screen, offset_x, offset_y):
-        t = self._emboscada_extension()
-        color_casco, _ = TINTES_POR_FASE.get(self.phase, TINTES_POR_FASE[1])
-        x0, y0 = self._ancla_mundo(*_ANCLA_VIENTRE_CENTRO)
-        self._dibujar_tentaculo_sprite(
-            screen, x0, y0, self.emboscada_x, self.emboscada_y, t, color_casco, offset_x, offset_y,
-            grosor=1.3, n_segmentos=6, ondulado=self.emboscada_state != "golpe",
-        )
-        if self.emboscada_state == "aviso":
-            pulse = 0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.03)
-            ax = (x0 + (self.emboscada_x - x0) * t) + offset_x
-            ay = (y0 + (self.emboscada_y - y0) * t) + offset_y
-            pygame.draw.circle(screen, (255, 200, 140), (int(ax), int(ay)), int(9 + 5 * pulse), 2)
-
-    def _dibujar_enjambre(self, screen, offset_x, offset_y):
-        """Los 6 anclajes idle (_ANCLAS_IDLE) estirandose TODOS a la vez
-        hacia su propio blanco (_iniciar_enjambre): el ataque mas grande
-        del Titan, cubre casi todo el ancho de pantalla de un saque."""
-        t = self._enjambre_extension()
-        color_casco, _ = TINTES_POR_FASE.get(self.phase, TINTES_POR_FASE[1])
-        for i, (frac, _ang) in enumerate(_ANCLAS_IDLE):
-            if i >= len(self.enjambre_targets):
-                break
-            x0, y0 = self._ancla_mundo(*frac)
-            tx, ty = self.enjambre_targets[i]
-            self._dibujar_tentaculo_sprite(
-                screen, x0, y0, tx, ty, t, color_casco, offset_x, offset_y,
-                grosor=1.8, n_segmentos=7, ondulado=self.enjambre_state != "golpe",
-            )
-        if self.enjambre_state == "aviso":
-            pulse = 0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.02)
-            for tx, ty in self.enjambre_targets:
-                ax, ay = tx + offset_x, ty + offset_y
-                pygame.draw.circle(screen, (255, 220, 120), (int(ax), int(ay)), int(14 + 8 * pulse), 3)
-
-    def _dibujar_guardia(self, screen, offset_x, offset_y):
-        """Dos tentaculos -uno por hombro- que se cruzan en X delante del
-        cuerpo, como brazos cruzados bloqueando un golpe (ver
-        _guardia_puntas/bloquea_disparo), en vez de un unico tentaculo
-        alzado."""
-        ancla_izq, punta_izq, ancla_der, punta_der = self._guardia_puntas()
-        t = self._guardia_extension()
-        color_casco, _ = TINTES_POR_FASE.get(self.phase, TINTES_POR_FASE[1])
-        color_guardia = tuple(min(255, c + 35) for c in color_casco)
-        self._dibujar_tentaculo_sprite(
-            screen, ancla_izq[0], ancla_izq[1], punta_izq[0], punta_izq[1], t, color_guardia,
-            offset_x, offset_y, grosor=1.7, n_segmentos=6, ondulado=False,
-        )
-        self._dibujar_tentaculo_sprite(
-            screen, ancla_der[0], ancla_der[1], punta_der[0], punta_der[1], t, color_guardia,
-            offset_x, offset_y, grosor=1.7, n_segmentos=6, ondulado=False,
-        )
-        if self.guardia_state == "activa":
-            pulse = 0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.015)
-            gx, gy = self.guardia_x + offset_x, self.guardia_y + offset_y
-            glow = pygame.Surface((self._guardia_radio * 5, self._guardia_radio * 3), pygame.SRCALPHA)
-            gw, gh = glow.get_width() // 2, glow.get_height() // 2
-            pygame.draw.ellipse(glow, (*color_guardia[:3], int(50 + 30 * pulse)),
-                                 (0, 0, glow.get_width(), glow.get_height()))
-            screen.blit(glow, (gx - gw, gy - gh))
+        px = ox + int(dx / dist * 9) // 3 * 3
+        py = oy + int(dy / dist * 9) // 3 * 3
+        color = (255, 60, 70) if self.phase < 3 else (255, 140, 40)
+        pixelfx.dibujar_halo(screen, color, px, py, 22)
+        screen.fill(color, (px - 9, py - 9, 18, 18))
+        screen.fill(color, (px - 12, py - 6, 24, 12))
+        screen.fill(color, (px - 6, py - 12, 12, 24))
+        screen.fill((30, 6, 12), (px - 3, py - 6, 6, 12))
+        screen.fill((255, 255, 255), (px - 9, py - 9, 3, 3))
