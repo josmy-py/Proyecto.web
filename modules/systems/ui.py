@@ -56,8 +56,8 @@ class AnimatedValue:
         return self.current
 
 
-# jefe que espera al final de cada tramo de oleadas -> sprite pixel para la
-# silueta del contador (ver generate_pixel_sprites.py)
+# jefe que espera al final de cada tramo de oleadas -> sprite pixel y
+# colores con los que aparece en la pelea (fase 1)
 _SILUETA_JEFE = {
     "sentinel": "centinela",
     "dragon": "dragon_a",
@@ -65,6 +65,24 @@ _SILUETA_JEFE = {
     "anomalia": "anomalia_px",
     "mega": "coloso_crucero",
 }
+
+
+def _colores_jefe(boss_id):
+    if boss_id == "sentinel":
+        from modules.core.boss_system import BOSS_DEFINITIONS
+        d = BOSS_DEFINITIONS[0]
+        return d.primary_color, tuple(d.secondary_color[:3])
+    if boss_id == "dragon":
+        from modules.entities.dragon_boss import COLORES_FASE
+        return COLORES_FASE[1]
+    if boss_id == "titan":
+        from modules.entities.titan_boss import COLORES_FASE
+        return COLORES_FASE[1][0], pixelfx.aclarar(COLORES_FASE[1][0], 0.3)
+    if boss_id == "anomalia":
+        from modules.entities.boss import COLORES_FASE
+        return COLORES_FASE[1]
+    from modules.systems.sprites import MEGA_FASES
+    return MEGA_FASES["cruiser"][1], MEGA_FASES["cruiser"][2]
 
 
 def _jefes_por_oleada():
@@ -75,25 +93,44 @@ def _jefes_por_oleada():
     return sorted(jefes)
 
 
-def _silueta_jefe(boss_id, color, alto=26):
-    """Silueta de un color del jefe (todas sus capas juntas), a `alto` px."""
-    clave = ("silueta_hud", boss_id, color, alto)
+def _silueta_jefe(boss_id, apagado=False, alto=30):
+    """Mini retrato del jefe con sus colores de verdad (el mismo sprite
+    pixel de la pelea, achicado) y contorno oscuro. El Titan suma sus
+    tentaculos, que en el juego se dibujan aparte. apagado: version oscura
+    para cuando el jefe todavia esta lejos."""
+    clave = ("retrato_hud", boss_id, apagado, alto)
     s = pixelfx._cache.get(clave)
     if s is not None:
         return s
     from modules.systems import sprites
-    kind = _SILUETA_JEFE.get(boss_id)
-    capas = [sprites.load_raw("boss", f"{kind}_{capa}.png") for capa in ("wing", "body", "detail")]
-    capas = [c for c in capas if c is not None]
-    if not capas:
+    kind = _SILUETA_JEFE[boss_id]
+    if not sprites.es_pixel("boss", kind):
         return None
-    base = pygame.Surface(capas[0].get_size(), pygame.SRCALPHA)
-    for c in capas:
-        base.blit(c, (0, 0))
-    mascara = pygame.mask.from_surface(base)
-    plana = mascara.to_surface(setcolor=(*color, 255), unsetcolor=(0, 0, 0, 0))
-    ancho = max(1, round(plana.get_width() * alto / plana.get_height()))
-    s = pygame.transform.scale(plana, (ancho, alto))
+    cuerpo, alas = _colores_jefe(boss_id)
+    w, h = sprites.tamano_pixel("boss", kind, 1)
+    sprite = sprites.get_boss_surface(cuerpo, alas, w, h, kind=kind)
+    if boss_id == "titan":
+        # tentaculos colgando del vientre
+        con_tentaculos = pygame.Surface((w, h + 8), pygame.SRCALPHA)
+        con_tentaculos.blit(sprite, (0, 0))
+        _, color_t = __import__("modules.entities.titan_boss", fromlist=["COLORES_FASE"]).COLORES_FASE[1]
+        for k, x0 in enumerate(range(w // 6, w - w // 8, max(2, w // 6))):
+            for paso in range(6):
+                x = x0 + int(math.sin(paso * 0.9 + k) * 1.5)
+                con_tentaculos.fill(color_t, (x, h - 4 + paso * 2, 2, 2))
+        sprite = con_tentaculos
+    ancho = max(1, round(sprite.get_width() * alto / sprite.get_height()))
+    chico = pygame.transform.scale(sprite, (ancho, alto))
+    if apagado:
+        chico = chico.copy()
+        chico.fill((95, 85, 140, 255), special_flags=pygame.BLEND_RGBA_MULT)
+    # contorno de un pixel alrededor
+    mascara = pygame.mask.from_surface(chico)
+    borde = mascara.to_surface(setcolor=(*neon.CONTORNO, 255), unsetcolor=(0, 0, 0, 0))
+    s = pygame.Surface((ancho + 4, alto + 4), pygame.SRCALPHA)
+    for dx, dy in ((0, 2), (4, 2), (2, 0), (2, 4), (1, 1), (3, 3), (1, 3), (3, 1)):
+        s.blit(borde, (dx, dy))
+    s.blit(chico, (2, 2))
     return pixelfx._guardar(clave, s)
 
 
@@ -195,8 +232,7 @@ class ModernHUD:
 
         if boss_id is not None:
             cerca = self.jefe_activo or self.progreso.get() > 0.85
-            color = ROSA_CHICLE if cerca and (t // 10) % 2 == 0 else (150, 140, 200)
-            sil = _silueta_jefe(boss_id, color)
+            sil = _silueta_jefe(boss_id, apagado=not (cerca and (t // 10) % 2 == 0))
             if sil is not None:
                 cx, cy = caja.right - 34, barra.centery - 4
                 if cerca:
