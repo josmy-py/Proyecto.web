@@ -846,6 +846,17 @@ def main():
             draw_viewport_frame(screen, game_offset_x, game_offset_y, GAME_WIDTH, GAME_HEIGHT, pygame.time.get_ticks())
             pygame.display.flip()
 
+    def _ya_golpeo(b, objetivo):
+        """Una bala perforante sigue de largo y pasaria varios cuadros
+        dentro del mismo objetivo: solo le pega una vez a cada uno."""
+        if not b.piercing:
+            return False
+        golpeados = b.__dict__.setdefault("golpeados", set())
+        if objetivo in golpeados:
+            return True
+        golpeados.add(objetivo)
+        return False
+
     def _golpear_asteroide(a, dano=1):
         """Un golpe a una roca: las de las oleadas aguantan 2 (el primero la
         raja con chispas del color de su veta) y al romperse se parten en
@@ -1626,6 +1637,8 @@ def main():
                         continue
                     dist = math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2)
                     if dist < a.size + b.radius:
+                        if _ya_golpeo(b, a):
+                            continue
                         stats_aciertos += 1
                         _golpear_asteroide(a)
                         if not b.piercing:
@@ -1636,6 +1649,8 @@ def main():
                 for aship in alien_ships[:]:
                     dist = math.sqrt((b.x - aship.x) ** 2 + (b.y - aship.y) ** 2)
                     if dist < aship.size + b.radius:
+                        if _ya_golpeo(b, aship):
+                            continue
                         # las bonus ya no mueren de un solo golpe (ver
                         # AlienShip.take_damage/hp): solo se otorga
                         # recompensa y se cuenta como objetivo cumplido en
@@ -1681,8 +1696,16 @@ def main():
                     if hasattr(boss, 'width'):
                         boss_hit_radius = max(boss_hit_radius, boss.width // 2)
                     if dist < boss_hit_radius + b.radius:
-                        damage = max(1, int(ship.damage_multiplier))
-                        boss.take_damage(damage)
+                        if _ya_golpeo(b, boss):
+                            continue
+                        # daño fraccionario (balas laterales del triple):
+                        # el resto se acumula en el jefe hasta sumar 1
+                        acumulado = getattr(boss, "resto_dano", 0.0) + \
+                            max(1, int(ship.damage_multiplier)) * getattr(b, "dano_jefe", 1.0)
+                        damage = int(acumulado)
+                        boss.resto_dano = acumulado - damage
+                        if damage:
+                            boss.take_damage(damage)
                         stats_aciertos += 1
                         if not b.piercing:
                             b.active = False

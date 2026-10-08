@@ -20,6 +20,9 @@ class Bullet:
         self.piercing = piercing
         # color heredado del skin de la nave (None = color por defecto)
         self.color = tuple(color[:3]) if color else None
+        # fraccion del daño que hace a los jefes (las balas laterales del
+        # TRIPLE CAÑON pegan menos, ver Ship.shoot)
+        self.dano_jefe = 1.0
 
     def update(self):
         self.y -= self.speed

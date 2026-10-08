@@ -497,11 +497,16 @@ class Ship:
             self.shoot_cooldown = self.shoot_delay
             shot_color = self.glow_color
             if self.triple_shot_active:
-                return [
+                balas = [
                     Bullet(self.x, self.y - self.height // 2, piercing=self.piercing_active, color=shot_color),
                     Bullet(self.x - 8, self.y - self.height // 2 + 2, piercing=self.piercing_active, color=shot_color),
                     Bullet(self.x + 8, self.y - self.height // 2 + 2, piercing=self.piercing_active, color=shot_color),
                 ]
+                # contra un jefe las tres pegan juntas: las laterales hacen
+                # un cuarto del daño, asi la rafaga es 1.5x y no 3x
+                for lateral in balas[1:]:
+                    lateral.dano_jefe = 0.25
+                return balas
             bullet = Bullet(self.x, self.y - self.height // 2, piercing=self.piercing_active, color=shot_color)
             return [bullet]
         return []

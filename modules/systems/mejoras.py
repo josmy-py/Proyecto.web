@@ -184,7 +184,7 @@ MEJORAS = {
     "velocidad": ("TURBO", "La nave se mueve mas rapido", "comun", 3, (130, 255, 190)),
     "vida": ("CASCO EXTRA", "+1 vida maxima y vida llena", "comun", 3, (255, 110, 150)),
     "escudo": ("ESCUDO VIVO", "Una carga de escudo que se recarga sola", "comun", 2, (110, 200, 255)),
-    "triple": ("TRIPLE CAÑON", "Rafaga triple para siempre", "epica", 1, (255, 210, 90)),
+    "triple": ("TRIPLE CAÑON", "Rafaga triple (a jefes pega menos)", "epica", 1, (255, 210, 90)),
     "perforante": ("PERFORADOR", "Las balas atraviesan todo", "rara", 1, (255, 170, 110)),
     "rayo": ("TORMENTA", "Campo electrico para siempre", "epica", 1, (185, 240, 255)),
     "dron": ("DRON ESCOLTA", "Un dron que dispara a tu lado", "rara", 2, (120, 255, 200)),
