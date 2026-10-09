@@ -602,12 +602,21 @@ def _apuntada(x, y, ship, velocidad, **kw):
 
 # ------------------------------------------------------------------ jefes
 
+# bufeo de los tres gatos (pedido de Josmy): mas vida (hp_base), atacan mas
+# seguido de entrada, se enfurecen antes y mucho mas fuerte. Los jefes de
+# Halloween/cyber heredan de JefeGatoBase y siguen con los valores de base.
+BUFEO_GATOS = dict(UMBRAL_FURIA=0.5, RITMO=1.2, RITMO_FURIA=1.6)
+
+
 class JefeGatoBase:
     """Vida, destello de impacto, entrada invulnerable, "furia" (al bajar de
     UMBRAL_FURIA de vida: mas rapido y con ataques extra) y la barra de
     vida pixelada."""
 
     UMBRAL_FURIA = 0.4
+    # multiplican la velocidad de ataque (ver _vel); los gatos usan BUFEO_GATOS
+    RITMO = 1.0
+    RITMO_FURIA = 1.35
 
     nombre = "GATO"
     hp_base = 300
@@ -642,7 +651,7 @@ class JefeGatoBase:
         self.furioso = True
 
     def _vel(self):
-        return self.dificultad * (1.35 if self.furioso else 1.0)
+        return self.dificultad * (self.RITMO_FURIA if self.furioso else self.RITMO)
 
     def _anunciar(self, texto, cuadros=80):
         self.cartel = [texto, cuadros]
@@ -727,7 +736,8 @@ class NyanBoss(JefeGatoBase):
     terminar y solo el original recibe daño."""
 
     nombre = "NYAN CAT"
-    hp_base = 650
+    hp_base = 950
+    UMBRAL_FURIA, RITMO, RITMO_FURIA = BUFEO_GATOS["UMBRAL_FURIA"], BUFEO_GATOS["RITMO"], BUFEO_GATOS["RITMO_FURIA"]
     ESCALA = 4
     LARGO_ESTELA = 240
     RADIO_CUERPO = 44
@@ -972,7 +982,7 @@ class NyanBoss(JefeGatoBase):
         self.timer_chispas -= 1
         if self.timer_chispas <= 0:
             self.timer_chispas = max(24, int((60 if self.fase == 1 else 46) / v))
-            n = 5 if self.fase == 1 else 7
+            n = 6 if self.fase == 1 else 9
             base = math.atan2(ship.y - self.y, ship.x - self.x)
             abanico = 1.0
             velocidad = (3.3 + 0.3 * self.fase) * math.sqrt(v)
@@ -1170,7 +1180,8 @@ class GatoPanBoss(JefeGatoBase):
         giran escupiendo espirales; solo el del medio recibe daño."""
 
     nombre = "GATO OIIA"
-    hp_base = 1000
+    hp_base = 1400
+    UMBRAL_FURIA, RITMO, RITMO_FURIA = BUFEO_GATOS["UMBRAL_FURIA"], BUFEO_GATOS["RITMO"], BUFEO_GATOS["RITMO_FURIA"]
     ANCHO_COLUMNA = 80
     # 4 = un pixel del arte por cada pixel del entorno bonus (PIXEL_BONUS)
     ESCALA = 4
@@ -1235,7 +1246,7 @@ class GatoPanBoss(JefeGatoBase):
                 self.salto = None
                 self.y = self.base_y
                 self.aplastado = 10
-                n = 18 if self.furioso else 12
+                n = 22 if self.furioso else 15
                 balas += _anillo(self.x, self.y + 20, n, 2.7 * math.sqrt(v),
                                  MIGA, 12, desfase=random.uniform(0, math.pi))
         else:
@@ -1477,7 +1488,8 @@ class GatoAlienBoss(JefeGatoBase):
         sobre la nave hasta dejarle un pasillo angosto."""
 
     nombre = "GATO ALIEN"
-    hp_base = 900
+    hp_base = 1300
+    UMBRAL_FURIA, RITMO, RITMO_FURIA = BUFEO_GATOS["UMBRAL_FURIA"], BUFEO_GATOS["RITMO"], BUFEO_GATOS["RITMO_FURIA"]
     ESCALA = 5
     ABDUCCION_TRAS = 35 * 60
 
@@ -1569,7 +1581,7 @@ class GatoAlienBoss(JefeGatoBase):
             if self.timer_estrellas <= 0:
                 self.timer_estrellas = max(45, int(100 / v))
                 self.giro += 0.3
-                n = 14 if self.furioso else 10
+                n = 18 if self.furioso else 13
                 balas += _anillo(self.x, self.y + 20, n, 2.6 * math.sqrt(v), OVNI_LUZ, 16,
                                  forma="estrella", desfase=self.giro)
 
@@ -1631,7 +1643,7 @@ class GatoAlienBoss(JefeGatoBase):
         if e['tipo'] == "constelacion":
             # se queda quieto "sembrando" y deja las minas por la pantalla
             if e['t'] == 20:
-                cantidad = 7 if self.furioso else 5
+                cantidad = 9 if self.furioso else 6
                 intentos = 0
                 while cantidad > 0 and intentos < 60:
                     intentos += 1

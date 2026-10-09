@@ -101,6 +101,8 @@ _PALABRAS_CANCION_PROPIA = {
     "jefe_pan": ("oiia", "spinningcat"),
     "jefe_nyan": ("nyan",),
     "impostor": ("amongus", "impostor"),
+    # Gato Alien (pedido de Josmy): "Marciano" de Patrulla 81
+    "jefe_gatos": ("marciano", "iturnedintoamartian", "patrulla81"),
     # final de la ruta cyberpunk (la Luna)
     "luna": ("stayatyourhouse", "ireallywanttostay", "edgerunners"),
 }

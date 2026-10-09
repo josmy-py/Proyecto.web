@@ -1427,9 +1427,10 @@ def main():
         aliado = TripulanteAliado(ship)
         bonus_estado = "alien"
         bonus_banner = ["¡TRIPULANTE AL RESCATE!", "", 150]
-        # mientras el tripulante pelea a tu lado suena su tema de impostor
-        # (o una cancion propia de Among Us, ver audio._PALABRAS_CANCION_PROPIA)
-        audio.reproducir_musica("impostor")
+        # el tema de impostor queda para la cinematica del rescate; la pelea
+        # vuelve a la cancion del Gato Alien (musica_jefe_gatos o la cancion
+        # propia, ver audio._PALABRAS_CANCION_PROPIA)
+        audio.reproducir_musica("jefe_gatos")
 
     def _dibujar_banner_bonus(surface):
         if bonus_banner is None:
