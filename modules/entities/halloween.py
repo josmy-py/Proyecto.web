@@ -5,7 +5,7 @@ _cinematica_victoria_falsa en main.py): un brazo de zombi rompe la pantalla
 desde abajo, el glitch se vuelve naranja/violeta y en vez de Nyan Cat
 llegan tres jefes de Halloween, uno tras otro:
 
-  1. REY CALABAZA: calabaza gigante con corona; salta, tira semillas y
+  1. REY CALABAZA: calabaza podrida y sanguinaria con corona de hierro; salta, tira semillas y
      calabazas bomba que estallan al caer.
   2. BRUJA NEON: vuela en su escoba; murcielagos que te persiguen, pociones
      que dejan charcos toxicos y clones del aquelarre. A mitad de la vida
@@ -74,6 +74,15 @@ PIEL_ZOMBI = (124, 176, 96)
 PIEL_ZOMBI_LUZ = (168, 214, 128)
 PIEL_ZOMBI_OSCURA = (70, 116, 62)
 HERIDA = (170, 20, 40)
+# Rey Calabaza sanguinario: calabaza podrida, corona de hierro y sangre
+CALABAZA_PODRIDA = (192, 72, 18)
+CALABAZA_SOMBRA = (110, 32, 12)
+CALABAZA_LUZ = (244, 140, 48)
+PODRIDO = (96, 74, 30)
+HIERRO = (52, 46, 60)
+HIERRO_LUZ = (120, 112, 132)
+SANGRE = (140, 0, 16)
+SANGRE_VIVA = (220, 20, 34)
 FONDO_NOCHE = ((18, 8, 34), (26, 10, 46), (36, 14, 58), (48, 18, 68))
 
 PALABRAS_HALLOWEEN = (
@@ -97,41 +106,72 @@ def _contornear(forma, color_contorno, tam):
 
 
 def _arte_calabaza(cuadro):
-    """Rey Calabaza (34x34): calabaza de gajos con corona dorada y cara
-    tallada que titila. cuadro: 0/1 brillo de la cara, 2 = furioso (rojo),
-    3 = boca abierta (escupe)."""
-    s = pygame.Surface((34, 34), pygame.SRCALPHA)
-    # gajos: cinco elipses que se superponen
-    for x, w in ((2, 14), (18, 14), (6, 12), (16, 12), (11, 12)):
-        pygame.draw.ellipse(s, NARANJA, (x, 9, w, 23))
-    for x in (8, 15, 22):
-        _px(s, NARANJA_OSCURO, x, 12, 1, 17)
-    pygame.draw.ellipse(s, NARANJA_CLARO, (5, 12, 4, 8))
-    _px(s, NARANJA_OSCURO, 4, 26, 26, 3)
-    # tallo y corona
-    _px(s, TALLO_OSCURO, 16, 6, 3, 4)
-    _px(s, TALLO, 16, 6, 2, 3)
-    _px(s, ORO, 9, 4, 16, 3)
-    for cx in (9, 15, 21):
-        _px(s, ORO, cx, 0, 4, 4)
-        _px(s, ORO_OSCURO, cx + 1, 2, 2, 2)
-    _px(s, (255, 60, 90), 16, 4, 2, 2)
-    _px(s, (90, 200, 255), 11, 4, 2, 2)
-    _px(s, (90, 200, 255), 21, 4, 2, 2)
-    _px(s, ORO_OSCURO, 9, 6, 16, 1)
-    # cara tallada
-    luz = LUZ_FURIA if cuadro == 2 else LUZ_CARA if cuadro != 1 else NARANJA_CLARO
-    for ox in (8, 20):
-        pygame.draw.polygon(s, CONTORNO, ((ox, 19), (ox + 6, 19), (ox + 3, 14)))
-        pygame.draw.polygon(s, luz, ((ox + 1, 18), (ox + 5, 18), (ox + 3, 15)))
-    _px(s, CONTORNO, 16, 20, 2, 2)
-    boca_alto = 6 if cuadro == 3 else 4
-    _px(s, CONTORNO, 8, 23, 18, boca_alto)
-    _px(s, luz, 9, 24, 16, boca_alto - 2)
-    for dx in (11, 16, 21):
-        _px(s, NARANJA, dx, 24, 2, 1)
-        _px(s, NARANJA, dx - 2, 23 + boca_alto - 2, 2, 1)
-    return _contornear(s, CONTORNO, (34, 34))
+    """Rey Calabaza (44x44), sanguinario: calabaza podrida y rajada, corona
+    de hierro negro con puntas y rubies, cara tallada de demonio con
+    colmillos y una luz roja adentro, sangre que le chorrea de los ojos y de
+    la boca, y enredaderas con espinas. cuadro: 0/1 la luz titila,
+    2 = furioso (la luz se pone blanca y roja), 3 = boca abierta (escupe)."""
+    s = pygame.Surface((44, 44), pygame.SRCALPHA)
+    # enredaderas con espinas que salen de abajo (detras)
+    for lado in (-1, 1):
+        x0 = 22 + lado * 12
+        puntos = [(x0, 34), (x0 + lado * 6, 38), (x0 + lado * 9, 42 - cuadro % 2), (x0 + lado * 14, 41)]
+        pygame.draw.lines(s, TALLO_OSCURO, False, puntos, 2)
+        for px, py in puntos[1:3]:
+            _px(s, TALLO, px, py - 2, 1, 2)
+    # gajos: calabaza ancha y achatada
+    for x, w in ((1, 20), (23, 20), (6, 16), (22, 16), (13, 18)):
+        pygame.draw.ellipse(s, CALABAZA_PODRIDA, (x, 11, w, 29))
+    for x in (9, 16, 27, 34):
+        _px(s, CALABAZA_SOMBRA, x, 14, 1, 23)
+    pygame.draw.ellipse(s, CALABAZA_LUZ, (6, 15, 4, 9))
+    _px(s, CALABAZA_SOMBRA, 3, 33, 38, 4)
+    # manchas de podrido y una raja
+    for x, y in ((5, 28), (36, 20), (38, 30), (12, 34)):
+        _px(s, PODRIDO, x, y, 3, 2)
+    pygame.draw.lines(s, CONTORNO, False, ((33, 12), (35, 16), (33, 19), (36, 23)), 1)
+    # tallo retorcido
+    pygame.draw.lines(s, TALLO_OSCURO, False, ((21, 12), (20, 9), (22, 7), (24, 8)), 3)
+    # corona de hierro negro, torcida, con puntas y rubies de sangre
+    pygame.draw.polygon(s, HIERRO, ((10, 11), (34, 9), (34, 13), (10, 15)))
+    for i, cx in enumerate((10, 16, 22, 28, 33)):
+        alto = (5, 7, 9, 7, 5)[i]
+        base = 13 - (cx - 10) * 2 // 24
+        pygame.draw.polygon(s, HIERRO, ((cx - 2, base), (cx + 2, base), (cx, base - alto)))
+        _px(s, HIERRO_LUZ, cx, base - alto + 1, 1, 2)
+    for cx in (13, 22, 31):
+        _px(s, SANGRE_VIVA, cx, 11 - (cx - 10) // 12, 2, 2)
+    _px(s, HIERRO_LUZ, 10, 11, 24, 1)
+    _px(s, SANGRE, 14, 15, 1, 3)   # sangre que chorrea de la corona
+    # cara tallada de demonio: huecos negros con una luz roja de adentro
+    furia = cuadro == 2
+    rojo = (255, 40, 30) if cuadro != 1 else (200, 24, 20)
+    centro = (255, 250, 220) if furia else (255, 190, 80) if cuadro != 1 else (240, 120, 40)
+    for ox, dir_ in ((7, 1), (37, -1)):
+        # ojos rasgados en angulo, mas altos hacia afuera (cara de enojo)
+        a1, a2, a3 = (ox, 16), (ox + dir_ * 12, 22), (ox + dir_ * 3, 25)
+        pygame.draw.polygon(s, CONTORNO, (a1, a2, a3))
+        pygame.draw.polygon(s, rojo, ((ox + dir_ * 2, 18), (ox + dir_ * 10, 22), (ox + dir_ * 4, 24)))
+        _px(s, centro, ox + dir_ * 5 - (1 if dir_ < 0 else 0), 21, 2, 2)
+        _px(s, SANGRE, ox + dir_ * 4, 25, 1, 4 + (cuadro % 2))   # lagrimas de sangre
+        _px(s, SANGRE_VIVA, ox + dir_ * 4, 29 + (cuadro % 2), 1, 1)
+    pygame.draw.polygon(s, CONTORNO, ((22, 23), (19, 28), (25, 28)))   # nariz
+    # boca enorme de sonrisa torcida, con colmillos de arriba y de abajo
+    alto = 9 if cuadro == 3 else 6
+    borde = ((4, 27), (11, 31), (22, 32), (33, 31), (40, 27), (35, 31 + alto), (22, 33 + alto), (9, 31 + alto))
+    pygame.draw.polygon(s, CONTORNO, borde)
+    pygame.draw.polygon(s, rojo, ((8, 30), (22, 34), (36, 30), (33, 30 + alto), (22, 32 + alto), (11, 30 + alto)))
+    pygame.draw.ellipse(s, centro, (15, 33, 14, max(2, alto - 3)))
+    for x in range(9, 35, 4):   # colmillos de arriba
+        y0 = 31 if 12 < x < 32 else 29
+        pygame.draw.polygon(s, CALABAZA_LUZ, ((x, y0), (x + 3, y0), (x + 1.5, y0 + 3 + (x % 8 == 1))))
+    for x in range(12, 32, 5):   # colmillos de abajo
+        pygame.draw.polygon(s, CALABAZA_LUZ, ((x, 31 + alto), (x + 3, 31 + alto), (x + 1.5, 28 + alto)))
+    # sangre que gotea de la boca
+    for x, largo in ((13, 3), (22, 5), (30, 4)):
+        _px(s, SANGRE, x, 32 + alto, 1, largo + (cuadro % 2))
+        _px(s, SANGRE_VIVA, x, 32 + alto + largo + (cuadro % 2), 1, 1)
+    return _contornear(s, CONTORNO, (44, 44))
 
 
 # Bruja Neon: mujer adulta de anime (pelo violeta largo, ojos violeta,
@@ -858,8 +898,8 @@ class ReyCalabazaBoss(JefeHalloweenBase):
         self.x = GAME_WIDTH / 2
         self.y = -140.0
         self.base_y = 170.0
-        self.size = 62
-        self.alto_sprite = 34 * self.ESCALA
+        self.size = 74
+        self.alto_sprite = 44 * self.ESCALA
         self.salto = None
         self.aplastado = 0
         self.timer_salto = 90
@@ -870,7 +910,7 @@ class ReyCalabazaBoss(JefeHalloweenBase):
 
     def _estallido(self, x, y):
         n = 12 if self.furioso else 8
-        return _anillo(x, y, n, 2.6 * math.sqrt(self._vel()), LUZ_CARA, 10, desfase=random.uniform(0, 1))
+        return _anillo(x, y, n, 2.6 * math.sqrt(self._vel()), SANGRE_VIVA, 10, desfase=random.uniform(0, 1))
 
     def update(self, ship):
         self._tick_comun()
@@ -917,7 +957,7 @@ class ReyCalabazaBoss(JefeHalloweenBase):
             self.timer_semillas = max(40, int((95 if not self.furioso else 65) / v))
             self.escupe = 14
             balas += _semillas_en_abanico(self.x, self.y + 50, ship, 7 if self.furioso else 5, 0.22,
-                                          3.4 * math.sqrt(v))
+                                          3.4 * math.sqrt(v), color=SANGRE_VIVA)
         elif self.timer_bombas <= 0:
             self.timer_bombas = max(70, int((170 if not self.furioso else 120) / v))
             for dx in ((-150, 150) if not self.furioso else (-200, 0, 200)):
@@ -958,7 +998,7 @@ class ReyCalabazaBoss(JefeHalloweenBase):
                 self.angulo += e['dir'] * 0.4
                 balas.append(_hitbox(self.x, self.y, 56))
                 if e['t'] % 6 == 0:
-                    balas.append(BalaPixel(self.x, self.y, 0, -random.uniform(2, 4), color=LUZ_CARA, tam=10,
+                    balas.append(BalaPixel(self.x, self.y, 0, -random.uniform(2, 4), color=SANGRE_VIVA, tam=10,
                                            gravedad=0.08))
                 if not -160 < self.x < GAME_WIDTH + 160:
                     e['fase'], e['t'] = 'vuelve', 0
