@@ -773,8 +773,15 @@ def generar_musica_juego_metal(nivel):
     jefe: bombo en negras, hat a contratiempo, palmas, bajo acido con el
     filtro abriendose y "sidechain" (todo se agacha en cada bombo); el 2
     suma acordes supersaw a contratiempo y el 3 semicorcheas de hat y una
-    subida de ruido al final del loop."""
-    bpm = 120 + 10 * nivel
+    subida de ruido al final del loop.
+
+    Los niveles 2 y 3 van mas lentos (120 y 126 BPM), afinados abajo, con
+    riff sincopado de dos guitarras dobladas y bateria en medio tiempo:
+    estilo pesado en vez de rapido."""
+    # niveles 2 y 3: groove pesado y mas lento, con mas guitarra (pedido de
+    # Josmy); el 1 y el 4 siguen con el tempo que sube
+    pesado = nivel in (2, 3)
+    bpm = (108 + 6 * nivel) if pesado else 120 + 10 * nivel
     pulso = 60.0 / bpm
     corchea = pulso / 2
     compas = pulso * 4
@@ -785,11 +792,11 @@ def generar_musica_juego_metal(nivel):
     bateria = np.zeros(total)
     lead = np.zeros(total)
 
-    afinacion = -2 if nivel >= 4 else 0          # el ultimo nivel baja la afinacion
+    afinacion = -2 if (nivel >= 4 or pesado) else 0   # afinacion baja: mas peso
     base_freq = 82.41 * (2.0 ** (afinacion / 12))  # Mi grave
     raices = [0, 0, 3, -2, 5, 3, 0, -2]            # Mi Mi Sol Re | La Sol Mi Re
     ganancia = (2.5, 3, 6, 10, 16)[nivel]
-    subdivision = 4 if nivel >= 3 else 2           # corcheas o semicorcheas
+    subdivision = 4 if (nivel >= 3 and not pesado) else 2   # corcheas o semicorcheas
 
     bombo, redoble, hat, platillo = _bombo_tecno(0.22), _redoble(), _hat_abierto(0.05), _platillo()
 
@@ -799,7 +806,18 @@ def generar_musica_juego_metal(nivel):
         inicio = c * compas
         # guitarra ritmica: acorde abierto al empezar el compas, el resto chugs
         golpe = compas / (4 * subdivision)
-        for k in range(4 * subdivision):
+        if pesado:
+            # riff sincopado y lento: acorde abierto que suena, silencio y
+            # chugs graves; dos guitarras dobladas (una desafinada apenas)
+            for k, largo in ((0, 2.5), (3, 1), (4, 2.5), (6, 1), (7, 1)):
+                abierto = largo > 1
+                for desaf, vol in ((1.0, 0.9), (1.004, 0.75)):
+                    _poner(guitarra, _power_chord(f * desaf, golpe * largo, ganancia * 1.3, not abierto),
+                           inicio + k * golpe, vol if abierto else vol * 0.85)
+                nota_bajo = onda_seno(f / 2, golpe * largo) + 0.5 * onda_sierra(f / 2, golpe * largo)
+                n_b = int(SR * golpe * largo)
+                _poner(bajo, suavizar(nota_bajo, 8)[:n_b] * envolvente(n_b, 0.003, golpe * largo * 0.8), inicio + k * golpe, 0.7)
+        for k in range(0 if pesado else 4 * subdivision):
             abierto = k == 0 or (nivel >= 2 and k == 2 * subdivision)
             dur = golpe * (3 if abierto else 1)
             _poner(guitarra, _power_chord(f, dur, ganancia, not abierto), inicio + k * golpe, 0.9 if abierto else 0.7)
@@ -814,6 +832,16 @@ def generar_musica_juego_metal(nivel):
                 # blast beat: bombo y redoble alternados en semicorcheas
                 for s in range(4):
                     _poner(bateria, bombo if s % 2 == 0 else redoble, t + s * pulso / 4, 0.8 if s % 2 == 0 else 0.55)
+                continue
+            if pesado:
+                # medio tiempo: bombo con el riff, redoble solo en el 3
+                if b in (0, 2):
+                    _poner(bateria, bombo, t, 1.0)
+                if b in (1, 3):
+                    _poner(bateria, bombo, t + corchea, 0.85)
+                if b == 2:
+                    _poner(bateria, redoble, t, 1.0)
+                _poner(bateria, hat, t, 0.3)
                 continue
             if nivel >= 3:
                 for s in range(4):   # doble bombo
@@ -870,7 +898,7 @@ def generar_musica_juego_metal(nivel):
                 _poner(tecno, hat_tecno, t + corchea, 0.45)    # hat a contratiempo
                 if b in (1, 3):
                     _poner(tecno, palma, t, 0.5)
-                if nivel >= 3:
+                if nivel >= 3 and not pesado:
                     for s16 in (1, 3):
                         _poner(tecno, _hat_abierto(0.03), t + s16 * pulso / 4, 0.22)
 
@@ -918,7 +946,7 @@ def generar_musica_juego_metal(nivel):
         _poner(sinte, ruido * np.linspace(0, 1, n) ** 2 * 0.5, (compases - 1) * compas, 1.0)
 
     bombeo = _bombeo(total, pulso, 0.12 * nivel)
-    mezcla = ((guitarra * 0.55 + lead + sinte) * bombeo + bajo * 0.5 * bombeo
+    mezcla = ((guitarra * (0.85 if pesado else 0.55) + lead + sinte) * bombeo + bajo * 0.5 * bombeo
               + bateria * 0.7 + tecno * 0.6 + acido * (0.16 + 0.04 * nivel))
     return _ganar_volumen(fundido_de_bucle(mezcla), empuje=1.5 + 0.2 * nivel)
 
