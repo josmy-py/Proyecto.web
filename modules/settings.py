@@ -23,6 +23,8 @@ _VALORES_POR_DEFECTO = {
     "bonus_todos_buffs": False,
     # ELEGIR FASE: arrancar la partida elegida con todos los buffs activos
     "fase_todos_buffs": False,
+    # vibracion del mando al recibir daño y en las explosiones grandes
+    "vibracion": True,
 }
 _ajustes = dict(_VALORES_POR_DEFECTO)
 

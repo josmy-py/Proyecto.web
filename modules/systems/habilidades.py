@@ -10,6 +10,9 @@ mejoras.EstadoMejoras.aplicar):
   - RECOLECTOR: cada tantos enemigos destruidos recuperas una vida.
   - FENIX: la primera vez que caes, renaces (ver Ship.take_damage).
 
+COMBOS: dos cartas juntas se potencian (ver COMBOS); al juntarlas sale un
+aviso "¡COMBO!".
+
 main.py llama a actualizar() una vez por cuadro de juego activo y a
 dibujar() despues de la nave."""
 
@@ -26,10 +29,28 @@ ORBITA = (190, 140, 255)
 
 PROB_CRITICO = (0.0, 0.12, 0.2, 0.28)     # por nivel
 RECARGA_MISIL = (0, 80, 55)               # cuadros entre misiles, por nivel
-RECARGA_NOVA = (0, 420, 270)
-RADIO_NOVA = 170
-BAJAS_RECOLECTOR = (0, 30, 20)
+# balance (2026-10-09): la Nova, la Orbita y el Recolector juntos dejaban
+# el juego demasiado facil
+RECARGA_NOVA = (0, 600, 420)
+RADIO_NOVA = 140
+BAJAS_RECOLECTOR = (0, 45, 30)
 RADIO_ORBITA = 52
+APAGADA_ORBITA = 90                       # cuadros que una esfera queda apagada tras frenar una bala
+
+
+# combo -> (nombre, que hace, cartas que lo arman)
+COMBOS = {
+    "misiles_dorados": ("MISILES DORADOS", "Los misiles salen dorados y pegan el doble",
+                        ("misiles", "critico")),
+    "orbita_nova": ("SUPERNOVA", "La Nova enciende las esferas y cada una suelta su onda",
+                    ("orbita", "nova")),
+    "cazadores": ("CAZADORES", "Los drones tambien lanzan misiles", ("dron", "misiles")),
+}
+RADIO_ONDA_ESFERA = 70
+
+
+def combos_activos(niveles):
+    return [c for c, (_, _, cartas) in COMBOS.items() if all(niveles.get(m, 0) for m in cartas)]
 
 
 class MisilJugador(Bullet):
@@ -74,8 +95,9 @@ class MisilJugador(Bullet):
     def draw(self, screen, offset_x=0, offset_y=0):
         for i, (tx, ty) in enumerate(self.trail[:-1]):
             neon.cuadro_pixel(screen, pixelfx.apagar((255, 170, 80), 0.3 + 0.08 * i), tx + offset_x, ty + offset_y, 4)
+        dorado = getattr(self, "dorado", False)
         pixelfx.misil(screen, self.x + offset_x, self.y + offset_y, self.angulo, self.t,
-                      cuerpo=(220, 226, 240), punta=ORO, largo=4)
+                      cuerpo=ORO if dorado else (220, 226, 240), punta=WHITE if dorado else ORO, largo=4)
 
 
 def marcar_critico(bala, nivel):
@@ -95,7 +117,11 @@ class Habilidades:
         self.recarga_nova = 0
         self.ondas = []           # [x, y, edad]
         self.golpes_orbita = {}   # id(roca) -> cuadros sin volver a pegarle
+        self.apagadas = {}        # indice de esfera -> cuadros apagada
         self.bajas_base = None
+        self.combos_vistos = set()
+        self.espera_combo = 0     # entre un aviso de combo y el siguiente
+        self.misiles_dron = 0
 
     def _esferas(self, ship, nivel):
         n = 2 * nivel
@@ -104,19 +130,35 @@ class Habilidades:
                 for i in range(n)]
 
     def actualizar(self, niveles, ship, bullets, asteroids, alien_ships, bosses, balas_enemigas,
-                   explosiones, crear_explosion, golpear_asteroide, bajas):
+                   explosiones, crear_explosion, golpear_asteroide, bajas, drones=()):
         """Un cuadro de juego. Devuelve un aviso [titulo, texto] o None."""
         self.t += 1
         aviso = None
+        combos = combos_activos(niveles)
+        self.espera_combo = max(0, self.espera_combo - 1)
+        for c in combos:
+            if c not in self.combos_vistos and self.espera_combo == 0:
+                self.espera_combo = 190
+                self.combos_vistos.add(c)
+                aviso = ["¡COMBO! " + COMBOS[c][0], COMBOS[c][1]]
+                break   # de a un aviso: el siguiente sale cuando se va este
         # MISILES
         nivel = niveles.get("misiles", 0)
         if nivel and ship.alive:
             self.recarga_misil -= 1
             if self.recarga_misil <= 0 and (asteroids or alien_ships or bosses):
                 self.recarga_misil = RECARGA_MISIL[min(nivel, 2)]
-                for lado in ((-1, 1) if nivel >= 2 else (random.choice((-1, 1)),)):
-                    bullets.append(MisilJugador(ship.x + lado * 18, ship.y, -math.pi / 2 + lado * 0.6,
-                                                (asteroids, alien_ships, bosses)))
+                salidas = [(ship.x + lado * 18, ship.y, lado)
+                           for lado in ((-1, 1) if nivel >= 2 else (random.choice((-1, 1)),))]
+                self.misiles_dron += 1
+                if "cazadores" in combos and self.misiles_dron % 2 == 0:
+                    salidas += [(d.x, d.y, -1 if d.x < ship.x else 1) for d in drones]
+                for x, y, lado in salidas:
+                    misil = MisilJugador(x, y, -math.pi / 2 + lado * 0.6, (asteroids, alien_ships, bosses))
+                    if "misiles_dorados" in combos:
+                        misil.dano_jefe *= 2
+                        misil.dorado = True
+                    bullets.append(misil)
         # NOVA: se dispara sola si una bala enemiga se acerca
         nivel = niveles.get("nova", 0)
         if nivel:
@@ -132,6 +174,15 @@ class Habilidades:
                             if (b.x - ship.x) ** 2 + (b.y - ship.y) ** 2 < RADIO_NOVA ** 2:
                                 b.active = False
                     explosiones.append(crear_explosion(ship.x, ship.y, NOVA, 30))
+                    if "orbita_nova" in combos:
+                        # SUPERNOVA: las esferas se encienden y sueltan su propia onda
+                        self.apagadas.clear()
+                        for ex, ey in self._esferas(ship, niveles.get("orbita", 0)):
+                            self.ondas.append([ex, ey, 0, RADIO_ONDA_ESFERA])
+                            for lista in balas_enemigas:
+                                for b in lista:
+                                    if (b.x - ex) ** 2 + (b.y - ey) ** 2 < RADIO_ONDA_ESFERA ** 2:
+                                        b.active = False
         for o in self.ondas:
             o[2] += 1
         self.ondas = [o for o in self.ondas if o[2] < 22]
@@ -139,11 +190,21 @@ class Habilidades:
         nivel = niveles.get("orbita", 0)
         if nivel:
             esferas = self._esferas(ship, nivel)
+            for i in list(self.apagadas):
+                self.apagadas[i] -= 1
+                if self.apagadas[i] <= 0:
+                    del self.apagadas[i]
             for lista in balas_enemigas:
                 for b in lista:
-                    if any((b.x - ex) ** 2 + (b.y - ey) ** 2 < 14 ** 2 for ex, ey in esferas):
-                        b.active = False
-                        explosiones.append(crear_explosion(b.x, b.y, ORBITA, 8))
+                    if not getattr(b, "active", True):
+                        continue
+                    for i, (ex, ey) in enumerate(esferas):
+                        if i not in self.apagadas and (b.x - ex) ** 2 + (b.y - ey) ** 2 < 14 ** 2:
+                            # cada esfera frena una bala y se apaga un rato
+                            b.active = False
+                            self.apagadas[i] = APAGADA_ORBITA
+                            explosiones.append(crear_explosion(b.x, b.y, ORBITA, 8))
+                            break
             for clave in list(self.golpes_orbita):
                 self.golpes_orbita[clave] -= 1
                 if self.golpes_orbita[clave] <= 0:
@@ -178,13 +239,17 @@ class Habilidades:
 
     def dibujar(self, surface, niveles, ship):
         if niveles.get("orbita", 0) and ship.alive:
-            for ex, ey in self._esferas(ship, niveles["orbita"]):
+            for i, (ex, ey) in enumerate(self._esferas(ship, niveles["orbita"])):
+                if i in self.apagadas:
+                    neon.cuadro_pixel(surface, pixelfx.apagar(ORBITA, 0.35), ex, ey, 6)
+                    continue
                 pixelfx.dibujar_halo(surface, ORBITA, ex, ey, 14)
                 neon.cuadro_pixel(surface, ORBITA, ex, ey, 10)
                 neon.cuadro_pixel(surface, WHITE, ex, ey, 4)
-        for x, y, edad in self.ondas:
+        for x, y, edad, *radio in self.ondas:
             k = edad / 22
-            neon.anillo_pixel(surface, pixelfx.apagar(NOVA, 1 - k * 0.7), x, y, 20 + RADIO_NOVA * k, tam=6)
+            r = radio[0] if radio else RADIO_NOVA
+            neon.anillo_pixel(surface, pixelfx.apagar(NOVA, 1 - k * 0.7), x, y, 20 + r * k, tam=6)
         if niveles.get("fenix", 0) and getattr(ship, "fenix", 0) > 0 and ship.alive and (self.t // 20) % 3 == 0:
             # una plumita encendida sobre la nave: el fenix sigue disponible
             neon.cuadro_pixel(surface, (255, 150, 50), ship.x, ship.y - 34, 6)

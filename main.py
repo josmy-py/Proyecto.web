@@ -16,6 +16,7 @@ import cv2
 import pygame
 import random
 import math
+import threading
 
 from modules.constants import (
     SCREEN_WIDTH, SCREEN_HEIGHT, GAME_WIDTH, GAME_HEIGHT,
@@ -73,6 +74,7 @@ from modules.entities.mascota import ZorritoEspacial, CapsulaMascota, dibujar_av
 from modules.systems.menu import MenuScene, Star
 from modules.systems.mejoras import EstadoMejoras, SeleccionMejora, dibujar_hud_mejoras, MEJORAS
 from modules.systems.habilidades import Habilidades, marcar_critico
+from modules.systems.logros import EntradaNombre, AvisoMedallas
 from modules.systems import audio
 from modules.systems import sprites
 from modules.systems import neon
@@ -147,6 +149,10 @@ def dibujar_rayo(surface, lb):
     surface.blit(bolt_surf, (off_x, off_y))
 
 
+# lo que dice la pantalla de carga mientras se prepara el modo camara
+PASOS_CAMARA = ("CARGANDO DETECTOR DE MANOS", "ENCENDIENDO CAMARA", "BUSCANDO IMAGEN", "CAMARA LISTA")
+
+
 def main():
     pygame.init()
     pygame.joystick.init()
@@ -212,16 +218,50 @@ def main():
                     BOTON_Y: [pygame.K_t]}.get(event.button, [])
         return []
 
+    # El detector de manos y la camara se cargan en un hilo mientras se ve
+    # la pantalla de carga (antes el juego se congelaba unos segundos): la
+    # barra no pasa del paso real y la cuenta espera a que termine.
+    carga_camara = {"hilo": None, "paso": len(PASOS_CAMARA) - 1, "detector": None, "cap": None}
+
+    def _cargar_camara(estado, indice, con_detector, con_camara):
+        try:
+            if con_detector:
+                set_frame_skip(2)
+                estado["detector"] = init_hand_landmarker(MODEL_PATH)
+            estado["paso"] = 1
+            if con_camara:
+                nueva = cv2.VideoCapture(indice)
+                nueva.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+                nueva.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+                nueva.set(cv2.CAP_PROP_FPS, 30)
+                estado["paso"] = 2
+                for _ in range(30):
+                    if nueva.read()[0]:
+                        break
+                estado["cap"] = nueva
+        except Exception as error:   # sin camara o sin modelo: se juega igual
+            print("No se pudo cargar la camara:", error)
+        estado["paso"] = len(PASOS_CAMARA) - 1
+
     def activar_modo_camara():
+        hilo = carga_camara["hilo"]
+        if (hilo is not None and hilo.is_alive()) or (hand_detector is not None and cap is not None):
+            return
+        carga_camara.update(paso=0 if hand_detector is None else 1, detector=None, cap=None)
+        carga_camara["hilo"] = threading.Thread(
+            target=_cargar_camara, args=(carga_camara, settings.get("camera_index"),
+                                         hand_detector is None, cap is None), daemon=True)
+        carga_camara["hilo"].start()
+
+    def _recoger_camara():
+        """Cuando el hilo termino, la camara y el detector pasan al juego."""
         nonlocal cap, hand_detector
-        if hand_detector is None:
-            set_frame_skip(2)
-            hand_detector = init_hand_landmarker(MODEL_PATH)
-        if cap is None:
-            cap = cv2.VideoCapture(settings.get("camera_index"))
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
-            cap.set(cv2.CAP_PROP_FPS, 30)
+        if carga_camara["paso"] < len(PASOS_CAMARA) - 1:
+            return
+        if carga_camara["detector"] is not None:
+            hand_detector, carga_camara["detector"] = carga_camara["detector"], None
+        if carga_camara["cap"] is not None:
+            cap, carga_camara["cap"] = carga_camara["cap"], None
 
     def activar_modo_mando():
         nonlocal cap, joystick
@@ -270,6 +310,15 @@ def main():
     pausa_sel = 0
     PAUSA_OPCIONES = ("CONTINUAR", "VOLVER AL MENU")
     nuevo_record = False
+    # records con iniciales y medallas (ver modules/systems/logros.py)
+    id_partida = 0
+    nombre_partida = None        # iniciales ya cargadas en esta partida
+    entrada_nombre = None
+    aviso_medallas = AvisoMedallas()
+    vidas_previas = 0
+    golpeado_en_jefe = False     # para la medalla INTOCABLE
+    modo_rush = False            # JEFE RUSH: solo los 5 jefes, uno tras otro
+    RUSH_SALTO = 10
     dificultad_base = DIFICULTADES[DIFICULTAD_DEFECTO]
     dificultad = dificultad_base
     stats_disparos = 0
@@ -373,6 +422,29 @@ def main():
     start_time = pygame.time.get_ticks()
     start_countdown = 5
 
+    def _medalla(medalla_id):
+        if progress.desbloquear_medalla(medalla_id):
+            aviso_medallas.agregar(medalla_id)
+            audio.sonido_powerup()
+        if medalla_id.startswith("ruta_") and {"ruta_gatos", "ruta_halloween", "ruta_cyber"} <= progress.medallas():
+            _medalla("trilogia")
+
+    def _vibrar(fuerza, ms):
+        """Vibracion del mando (si se juega con mando y esta prendida en
+        AJUSTES); los mandos que no vibran simplemente la ignoran."""
+        if modo_control == "mando" and joystick is not None and settings.get("vibracion"):
+            try:
+                joystick.rumble(fuerza, fuerza, ms)
+            except (pygame.error, AttributeError):
+                pass
+
+    def _guardar_nombre():
+        nonlocal entrada_nombre, nombre_partida
+        nombre_partida = entrada_nombre.nombre
+        entrada_nombre = None
+        progress.guardar_record(id_partida, nombre_partida, score, wave, "rush" if modo_rush else "")
+        audio.sonido_boton()
+
     def reset_game():
         nonlocal ship, bullets, asteroids, alien_ships, alien_bullets
         nonlocal bosses, boss_bullets, explosions, particles, lightning_bolts
@@ -385,6 +457,7 @@ def main():
         nonlocal ruta_bonus, escena_final
         nonlocal mascota, capsula_mascota, mascota_ofrecida, aviso_mascota
         nonlocal estado_mejoras, eleccion, ultima_oleada_mejora, mejora_inicial_pendiente, habilidades
+        nonlocal id_partida, nombre_partida, entrada_nombre, golpeado_en_jefe, modo_rush
         if hasattr(draw_hud, 'hud'):
             del draw_hud.hud
         ship = Ship(GAME_WIDTH // 2, GAME_HEIGHT - 60, selected_ship_type, selected_skin_id)
@@ -405,6 +478,9 @@ def main():
         aliado = None
         mascota = None; capsula_mascota = None; mascota_ofrecida = False; aviso_mascota = None
         escena_final = None
+        id_partida = random.randint(1, 10 ** 9)
+        nombre_partida = None; entrada_nombre = None; golpeado_en_jefe = False
+        modo_rush = inicio_partida == "rush"
         if inicio_partida in JEFES_HALLOWEEN:
             ruta_bonus = "halloween"
         elif inicio_partida in JEFES_CYBER:
@@ -417,7 +493,7 @@ def main():
             fondo_pixel = {"halloween": FondoHalloween, "cyber": FondoCyber}.get(ruta_bonus, FondoPixel)()
         else:
             bonus_directo_pendiente = None
-            wave = int(inicio_partida[1:])
+            wave = 10 if modo_rush else int(inicio_partida[1:])
         estado_mejoras = EstadoMejoras()
         habilidades = Habilidades()
         eleccion = None
@@ -440,7 +516,7 @@ def main():
 
     def terminar_partida(victoria):
         """Marca fin de partida (derrota o victoria) y registra el record."""
-        nonlocal game_over, game_victory, nuevo_record, tiempo_sobrevivido, derrotas_seguidas
+        nonlocal game_over, game_victory, nuevo_record, tiempo_sobrevivido, derrotas_seguidas, entrada_nombre
         if victoria:
             derrotas_seguidas = 0
         elif bonus_estado != "dimension":  # perder el duelo no cuenta
@@ -449,6 +525,11 @@ def main():
         game_victory = victoria
         tiempo_sobrevivido = max(0.0, (pygame.time.get_ticks() - start_time) / 1000.0 - start_countdown)
         nuevo_record = progress.registrar_partida(score, wave)
+        if nombre_partida is not None:
+            # siguio con "Intentar de Nuevo": se actualiza su fila sin preguntar
+            progress.guardar_record(id_partida, nombre_partida, score, wave, "rush" if modo_rush else "")
+        elif progress.entra_en_tabla(score):
+            entrada_nombre = EntradaNombre(score)
         if victoria:
             audio.sonido_victoria()
 
@@ -470,6 +551,9 @@ def main():
         mueve."""
         nonlocal stats_jefes, dificultad, boss_reward_timer
         nonlocal wave, objetivos_oleada
+        _medalla("primer_jefe")
+        if not golpeado_en_jefe:
+            _medalla("intocable")
         if not isinstance(boss, MegaBoss):
             # el Coloso cae con su propia huida (_cinematica_victoria)
             _cinematica_derrota_jefe(boss)
@@ -482,13 +566,20 @@ def main():
         boss_reward_timer = 180
 
         if isinstance(boss, MegaBoss):
+            _medalla("coloso")
             _cinematica_victoria(boss)
-            _iniciar_victoria_falsa()
+            if modo_rush:
+                # fin del JEFE RUSH: victoria directa, sin rutas bonus
+                _medalla("rush")
+                terminar_partida(True)
+            else:
+                _iniciar_victoria_falsa()
         else:
             # la explosion ya paso en su cinematica de derrota: aca no estalla de nuevo
             audio.sonido_victoria()
             dificultad += 0.2
-            wave = boss.definition.spawn_wave + 1
+            # en el JEFE RUSH se salta directo a la oleada del jefe siguiente
+            wave = boss.definition.spawn_wave + (RUSH_SALTO if modo_rush else 1)
             objetivos_oleada = 0
 
     def _cinematica_victoria(boss):
@@ -1101,6 +1192,8 @@ def main():
                     _cinematica_luna()
                 else:
                     _cinematica_gato_durmiendo()
+                _medalla({"dimension": "parca", "halloween": "ruta_halloween",
+                          "cyber": "ruta_cyber"}.get(ruta_bonus, "ruta_gatos"))
                 bonus_estado = "terminado"
                 terminar_partida(True)
 
@@ -1125,6 +1218,8 @@ def main():
             for ev in cine.eventos:
                 for sonido in sonidos.get(ev, ()):
                     sonido()
+                if ev in ("golpe", "explosion"):
+                    _vibrar(1.0 if ev == "golpe" else 0.5, 260)
             cine.eventos.clear()
             cine.draw(cine_surface)
             sx = game_offset_x + (random.randint(-cine.temblor, cine.temblor) if cine.temblor else 0)
@@ -1481,17 +1576,20 @@ def main():
         volver a pelear hay una carta de mejora."""
         nonlocal inicio_partida, score, dificultad, mascota, mascota_ofrecida
         nonlocal stats_disparos, stats_aciertos, stats_alienigenas, stats_jefes
+        nonlocal modo_rush, id_partida, nombre_partida
         es_jefe = bool(bosses) or punto in JEFES_BONUS_DIRECTOS or (
             punto.startswith("w") and (get_boss_for_wave(wave) is not None or wave == MEGA_BOSS_SPAWN_WAVE))
         niveles = dict(estado_mejoras.niveles)
         tenia_mascota, ofrecida = mascota is not None, mascota_ofrecida
         guardado = (score, dificultad, stats_disparos, stats_aciertos, stats_alienigenas, stats_jefes)
         elegido_en_menu = inicio_partida
+        de_la_partida = (modo_rush, id_partida, nombre_partida)
         inicio_partida = punto
         try:
             reset_game()
         finally:
             inicio_partida = elegido_en_menu
+        modo_rush, id_partida, nombre_partida = de_la_partida
         score, dificultad, stats_disparos, stats_aciertos, stats_alienigenas, stats_jefes = guardado
         for mid, nivel in niveles.items():
             if mid == "reparar":
@@ -1582,6 +1680,12 @@ def main():
         for event in eventos:
             if event.type == pygame.QUIT:
                 running = False
+            if entrada_nombre is not None and game_over:
+                # iniciales para la tabla: se come las teclas del fin de partida
+                entrada_nombre.handle_event(event, game_offset_x, game_offset_y, GAME_WIDTH, GAME_HEIGHT)
+                if entrada_nombre.listo:
+                    _guardar_nombre()
+                continue
             if event.type == pygame.JOYBUTTONDOWN and modo_control == "mando":
                 if event.button in _botones_pausa(joystick):
                     if not menu_scene.active and not game_over and bonus_estado not in congelados_bonus:
@@ -1662,7 +1766,7 @@ def main():
                     inicio_con_buffs = len(parts) > 6 and parts[6] == "buffs"
                     if inicio_partida == "bonus":
                         inicio_partida = "nyan"
-                    if inicio_partida not in JEFES_BONUS_DIRECTOS and not (
+                    if inicio_partida not in JEFES_BONUS_DIRECTOS and inicio_partida != "rush" and not (
                             inicio_partida.startswith("w") and inicio_partida[1:].isdigit()):
                         inicio_partida = "w1"
                     if modo_control == "mando":
@@ -1698,7 +1802,13 @@ def main():
             pygame.display.flip()
             continue
 
+        _recoger_camara()
+        camara_cargando = modo_control == "camara" and carga_camara["paso"] < len(PASOS_CAMARA) - 1
         elapsed = (pygame.time.get_ticks() - start_time) / 1000.0
+        if camara_cargando and elapsed > start_countdown * 0.8:
+            # la cuenta se queda esperando a la camara
+            start_time = pygame.time.get_ticks() - int(start_countdown * 800)
+            elapsed = start_countdown * 0.8
         countdown_val = start_countdown - int(elapsed)
         countdown_fraction = max(0.0, min(1.0, (start_countdown - elapsed) / start_countdown))
 
@@ -1708,12 +1818,13 @@ def main():
         # las que hacen falta). En modo mando no se toca la camara para nada.
         frame_actual = None
         if modo_control == "camara":
-            if not game_over:
+            if not game_over and cap is not None:
                 ret, frame = cap.read()
                 if ret:
                     frame_actual = cv2.flip(frame, 1)
 
-            if not game_over and countdown_val <= 0 and not paused and frame_actual is not None:
+            if (not game_over and countdown_val <= 0 and not paused and frame_actual is not None
+                    and hand_detector is not None):
                 result = process_camera_frame(hand_detector, frame_actual, timestamp_ms)
                 hand_active = False
 
@@ -1984,10 +2095,24 @@ def main():
             aviso = habilidades.actualizar(
                 estado_mejoras.niveles, ship, bullets, asteroids, alien_ships, bosses,
                 (alien_bullets, boss_bullets), explosions, Explosion, _golpear_asteroide,
-                asteroid_kills + stats_alienigenas)
+                asteroid_kills + stats_alienigenas, estado_mejoras.drones)
             if aviso is not None:
                 aviso_mascota = [aviso[0], aviso[1], 180]
                 audio.sonido_powerup()
+                if aviso[0].startswith("¡COMBO!"):
+                    _medalla("combo")
+                elif aviso[0] == "¡FÉNIX!":
+                    _medalla("fenix")
+                    _vibrar(1.0, 500)
+            if ship.lives < vidas_previas:
+                _vibrar(0.8, 220)
+                if bosses:
+                    golpeado_en_jefe = True
+            vidas_previas = ship.lives
+            if not bosses:
+                golpeado_en_jefe = False
+            if asteroid_kills >= 150:
+                _medalla("demoledor")
 
             for b in bullets[:]:
                 b.update()
@@ -2244,8 +2369,12 @@ def main():
                 control_hint = "Cerra el puño para disparar"
             else:
                 control_hint = "Boton del mando para disparar - START para pausar"
+            tope, tarea = 1.0, None
+            if camara_cargando:
+                tope = (carga_camara["paso"] + 0.5) / len(PASOS_CAMARA)
+                tarea = PASOS_CAMARA[carga_camara["paso"]]
             draw_countdown(game_surface, GAME_WIDTH, GAME_HEIGHT, countdown_val, countdown_fraction,
-                            font, info_font, big_font, control_hint)
+                            font, info_font, big_font, control_hint, progreso_tope=tope, tarea=tarea)
 
         elif bonus_estado == "game_over_falso":
             # GAME OVER de mentira (el Alien invencible te mato): igual al de
@@ -2391,7 +2520,9 @@ def main():
                 record_surf = render_text(texto_record, 14, AMARILLO if nuevo_record else WHITE)
                 game_surface.blit(record_surf, (GAME_WIDTH // 2 - record_surf.get_width() // 2, GAME_HEIGHT // 2 + 100))
 
-            go_buttons = GOButtons if not game_victory else []
+            if entrada_nombre is not None:
+                entrada_nombre.draw(game_surface, GAME_WIDTH, GAME_HEIGHT)
+            go_buttons = GOButtons if not game_victory and entrada_nombre is None else []
             if go_buttons:
                 btn_w = 150
                 btn_h = 40
@@ -2408,6 +2539,11 @@ def main():
                             _volver_al_menu()
                         else:
                             _reintentar()
+
+        if not menu_scene.active:
+            if not paused:
+                aviso_medallas.update()
+            aviso_medallas.draw(game_surface, GAME_WIDTH)
 
         screen.fill(DARKER_BG)
         for estrella in estrellas_fondo:

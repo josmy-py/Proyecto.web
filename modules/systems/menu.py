@@ -10,10 +10,11 @@ import math
 from modules.constants import WHITE, AZUL, MENTA
 from modules.systems import audio
 from modules.systems.fonts import render_texto_pixelado
-from modules import settings
+from modules import settings, progress
 from modules.systems import sprites, pixelfx, neon
 from modules.entities.ship import TIPOS_NAVE, ORDEN_NAVES
 from modules.skins import get_skin_colors
+from modules.systems.logros import MEDALLAS, dibujar_tabla_records, dibujar_medallas
 
 
 class Star:
@@ -187,7 +188,9 @@ FILAS_FASES = 6
 class MenuScene:
     """Pantalla de menu completa. self.state controla que se dibuja/procesa:
 
-    - "main": los 4 botones (JUGAR, ELEGIR FASE, AJUSTES, SALIR).
+    - "main": los 6 botones (JUGAR, JEFE RUSH, ELEGIR FASE, RÉCORDS,
+      AJUSTES, SALIR). JEFE RUSH sigue el camino de JUGAR con ":rush".
+    - "records": tabla de records y medallas (ver modules/systems/logros.py).
     - "fases": se entra con ELEGIR FASE; lista de puntos de partida (ver
       FASES_INICIO). Elegido uno sigue el camino de JUGAR (modo de control
       -> dificultad) y START_GAME lleva ":<id de la fase>" al final, mas
@@ -226,17 +229,18 @@ class MenuScene:
 
         self.stars = [Star(screen_width, screen_height) for _ in range(120)]
 
-        btn_w, btn_h = 260, 56
-        gap = 20
-        total_h = 4 * btn_h + 3 * gap
-        start_y = screen_height // 2 - total_h // 2 + btn_h // 2
+        btn_w, btn_h = 260, 50
+        gap = 12
+        principales = (("JUGAR", (30, 200, 120)), ("JEFE RUSH", (255, 90, 220)), ("ELEGIR FASE", (120, 140, 255)),
+                       ("RÉCORDS", (255, 210, 80)), ("AJUSTES", (200, 180, 60)), ("SALIR", (220, 80, 80)))
+        total_h = len(principales) * btn_h + (len(principales) - 1) * gap
+        start_y = screen_height // 2 - total_h // 2 + btn_h // 2 + 20
         cx = screen_width // 2
-        self.buttons = [
-            MenuButton(cx, start_y, btn_w, btn_h, "JUGAR", self.button_font, (30, 200, 120)),
-            MenuButton(cx, start_y + btn_h + gap, btn_w, btn_h, "ELEGIR FASE", self.button_font, (120, 140, 255)),
-            MenuButton(cx, start_y + 2 * (btn_h + gap), btn_w, btn_h, "AJUSTES", self.button_font, (200, 180, 60)),
-            MenuButton(cx, start_y + 3 * (btn_h + gap), btn_w, btn_h, "SALIR", self.button_font, (220, 80, 80)),
-        ]
+        self.buttons = [MenuButton(cx, start_y + i * (btn_h + gap), btn_w, btn_h, texto, self.button_font, color)
+                        for i, (texto, color) in enumerate(principales)]
+        self.medalla_sel = 0
+        self.btn_records_volver = MenuButton(cx, screen_height - 98, 200, 40, "VOLVER", get_font(16, bold=True),
+                                             (90, 90, 115))
 
         # ELEGIR FASE: grilla de 3 columnas x FILAS_FASES filas + VOLVER
         fase_font = get_font(17, bold=True)
@@ -277,12 +281,13 @@ class MenuScene:
         toggle_font = get_font(16, bold=True)
         self.btn_silencio = MenuButton(cx, 345, 300, 44, "SILENCIO: NO", toggle_font, (150, 150, 175))
         self.btn_pantalla = MenuButton(cx, 397, 300, 44, "PANTALLA COMPLETA: SI", toggle_font, (150, 150, 175))
-        self.btn_camara = MenuButton(cx, 449, 300, 44, "CAMARA: 0", toggle_font, (150, 150, 175))
+        self.btn_camara = MenuButton(cx - 78, 449, 144, 44, "CAMARA: 0", toggle_font, (150, 150, 175))
+        self.btn_vibracion = MenuButton(cx + 78, 449, 144, 44, "VIBRAR: SI", toggle_font, (150, 150, 175))
         self.btn_bonus_buffs = MenuButton(cx, 507, 340, 44, "BONUS CON TODOS LOS BUFFS: NO", toggle_font, (255, 110, 200))
         self.btn_bonus = MenuButton(cx, 559, 300, 44, "JUGAR NIVEL BONUS", toggle_font, (255, 110, 200))
         self.btn_volver = MenuButton(cx, 619, 200, 44, "VOLVER", toggle_font, (90, 90, 115))
         self.settings_widgets = [self.slider_musica, self.slider_sfx, self.slider_sensibilidad,
-                                 self.btn_silencio, self.btn_pantalla, self.btn_camara,
+                                 self.btn_silencio, self.btn_pantalla, self.btn_camara, self.btn_vibracion,
                                  self.btn_bonus_buffs, self.btn_bonus, self.btn_volver]
         # True cuando se entro al flujo de partida desde "JUGAR NIVEL BONUS"
         self.partida_bonus = False
@@ -367,6 +372,7 @@ class MenuScene:
             self.btn_silencio.update(mouse_pos, mouse_pressed)
             self.btn_pantalla.update(mouse_pos, mouse_pressed)
             self.btn_camara.update(mouse_pos, mouse_pressed)
+            self.btn_vibracion.update(mouse_pos, mouse_pressed)
             self.btn_bonus_buffs.update(mouse_pos, mouse_pressed)
             self.btn_bonus.update(mouse_pos, mouse_pressed)
             self.btn_volver.update(mouse_pos, mouse_pressed)
@@ -397,6 +403,14 @@ class MenuScene:
             for i in range(len(ORDEN_NAVES)):
                 if self._rect_nave(i).collidepoint(mouse_pos):
                     self.nave_seleccionada = i
+            self.title_phase += 0.025
+            return
+
+        if self.state == "records":
+            self.btn_records_volver.update(mouse_pos, mouse_pressed)
+            for i in range(len(MEDALLAS)):
+                if self._rect_medalla(i).collidepoint(mouse_pos):
+                    self.medalla_sel = i
             self.title_phase += 0.025
             return
 
@@ -435,6 +449,8 @@ class MenuScene:
             return self._handle_nave_event(event)
         if self.state == "fases":
             return self._handle_fases_event(event)
+        if self.state == "records":
+            return self._handle_records_event(event)
 
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_UP:
@@ -504,6 +520,9 @@ class MenuScene:
             nuevo_indice = (settings.get("camera_index") + 1) % 4
             settings.set_valor("camera_index", nuevo_indice)
             return "CHANGE_CAMERA"
+        if widget is self.btn_vibracion:
+            settings.set_valor("vibracion", not settings.get("vibracion"))
+            return None
         if widget is self.btn_bonus_buffs:
             settings.set_valor("bonus_todos_buffs", not settings.get("bonus_todos_buffs"))
             return None
@@ -571,6 +590,36 @@ class MenuScene:
                 self.state = "main"
         return None
 
+    # ------------------------------------------------------------ records
+
+    _PANEL_RECORDS = (60, 136, 470, 450)
+    _PANEL_MEDALLAS = (560, 136, 660, 450)
+
+    def _rect_medalla(self, i):
+        x, y, w, _ = self._PANEL_MEDALLAS
+        ancho = (w - 40) // 4
+        cx = x + 20 + ancho * (i % 4) + ancho // 2
+        cy = y + 96 + (i // 4) * 96
+        return pygame.Rect(cx - ancho // 2, cy - 40, ancho, 90)
+
+    def _handle_records_event(self, event):
+        total = len(MEDALLAS)
+        if event.type == pygame.KEYDOWN:
+            if event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE, pygame.K_RETURN, pygame.K_KP_ENTER):
+                self.state = "main"
+                audio.sonido_boton()
+            elif event.key == pygame.K_RIGHT:
+                self.medalla_sel = (self.medalla_sel + 1) % total
+            elif event.key == pygame.K_LEFT:
+                self.medalla_sel = (self.medalla_sel - 1) % total
+            elif event.key == pygame.K_DOWN:
+                self.medalla_sel = (self.medalla_sel + 4) % total
+            elif event.key == pygame.K_UP:
+                self.medalla_sel = (self.medalla_sel - 4) % total
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.btn_records_volver.handle_event(event):
+            self.state = "main"
+        return None
+
     def _alternar_buffs_fase(self):
         settings.set_valor("fase_todos_buffs", not settings.get("fase_todos_buffs"))
         audio.sonido_boton()
@@ -582,6 +631,8 @@ class MenuScene:
         return None
 
     def _etiqueta_inicio(self):
+        if self.inicio_elegido == "rush":
+            return "JEFE RUSH"
         for fase_id, etiqueta, _ in FASES_INICIO:
             if fase_id == self.inicio_elegido:
                 return etiqueta
@@ -661,7 +712,7 @@ class MenuScene:
             sufijo = ":bonus"
         elif self.inicio_elegido:
             sufijo = f":{self.inicio_elegido}"
-            if settings.get("fase_todos_buffs"):
+            if settings.get("fase_todos_buffs") and self.inicio_elegido != "rush":
                 sufijo += ":buffs"
         else:
             sufijo = ""
@@ -675,8 +726,17 @@ class MenuScene:
             self.inicio_elegido = None
             self._ir_a_modo_control()
             return None
+        if label == "JEFE RUSH":
+            self.partida_bonus = False
+            self.inicio_elegido = "rush"
+            self._ir_a_modo_control()
+            return None
         if label == "ELEGIR FASE":
             self.state = "fases"
+            return None
+        if label == "RÉCORDS":
+            self.state = "records"
+            self.medalla_sel = 0
             return None
         if label == "AJUSTES":
             self.state = "settings"
@@ -754,6 +814,17 @@ class MenuScene:
             self.btn_fases_volver.draw(self.surface)
             self._dibujar_ayuda("Flechas para moverte - ENTER para elegir - T = todos los buffs - ESC para volver",
                                 "Palanca o cruceta para moverte - A para elegir - Y = todos los buffs - B para volver")
+            self._presentar(surface)
+            return
+
+        if self.state == "records":
+            self._subtitulo("RÉCORDS Y MEDALLAS")
+            t = int(self.title_phase * 40)
+            dibujar_tabla_records(self.surface, pygame.Rect(self._PANEL_RECORDS), progress.records(), t)
+            dibujar_medallas(self.surface, pygame.Rect(self._PANEL_MEDALLAS), progress.medallas(), self.medalla_sel, t)
+            self.btn_records_volver.draw(self.surface)
+            self._dibujar_ayuda("Flechas para ver las medallas - ESC para volver",
+                                "Palanca o cruceta para ver las medallas - B para volver")
             self._presentar(surface)
             return
 
@@ -905,6 +976,7 @@ class MenuScene:
         self.btn_silencio.text = f"SILENCIO: {'SI' if audio.esta_silenciado() else 'NO'}"
         self.btn_pantalla.text = f"PANTALLA COMPLETA: {'SI' if settings.get('pantalla_completa') else 'NO'}"
         self.btn_camara.text = f"CAMARA: {settings.get('camera_index')}"
+        self.btn_vibracion.text = f"VIBRAR: {'SI' if settings.get('vibracion') else 'NO'}"
         self.btn_bonus_buffs.text = f"BONUS CON TODOS LOS BUFFS: {'SI' if settings.get('bonus_todos_buffs') else 'NO'}"
         for widget in self.settings_widgets:
             if isinstance(widget, MenuButton):

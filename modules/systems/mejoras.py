@@ -273,7 +273,7 @@ MEJORAS = {
     "critico": ("CRÍTICO", "Algunas balas salen doradas y pegan triple a los jefes", "comun", 3, (255, 210, 70)),
     "nova": ("NOVA", "Una onda borra las balas que se te acercan", "rara", 2, (150, 230, 255)),
     "orbita": ("ÓRBITA", "Esferas que giran a tu lado, frenan balas y rompen rocas", "rara", 2, (190, 140, 255)),
-    "recolector": ("RECOLECTOR", "Recuperas una vida cada tantos enemigos destruidos", "comun", 2, (130, 255, 150)),
+    "recolector": ("RECOLECTOR", "Recuperas una vida cada tantos enemigos destruidos", "rara", 2, (130, 255, 150)),
     "fenix": ("FÉNIX", "La primera vez que caes, renaces con 2 vidas", "epica", 1, (255, 150, 50)),
 }
 

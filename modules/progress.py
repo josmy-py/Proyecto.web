@@ -1,6 +1,7 @@
 """
-Progreso guardado del jugador: puntaje maximo, oleada mas alta alcanzada y
-la ultima ruta bonus que salio (para no repetirla en la partida siguiente).
+Progreso guardado del jugador: puntaje maximo, oleada mas alta alcanzada,
+la ultima ruta bonus que salio (para no repetirla en la partida siguiente),
+la tabla de records con iniciales y las medallas ganadas.
 
 Mismo patron que modules/skins.py usa para los colores personalizados: un
 JSON en la raiz del proyecto, tolerante a errores (si el archivo no existe,
@@ -14,7 +15,10 @@ import os
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROGRESS_FILE = os.path.join(_PROJECT_ROOT, "progreso.json")
 
-_VALORES_POR_DEFECTO = {"puntaje_maximo": 0, "oleada_maxima": 1, "ultima_ruta": ""}
+_VALORES_POR_DEFECTO = {"puntaje_maximo": 0, "oleada_maxima": 1, "ultima_ruta": "",
+                        # tabla de records (ver modules/systems/logros.py) y medallas
+                        "records": [], "medallas": []}
+TOPE_RECORDS = 10
 _progreso = dict(_VALORES_POR_DEFECTO)
 
 
@@ -65,3 +69,37 @@ def registrar_partida(puntaje, oleada):
         _progreso["oleada_maxima"] = oleada
     guardar()
     return hay_record_nuevo
+
+
+def records():
+    """Tabla de records, de mayor a menor puntaje."""
+    return list(_progreso.get("records", []))
+
+
+def entra_en_tabla(puntaje):
+    tabla = records()
+    return puntaje > 0 and (len(tabla) < TOPE_RECORDS or puntaje > tabla[-1].get("puntaje", 0))
+
+
+def guardar_record(id_partida, nombre, puntaje, oleada, modo=""):
+    """Agrega (o actualiza, si es la misma partida que siguio con "Intentar
+    de Nuevo") una fila de la tabla y la deja ordenada."""
+    tabla = [r for r in records() if isinstance(r, dict) and r.get("id") != id_partida]
+    tabla.append({"id": id_partida, "nombre": nombre[:3], "puntaje": int(puntaje), "oleada": int(oleada), "modo": modo})
+    tabla.sort(key=lambda r: r.get("puntaje", 0), reverse=True)
+    _progreso["records"] = tabla[:TOPE_RECORDS]
+    guardar()
+
+
+def medallas():
+    return set(m for m in _progreso.get("medallas", []) if isinstance(m, str))
+
+
+def desbloquear_medalla(medalla_id):
+    """Guarda la medalla. Devuelve True si es nueva."""
+    ganadas = list(_progreso.get("medallas", []))
+    if medalla_id in ganadas:
+        return False
+    _progreso["medallas"] = ganadas + [medalla_id]
+    guardar()
+    return True

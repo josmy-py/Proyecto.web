@@ -347,16 +347,18 @@ _ETAPAS_CARGA = (
 )
 
 
-def draw_countdown(surface, game_w, game_h, countdown_val, countdown_fraction, font, info_font, big_font, control_hint=""):
+def draw_countdown(surface, game_w, game_h, countdown_val, countdown_fraction, font, info_font, big_font, control_hint="",
+                   progreso_tope=1.0, tarea=None):
     """Pantalla de carga antes de que arranque la partida, en pixel art
     neon: una barra de bloques que se llena de 0 a 100 % (de cian a
     magenta) con el porcentaje grande y lo que se esta "cargando", sobre el
     fondo de estrellas que ya dibujo el llamador. countdown_fraction va de
-    1.0 (recien empezo) a 0.0 (arranca la partida)."""
+    1.0 (recien empezo) a 0.0 (arranca la partida). Mientras carga la
+    camara, progreso_tope frena la barra en el paso real y tarea lo nombra."""
     t = pygame.time.get_ticks() // 16
     cx = game_w // 2
     # llega al 100 % un poco antes del final, asi se alcanza a ver el "¡LISTO!"
-    progreso = min(1.0, (1.0 - max(0.0, min(1.0, countdown_fraction))) / 0.85)
+    progreso = min(1.0, (1.0 - max(0.0, min(1.0, countdown_fraction))) / 0.85, progreso_tope)
     porcentaje = min(100, int(progreso * 100))
 
     neon.titulo(surface, "NAVE VS ASTEROIDES", 40, neon.CIAN, cx, game_h // 2 - 170)
@@ -410,10 +412,12 @@ def draw_countdown(surface, game_w, game_h, countdown_val, countdown_fraction, f
         pixelfx.dibujar_halo(surface, pixelfx.apagar(WHITE, 0.4), punta, y0 + alto_bloque // 2, 26)
 
     # lo que se esta cargando ahora
-    tarea = next(nombre for hasta, nombre in _ETAPAS_CARGA if progreso <= hasta or hasta == 1.0)
+    tarea_actual = next(nombre for hasta, nombre in _ETAPAS_CARGA if progreso <= hasta or hasta == 1.0)
+    if tarea is not None and not listo:
+        tarea_actual = tarea
     if listo:
-        tarea = "TODO EN ORDEN, PILOTO"
-    linea = render_texto_pixelado(get_font(14), f"> {tarea}", (150, 160, 200))
+        tarea_actual = "TODO EN ORDEN, PILOTO"
+    linea = render_texto_pixelado(get_font(14), f"> {tarea_actual}", (150, 160, 200))
     surface.blit(linea, (x0, y0 + alto_bloque + 16))
 
     if listo or (t // 15) % 4:

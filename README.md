@@ -39,8 +39,21 @@ ESC sale del juego.
   que se acercan), Orbita (esferas que giran alrededor de la nave), Recolector
   (una vida cada tantas bajas) y Fenix (renaces una vez al caer), ver
   modules/systems/habilidades.py.
+- Combos: Misiles + Critico = Misiles Dorados (pegan el doble), Orbita + Nova =
+  Supernova (la Nova enciende las esferas y cada una suelta su onda) y Dron +
+  Misiles = Cazadores (los drones tambien lanzan misiles). Al armarlos sale el
+  aviso "¡COMBO!".
 - Antes de cada partida hay una pantalla de carga neon: una barra de bloques
-  que se llena de 0 a 100 % (ver ui.draw_countdown).
+  que se llena de 0 a 100 % (ver ui.draw_countdown). En modo camara la barra
+  muestra la carga real (detector de manos y camara, en segundo plano) y no
+  arranca la partida hasta que la camara este lista.
+- JEFE RUSH (menu principal): los cinco jefes del Tomo I seguidos, sin oleadas
+  entre medio, hasta el Coloso.
+- RECORDS (menu principal): las 10 mejores partidas con tres iniciales, como
+  en los arcades, y las 12 medallas (modules/systems/logros.py). Se guardan en
+  progreso.json.
+- Con mando, los golpes, el Fenix y las explosiones de las cinematicas hacen
+  vibrar el control (se apaga en AJUSTES > VIBRAR).
 - Jefes en las oleadas 10, 20, 30 y 40, y el Coloso en la oleada 50.
 - "Intentar de Nuevo" sigue desde donde perdiste (la misma oleada o el mismo
   jefe), con la vida llena y todas tus mejoras. Si perdiste contra un jefe,
@@ -74,7 +87,7 @@ ESC sale del juego.
 ```
 main.py                     bucle principal
 modules/constants.py        constantes globales
-modules/progress.py         record y progreso (progreso.json)
+modules/progress.py         records, medallas y progreso (progreso.json)
 modules/settings.py         ajustes (ajustes.json)
 modules/skins.py            colores de las naves
 modules/core/boss_system.py jefes por oleada
