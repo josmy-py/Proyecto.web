@@ -71,6 +71,7 @@ from modules.entities.cine_jefes import (CinematicaEntradaJefe, CinematicaDerrot
                                         clave_de, retrato)
 from modules.entities import mascota as mascota_mod
 from modules.entities.mascota import ZorritoEspacial, CapsulaMascota, dibujar_aviso_mascota
+from modules.systems.momentos_jefe import DirectorJefes
 from modules.systems.menu import MenuScene, Star
 from modules.systems.mejoras import EstadoMejoras, SeleccionMejora, dibujar_hud_mejoras, MEJORAS
 from modules.systems.habilidades import Habilidades, marcar_critico
@@ -380,6 +381,10 @@ def main():
     mascota_ofrecida = False
     aviso_mascota = None
 
+    # Animaciones de ataque de los jefes y su momento unico a media pelea
+    # (ver modules/systems/momentos_jefe.py).
+    director_jefes = DirectorJefes()
+
     # Mejoras (ver modules/systems/mejoras.py): cartas para elegir una al
     # arrancar, cada 5 oleadas y despues de cada jefe. Mientras `eleccion`
     # esta abierta el mundo queda congelado y la nave solo mueve el cursor.
@@ -454,7 +459,7 @@ def main():
         nonlocal paused, nuevo_record, dificultad
         nonlocal stats_disparos, stats_aciertos, stats_alienigenas, stats_jefes, tiempo_sobrevivido
         nonlocal bonus_estado, bonus_timer, bonus_banner, fondo_pixel, bonus_directo_pendiente, aliado
-        nonlocal ruta_bonus, escena_final
+        nonlocal ruta_bonus, escena_final, director_jefes
         nonlocal mascota, capsula_mascota, mascota_ofrecida, aviso_mascota
         nonlocal estado_mejoras, eleccion, ultima_oleada_mejora, mejora_inicial_pendiente, habilidades
         nonlocal id_partida, nombre_partida, entrada_nombre, golpeado_en_jefe, modo_rush
@@ -478,6 +483,7 @@ def main():
         aliado = None
         mascota = None; capsula_mascota = None; mascota_ofrecida = False; aviso_mascota = None
         escena_final = None
+        director_jefes = DirectorJefes()
         id_partida = random.randint(1, 10 ** 9)
         nombre_partida = None; entrada_nombre = None; golpeado_en_jefe = False
         modo_rush = inicio_partida == "rush"
@@ -1440,6 +1446,7 @@ def main():
             aship.draw(surface)
         for boss in bosses:
             boss.draw(surface)
+        director_jefes.dibujar_mundo(surface, ship)
         for ab in alien_bullets:
             ab.draw(surface)
         for bb in boss_bullets:
@@ -2012,10 +2019,14 @@ def main():
                 audio.reproducir_musica("jefe_mega")
 
             for b in bosses[:]:
+                if director_jefes.congela(b):
+                    # su momento unico: se queda quieto cargando el remate
+                    continue
                 if isinstance(b, MegaBoss):
                     if b.pide_cinematica == "renacer":
                         _cinematica_renacer_coloso(b)
                     resultado_jefe = b.update(ship)
+                    director_jefes.observar(b, (resultado_jefe or {}).get("bullets", []))
                     if resultado_jefe:
                         for rb in resultado_jefe.get("bullets", []):
                             boss_bullets.append(rb)
@@ -2030,6 +2041,7 @@ def main():
                         bosses.remove(b)
                 elif isinstance(b, (WaveBoss, FinalBoss, TitanBoss, DragonBoss, JefeGatoBase)):
                     ret_b = b.update(ship)
+                    director_jefes.observar(b, ret_b)
                     if ret_b:
                         for rb in ret_b:
                             boss_bullets.append(rb)
@@ -2055,6 +2067,15 @@ def main():
                             b.rewarded = True
                             _recompensar_jefe(b)
                         bosses.remove(b)
+
+            director_jefes.actualizar(bosses, ship, boss_bullets)
+            for ev in director_jefes.eventos:
+                if ev[0] == "alerta":
+                    audio.sonido_alerta_jefe()
+                elif ev[0] == "explosion":
+                    audio.sonido_explosion()
+                elif ev[0] == "vibrar":
+                    _vibrar(ev[1], ev[2])
 
             if aliado is not None:
                 bullets.extend(aliado.update(ship, bosses))
@@ -2417,6 +2438,7 @@ def main():
                     if hasattr(boss, "draw_ui"):
                         boss.draw_ui(game_surface)
                 _dibujar_banner_bonus(game_surface)
+            director_jefes.dibujar_pantalla(game_surface)
 
             if aviso_mascota is not None:
                 dibujar_aviso_mascota(game_surface, aviso_mascota[0], aviso_mascota[1], aviso_mascota[2], frame_count)
@@ -2554,7 +2576,8 @@ def main():
             estrella.update()
             estrella.draw(screen)
 
-        screen.blit(game_surface, (game_offset_x, game_offset_y))
+        sx, sy = (0, 0) if paused else director_jefes.desplazamiento()
+        screen.blit(game_surface, (game_offset_x + sx, game_offset_y + sy))
         draw_viewport_frame(screen, game_offset_x, game_offset_y, GAME_WIDTH, GAME_HEIGHT, pygame.time.get_ticks())
 
         if mostrar_hud_margenes:
