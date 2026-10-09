@@ -738,6 +738,28 @@ def _lead_guitarra(freq, dur, ganancia):
     return onda * envolvente(n, 0.005, dur * 1.1)
 
 
+def _filtro_acido(señal, corte, resonancia):
+    """Filtro pasabajos resonante (state variable) con el corte variando
+    muestra a muestra: el "chillido" del bajo acido del techno (TB-303)."""
+    salida = np.zeros(len(señal))
+    bajo = banda = 0.0
+    amort = 2.0 - 1.9 * resonancia
+    for i in range(len(señal)):
+        f = 2.0 * np.sin(np.pi * min(corte[i], SR / 6) / SR)
+        alto = señal[i] - bajo - amort * banda
+        banda += f * alto
+        bajo += f * banda
+        salida[i] = bajo
+    return salida
+
+
+def _bombeo(total, pulso, profundidad):
+    """Envolvente de "sidechain": todo lo que no es bateria se agacha en cada
+    golpe del bombo y vuelve a subir, el vaiven tipico del techno."""
+    t = (np.arange(total) / SR) % pulso
+    return 1.0 - profundidad * np.exp(-t / (pulso * 0.28))
+
+
 def generar_musica_juego_metal(nivel):
     """nivel 0..4 (el juego elige cual en main._musica_partida). El 0 (oleadas
     1-10) es metal liviano con una melodia de sintetizador arcade. Con cada
@@ -745,7 +767,13 @@ def generar_musica_juego_metal(nivel):
     acorde abierto a mitad de compas, bombo extra, platillo en cada compas
     y guitarra lider en la segunda mitad; el 3 pasa a semicorcheas con
     doble bombo y lead en todo el loop; el 4 baja la afinacion, mete blast
-    beat en la segunda mitad y armoniza el lead en quintas."""
+    beat en la segunda mitad y armoniza el lead en quintas.
+
+    Ademas, desde el nivel 1 se suma una capa techno que crece con cada
+    jefe: bombo en negras, hat a contratiempo, palmas, bajo acido con el
+    filtro abriendose y "sidechain" (todo se agacha en cada bombo); el 2
+    suma acordes supersaw a contratiempo y el 3 semicorcheas de hat y una
+    subida de ruido al final del loop."""
     bpm = 120 + 10 * nivel
     pulso = 60.0 / bpm
     corchea = pulso / 2
@@ -828,7 +856,70 @@ def generar_musica_juego_metal(nivel):
                 nota = onda_cuadrada(f, corchea, ancho_pulso=0.25) * envolvente(int(SR * corchea), 0.004, corchea * 0.8)
                 _poner(lead, nota, c * compas + k * corchea, 0.22)
 
-    mezcla = guitarra * 0.55 + bajo * 0.5 + bateria * 0.7 + lead
+    # ---- capa techno: crece con cada jefe derrotado (nivel 1..4)
+    tecno = np.zeros(total)
+    acido = np.zeros(total)
+    sinte = np.zeros(total)
+    if nivel >= 1:
+        kick, palma, hat_tecno = _bombo_tecno(0.3), _palmas(), _hat_abierto(0.11)
+        for c in range(compases):
+            inicio = c * compas
+            for b in range(4):
+                t = inicio + b * pulso
+                _poner(tecno, kick, t, 1.0)                    # bombo en negras
+                _poner(tecno, hat_tecno, t + corchea, 0.45)    # hat a contratiempo
+                if b in (1, 3):
+                    _poner(tecno, palma, t, 0.5)
+                if nivel >= 3:
+                    for s16 in (1, 3):
+                        _poner(tecno, _hat_abierto(0.03), t + s16 * pulso / 4, 0.22)
+
+        # bajo acido en semicorcheas siguiendo el riff; el filtro se abre y
+        # se cierra cada dos compases y chilla mas en cada nivel
+        semi16 = pulso / 4
+        patron = [0, 0, 12, 0, 0, 10, 0, 12, 0, 0, 7, 0, 12, 0, 3, 0]
+        acento = [1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0]
+        crudo = np.zeros(total)
+        picos = np.zeros(total)
+        for c in range(compases):
+            f_raiz = base_freq * (2.0 ** (raices[c] / 12))
+            for k in range(16):
+                f = f_raiz * (2.0 ** (patron[k] / 12))
+                dur = semi16 * (0.9 if acento[k] else 0.55)
+                n = int(SR * dur)
+                nota = onda_sierra(f, dur)[:n] * envolvente(n, 0.002, dur * 0.9)
+                i = int((c * compas + k * semi16) * SR)
+                fin = min(total, i + n)
+                crudo[i:fin] += nota[:fin - i]
+                tt = np.arange(fin - i) / SR
+                picos[i:fin] = np.maximum(picos[i:fin], (1.0 if acento[k] else 0.5) * np.exp(-tt / 0.06))
+        tiempo = np.arange(total) / SR
+        barrido = 0.5 - 0.5 * np.cos(2 * np.pi * tiempo / (compas * 2))
+        corte = 180 + (500 + 350 * nivel) * barrido + (900 + 300 * nivel) * picos
+        acido = np.tanh(_filtro_acido(crudo, corte, 0.55 + 0.08 * nivel) * (1.5 + 0.5 * nivel))
+
+    if nivel >= 2:
+        # acordes "supersaw" a contratiempo (Mi menor sobre la raiz del riff)
+        for c in range(compases):
+            f_raiz = 164.81 * (2.0 ** ((raices[c] + afinacion) / 12))
+            for b in range(4):
+                dur = corchea * 0.8
+                n = int(SR * dur)
+                acorde = sum(_supersierra(f_raiz * (2.0 ** (iv / 12)), dur, voces=5, semilla=c * 4 + b + iv)
+                             for iv in (0, 3, 7, 12))
+                acorde = suavizar(acorde, 3)[:n] * envolvente(n, 0.004, dur * 0.6)
+                _poner(sinte, acorde, c * compas + b * pulso + corchea, 0.32)
+
+    if nivel >= 3:
+        # subida de ruido en el ultimo compas, antes de que vuelva el loop
+        dur = compas
+        n = int(SR * dur)
+        ruido = np.diff(ruido_blanco(dur + 2 / SR, semilla=91))[:n]
+        _poner(sinte, ruido * np.linspace(0, 1, n) ** 2 * 0.5, (compases - 1) * compas, 1.0)
+
+    bombeo = _bombeo(total, pulso, 0.12 * nivel)
+    mezcla = ((guitarra * 0.55 + lead + sinte) * bombeo + bajo * 0.5 * bombeo
+              + bateria * 0.7 + tecno * 0.6 + acido * (0.16 + 0.04 * nivel))
     return _ganar_volumen(fundido_de_bucle(mezcla), empuje=1.5 + 0.2 * nivel)
 
 
