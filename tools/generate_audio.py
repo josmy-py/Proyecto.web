@@ -777,7 +777,8 @@ def generar_musica_juego_metal(nivel):
 
     Los niveles 2 y 3 van mas lentos (120 y 126 BPM), afinados abajo, con
     riff sincopado de dos guitarras dobladas y bateria en medio tiempo:
-    estilo pesado en vez de rapido."""
+    estilo pesado en vez de rapido. El 4 suma sintes retro: arpegio de onda
+    cuadrada, colchon de sierras y melodia de pulso en la segunda mitad."""
     # niveles 2 y 3: groove pesado y mas lento, con mas guitarra (pedido de
     # Josmy); el 1 y el 4 siguen con el tempo que sube
     pesado = nivel in (2, 3)
@@ -944,6 +945,35 @@ def generar_musica_juego_metal(nivel):
         n = int(SR * dur)
         ruido = np.diff(ruido_blanco(dur + 2 / SR, semilla=91))[:n]
         _poner(sinte, ruido * np.linspace(0, 1, n) ** 2 * 0.5, (compases - 1) * compas, 1.0)
+
+    if nivel >= 4:
+        # sintes retro (arcade / synthwave): arpegio de onda cuadrada en
+        # semicorcheas, colchon de sierras desafinadas y una melodia de pulso
+        # angosto que dobla una octava arriba a la guitarra lider
+        semi16 = pulso / 4
+        arpegio = [0, 3, 7, 12, 15, 12, 7, 3]
+        for c in range(compases):
+            f_raiz = 329.63 * (2.0 ** ((raices[c] + afinacion) / 12))
+            for k in range(16):
+                f = f_raiz * (2.0 ** (arpegio[k % 8] / 12))
+                n = int(SR * semi16)
+                nota = onda_cuadrada(f, semi16, ancho_pulso=0.25)[:n] * envolvente(n, 0.002, semi16 * 0.7)
+                _poner(sinte, nota, c * compas + k * semi16, 0.24)
+            n = int(SR * compas)
+            colchon = sum(_supersierra(f_raiz / 2 * (2.0 ** (iv / 12)), compas, voces=5, semilla=200 + c * 3 + iv)
+                          for iv in (0, 3, 7))
+            colchon = suavizar(colchon, 12)[:n] * envolvente(n, 0.25, compas * 0.9)
+            _poner(sinte, colchon, c * compas, 0.18)
+        frases_sinte = [[19, 22, 24, 22, 19, 17, 15, 17], [19, 22, 24, 27, 24, 22, 19, 22],
+                        [24, 22, 19, 17, 15, 17, 19, 15], [12, 15, 17, 19, 17, 15, 12, 10]]
+        for c in range(4, compases):
+            for k, semi in enumerate(frases_sinte[c % 4]):
+                f = 329.63 * (2.0 ** ((semi + afinacion) / 12))
+                n = int(SR * corchea)
+                tt = np.arange(n) / SR
+                vibrato = 1 + 0.008 * np.sin(2 * np.pi * 5.5 * tt) * np.minimum(1, tt / 0.1)
+                onda = np.where(((np.cumsum(f * vibrato) / SR) % 1.0) < 0.3, 1.0, -1.0)
+                _poner(sinte, suavizar(onda, 2)[:n] * envolvente(n, 0.004, corchea * 0.9), c * compas + k * corchea, 0.26)
 
     bombeo = _bombeo(total, pulso, 0.12 * nivel)
     mezcla = ((guitarra * (0.85 if pesado else 0.55) + lead + sinte) * bombeo + bajo * 0.5 * bombeo
