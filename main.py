@@ -427,8 +427,15 @@ def main():
     start_time = pygame.time.get_ticks()
     start_countdown = 5
 
+    # medallas ya avisadas en esta partida: (id_partida, medalla). Si se
+    # repite un logro ya ganado vuelve a salir el cartel (solo la medalla),
+    # pero una vez por partida para no llenar la pantalla.
+    medallas_avisadas = set()
+
     def _medalla(medalla_id):
-        if progress.desbloquear_medalla(medalla_id):
+        progress.desbloquear_medalla(medalla_id)
+        if (id_partida, medalla_id) not in medallas_avisadas:
+            medallas_avisadas.add((id_partida, medalla_id))
             aviso_medallas.agregar(medalla_id)
             audio.sonido_powerup()
         if medalla_id.startswith("ruta_") and {"ruta_gatos", "ruta_halloween", "ruta_cyber"} <= progress.medallas():
@@ -2122,12 +2129,16 @@ def main():
                 habilidades.corazon_nuevo = False
                 audio.sonido_powerup()
             if aviso is not None:
-                aviso_mascota = [aviso[0], aviso[1], 180]
-                audio.sonido_powerup()
-                if aviso[0].startswith("¡COMBO!"):
-                    _medalla("combo")
-                elif aviso[0] == "¡FÉNIX!":
-                    _medalla("fenix")
+                medalla_aviso = ("combo" if aviso[0].startswith("¡COMBO!")
+                                 else "fenix" if aviso[0] == "¡FÉNIX!" else None)
+                if medalla_aviso is None or medalla_aviso not in progress.medallas():
+                    # el zorrito explica solo la primera vez; si ya tenias
+                    # la medalla sale nada mas el cartel de la medalla
+                    aviso_mascota = [aviso[0], aviso[1], 180]
+                    audio.sonido_powerup()
+                if medalla_aviso is not None:
+                    _medalla(medalla_aviso)
+                if medalla_aviso == "fenix":
                     _vibrar(1.0, 500)
             if ship.lives < vidas_previas:
                 _vibrar(0.8, 220)
