@@ -2,8 +2,8 @@
 Cinematica de la Bruja Neon a mitad de pelea (ver BrujaBoss.UMBRAL_GIGANTE
 en halloween.py y _cinematica_bruja_gigante en main.py): se planta en el
 centro, saca una pocion, se la toma ("*glu glu glu*"), brilla y crece hasta
-llenar la pantalla. Despues aparece de frente, gigante, con las manos
-listas para la segunda parte de la pelea.
+llenar la pantalla. Despues aparece de frente, gigante, con una pocion en
+una mano y un circulo magico en la otra para la segunda parte de la pelea.
 
 Interfaz de las otras cinematicas: update(), draw(surface), terminada,
 saltar(), temblor y eventos ("pocion", "trago", "crece", "flash", "risa")."""
@@ -103,12 +103,6 @@ class CinematicaBrujaGigante:
             g.x = GAME_WIDTH / 2
             g.y = GAME_HEIGHT + 220 - k * (GAME_HEIGHT + 220 - g.Y_GIGANTE)
             g.risa = 999 if t >= self.T_RISA else 0
-            for mano in g.manos:
-                rx, ry = g._reposo_mano(mano['lado'])
-                subida = min(1.0, max(0.0, (t - self.T_GIGANTE - 25) / 40))
-                mano['x'] = rx + mano['lado'] * 40 * (1 - subida)
-                mano['y'] = GAME_HEIGHT + 120 - subida * (GAME_HEIGHT + 120 - (ry - 90))
-                mano['puno'] = False
 
     # ------------------------------------------------------------- dibujo
 

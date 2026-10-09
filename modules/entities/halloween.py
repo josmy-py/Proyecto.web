@@ -9,7 +9,7 @@ llegan tres jefes de Halloween, uno tras otro:
      calabazas bomba que estallan al caer.
   2. BRUJA NEON: vuela en su escoba; murcielagos que te persiguen, pociones
      que dejan charcos toxicos y clones del aquelarre. A mitad de la vida
-     se toma una pocion y pelea gigante, con los brazos.
+     se toma una pocion y pelea gigante, con pociones y circulos magicos.
   3. LA PARCA: se teletransporta, dispara calaveras y almas y barre una
      fila entera con su guadaña (avisada antes).
 
@@ -218,141 +218,222 @@ def _arte_bruja(cuadro):
 
 
 def _arte_bruja_gigante(cuadro):
-    """La Bruja Neon gigante de frente, de la cintura para arriba (66x60):
-    sombrero enorme de ala caida, pelo largo gris azulado que le tapa un
-    ojo, ojos blancos que brillan, constelaciones celestes en los hombros,
-    vestido azul marino sin breteles y mangas transparentes. Los brazos se
-    dibujan aparte (ver BrujaBoss._dibujar_brazo).
+    """La Bruja Neon gigante de frente, de la cintura para arriba (120x92),
+    estilo anime: sombrero enorme con cinta y hebilla de estrella, pelo
+    largo gris azulado con reflejos, ojos grandes blancos que brillan con
+    pestañas largas, rubor, labios rosados, gargantilla con gema, vestido
+    azul marino de escote corazon con ribete plateado y cordones, mangas
+    transparentes y constelaciones en los hombros. La mano izquierda queda
+    abierta para los circulos magicos y la derecha levantada para las
+    pociones (las dos se dibujan en el arte: ya no atacan con los brazos).
     cuadro: 0 normal, 1 parpadeo, 2 risa (ojos cerrados), 3 furia (los
     ojos y las constelaciones brillan mas)."""
     pal = _PALETA_BRUJA
-    sf = pygame.Surface((66, 60), pygame.SRCALPHA)
+    sf = pygame.Surface((120, 92), pygame.SRCALPHA)
+    S, s, P, p, L = pal['S'], pal['s'], pal['P'], pal['p'], pal['L']
+    D, d, H, h = pal['D'], pal['d'], pal['H'], pal['h']
     brillo = (240, 252, 255) if cuadro == 3 else pal['G']
-    # pelo largo que cae detras y se abre hacia abajo
-    pygame.draw.polygon(sf, pal['p'], [(17, 14), (13, 30), (10, 44), (5, 60), (61, 60), (56, 44), (53, 30), (49, 14)])
-    for x0, x1 in ((15, 8), (19, 13), (47, 53), (51, 58)):
-        pygame.draw.line(sf, pal['P'], (x0, 26), (x1, 58))
-    # hombros desnudos, cuello y vestido sin breteles
-    pygame.draw.polygon(sf, pal['S'], [(10, 60), (13, 50), (23, 45), (43, 45), (53, 50), (56, 60)])
-    _px(sf, pal['S'], 29, 35, 8, 11)
-    _px(sf, pal['s'], 29, 37, 8, 2)
-    pygame.draw.polygon(sf, pal['D'], [(16, 60), (18, 54), (26, 52), (33, 55), (40, 52), (48, 54), (50, 60)])
-    pygame.draw.line(sf, pal['d'], (18, 54), (26, 52))
-    pygame.draw.line(sf, pal['d'], (40, 52), (48, 54))
-    # constelaciones que brillan sobre los hombros y el cuello
-    for linea in (((14, 53), (18, 49), (23, 51), (26, 47)), ((40, 47), (43, 51), (48, 49), (52, 53)),
-                  ((31, 41), (33, 44), (36, 42))):
+    PLATA = (190, 200, 228)
+    RUBOR = (240, 150, 182)
+    LABIO = (226, 96, 130)
+    UNA = (120, 90, 230)
+    PELO_OSCURO = (36, 46, 76)
+
+    # ---- pelo de atras: cae largo y ondulado hasta abajo
+    pygame.draw.polygon(sf, p, [(44, 26), (38, 38), (35, 52), (30, 66), (24, 80), (20, 92), (100, 92), (96, 80),
+                                (90, 66), (85, 52), (82, 38), (76, 26)])
+    # mechones: lineas que se abren hacia abajo, con brillo y sombra
+    for i, x0 in enumerate(range(37, 84, 3)):
+        abre = (x0 - 60) / 23
+        x1 = 60 + abre * 40
+        c = (L, P, PELO_OSCURO, P)[i % 4]
+        pygame.draw.lines(sf, c, False, ((x0, 30), (x0 + abre * 6, 52), (x1 + math.sin(i) * 2, 90)))
+    # brillo de anillo sobre la cabeza (el reflejo tipico del pelo de anime)
+    for x in range(44, 78, 4):
+        _px(sf, L, x, 27, 2, 1)
+    # ondas en las puntas
+    for y in range(70, 92, 4):
+        _px(sf, PELO_OSCURO, 20 + (y - 70) // 6, y, 2, 1)
+        _px(sf, PELO_OSCURO, 98 - (y - 70) // 6, y, 2, 1)
+
+    # ---- brazos (detras del cuerpo): el izquierdo levantado con la palma
+    # abierta para los circulos magicos, el derecho sostiene la pocion
+    for (hx, hy), (cx, cy), (mx, my) in (((40, 74), (24, 82), (14, 64)), ((80, 74), (96, 82), (106, 62))):
+        lado = -1 if cx < 60 else 1
+        pygame.draw.line(sf, S, (hx, hy), (cx, cy), 7)
+        pygame.draw.circle(sf, S, (cx, cy), 3)
+        pygame.draw.line(sf, S, (cx, cy), (mx, my), 5)
+        pygame.draw.line(sf, s, (cx + lado * 2, cy + 1), (mx + lado * 2, my + 1))
+        _px(sf, PLATA, mx + (cx - mx) // 4 - 2, my + (cy - my) // 4 - 1, 5, 2)   # pulsera
+        # manga transparente acampanada que cae desde el hombro
+        manga = [(hx - lado * 2, hy - 4), (cx + lado * 2, cy - 5), (cx + lado * 9, cy + 6),
+                 (cx + lado * 4, cy + 10), (hx, hy + 8)]
+        pygame.draw.polygon(sf, (205, 218, 250, 55), manga)
+        pygame.draw.lines(sf, (230, 238, 255, 200), False, manga[1:4])
+        for k in (0.35, 0.7):
+            px = manga[0][0] + (manga[2][0] - manga[0][0]) * k
+            py = manga[0][1] + (manga[2][1] - manga[0][1]) * k
+            _px(sf, (225, 232, 250, 150), px, py)
+    # mano izquierda abierta (palma hacia afuera, dedos finos y uñas violeta)
+    pygame.draw.ellipse(sf, S, (9, 57, 9, 9))
+    for fx, fy in ((8, 51), (11, 49), (14, 49), (17, 51)):
+        pygame.draw.line(sf, S, (fx + 1, fy + 7), (fx, fy), 2)
+        _px(sf, UNA, fx, fy, 2, 1)
+    pygame.draw.line(sf, S, (18, 62), (21, 58), 2)   # pulgar
+    _px(sf, s, 11, 63, 6, 1)
+    # mano derecha levantada, curva para sostener la pocion
+    pygame.draw.ellipse(sf, S, (102, 55, 9, 10))
+    for k in range(3):
+        _px(sf, s, 103 + k * 3, 56, 1, 3)
+    _px(sf, UNA, 102, 58, 1, 2)
+    _px(sf, UNA, 110, 58, 1, 2)
+
+    # ---- hombros, cuello y pecho
+    pygame.draw.polygon(sf, S, [(30, 92), (32, 80), (40, 70), (52, 66), (68, 66), (80, 70), (88, 80), (90, 92)])
+    pygame.draw.polygon(sf, s, [(30, 92), (32, 80), (40, 70), (44, 69), (36, 80), (34, 92)])
+    pygame.draw.polygon(sf, s, [(90, 92), (88, 80), (80, 70), (76, 69), (84, 80), (86, 92)])
+    _px(sf, S, 55, 54, 10, 14)
+    _px(sf, s, 55, 56, 10, 3)                  # sombra del menton
+    pygame.draw.line(sf, s, (45, 72), (56, 74))   # claviculas
+    pygame.draw.line(sf, s, (64, 74), (75, 72))
+    # gargantilla con gema
+    _px(sf, CONTORNO, 55, 61, 10, 2)
+    _px(sf, PLATA, 55, 61, 10, 1)
+    _px(sf, PLATA, 60, 63, 1, 1)
+    pygame.draw.polygon(sf, brillo, ((60, 64), (62, 66), (60, 68), (58, 66)))   # gema en rombo
+    _px(sf, WHITE, 60, 65, 1, 1)
+    # vestido: escote corazon, ribete plateado, cordones cruzados
+    pygame.draw.polygon(sf, D, [(34, 92), (35, 80), (46, 76), (54, 78), (60, 82), (66, 78), (74, 76), (85, 80),
+                                (86, 92)])
+    pygame.draw.lines(sf, PLATA, False, ((35, 80), (46, 76), (54, 78), (60, 82), (66, 78), (74, 76), (85, 80)))
+    pygame.draw.lines(sf, d, False, ((38, 84), (46, 80), (53, 82)))
+    pygame.draw.lines(sf, d, False, ((67, 82), (74, 80), (82, 84)))
+    # moño en el escote con un broche de cristal
+    pygame.draw.polygon(sf, pal['B'], ((60, 83), (55, 80), (55, 86)))
+    pygame.draw.polygon(sf, pal['B'], ((60, 83), (65, 80), (65, 86)))
+    _px(sf, brillo, 59, 82, 2, 2)
+    _px(sf, WHITE, 59, 82, 1, 1)
+    for x0, x1 in ((40, 44), (76, 80)):
+        pygame.draw.line(sf, d, (x0, 84), (x1 - 2, 92))
+    for y in range(87, 92, 3):
+        pygame.draw.line(sf, PLATA, (57, y), (63, y + 2))
+        pygame.draw.line(sf, PLATA, (63, y), (57, y + 2))
+    # constelaciones que brillan sobre los hombros
+    for linea in (((34, 82), (38, 76), (44, 77), (47, 72)), ((73, 72), (76, 77), (82, 76), (86, 82))):
         pygame.draw.lines(sf, brillo, False, linea)
         for x, y in linea:
             _px(sf, WHITE, x, y)
-    # mangas transparentes que caen de los hombros (solo se ve el borde)
-    for lado in (-1, 1):
-        x = 33 + lado * 21
-        velo = [(x - lado * 3, 49), (x + lado * 8, 53), (x + lado * 11, 60), (x - lado * 1, 60)]
-        pygame.draw.polygon(sf, (190, 204, 230, 55), velo)
-        pygame.draw.lines(sf, (214, 224, 244, 120), False, velo[:3])
-    # mechones que enmarcan la cara y caen delante de los hombros
-    for x0, inclina in ((17, -1), (44, 1)):
-        pygame.draw.polygon(sf, pal['P'], [(x0, 16), (x0 + 5, 16), (x0 + 4 + inclina * 2, 44), (x0 + 1 + inclina * 3, 50)])
-        pygame.draw.line(sf, pal['L'], (x0 + 2, 20), (x0 + 2 + inclina, 38))
-    # cara ovalada con el menton en punta
-    pygame.draw.ellipse(sf, pal['S'], (22, 15, 22, 19))
-    pygame.draw.polygon(sf, pal['S'], [(23, 27), (43, 27), (36, 37), (30, 37)])
-    _px(sf, pal['s'], 23, 28, 1, 3)
-    _px(sf, pal['s'], 42, 28, 1, 3)
-    # ojos almendrados blancos que brillan
-    for ex in (25, 36):
+
+    # ---- mechones delanteros que enmarcan la cara y caen sobre los hombros
+    for x0, inclina in ((38, -1), (76, 1)):
+        pygame.draw.polygon(sf, P, [(x0, 28), (x0 + 6, 28), (x0 + 5 + inclina * 3, 60), (x0 + 3 + inclina * 6, 80),
+                                    (x0 + inclina * 4, 70), (x0 + 1 + inclina, 50)])
+        pygame.draw.line(sf, L, (x0 + 3, 32), (x0 + 3 + inclina * 3, 64))
+        pygame.draw.line(sf, PELO_OSCURO, (x0 + 1, 40), (x0 + 1 + inclina * 2, 62))
+
+    # ---- cara: ovalada con menton fino
+    pygame.draw.ellipse(sf, S, (43, 26, 34, 30))
+    pygame.draw.polygon(sf, S, [(44, 44), (76, 44), (66, 57), (60, 59), (54, 57)])
+    _px(sf, s, 44, 44, 1, 6)
+    _px(sf, s, 75, 44, 1, 6)
+    pygame.draw.line(sf, s, (46, 50), (54, 57))
+    pygame.draw.line(sf, s, (74, 50), (66, 57))
+
+    # ojos grandes de anime: almendrados, blancos que brillan, pestañas largas
+    for ex, afuera in ((47, -1), (64, 1)):
+        ox = ex if afuera < 0 else ex + 8    # rabillo del ojo (lado de afuera)
+        ix = ex + 8 if afuera < 0 else ex    # lagrimal (lado de adentro)
         if cuadro == 1:
-            _px(sf, CONTORNO, ex, 26, 6, 1)
+            pygame.draw.lines(sf, CONTORNO, False, ((ex, 44), (ex + 4, 45), (ex + 8, 44)), 2)
+            _px(sf, CONTORNO, ox + afuera, 43, 1, 1)
         elif cuadro == 2:
-            # ojos cerrados de felicidad (curvas hacia arriba)
-            _px(sf, CONTORNO, ex, 26, 1, 1)
-            _px(sf, CONTORNO, ex + 1, 25, 4, 1)
-            _px(sf, CONTORNO, ex + 5, 26, 1, 1)
+            # ojos cerrados de felicidad (arco hacia arriba)
+            pygame.draw.lines(sf, CONTORNO, False, ((ex, 45), (ex + 2, 42), (ex + 6, 42), (ex + 8, 45)), 2)
+            _px(sf, CONTORNO, ox + afuera, 43, 1, 1)
         else:
-            _px(sf, CONTORNO, ex, 23, 6, 1)  # pestañas, mas largas hacia afuera
-            _px(sf, CONTORNO, ex + (6 if ex > 30 else -1), 22, 1, 1)
-            _px(sf, pal['e'], ex + (6 if ex > 30 else -1), 25, 1, 1)  # brillo que se escapa
-            _px(sf, pal['e'], ex, 24, 6, 3)
-            _px(sf, pal['E'], ex + 1, 24, 4, 2)
-            _px(sf, WHITE, ex + 2, 24, 2, 1)
-            _px(sf, CONTORNO, ex + 1, 27, 4, 1)
+            # forma almendrada: el blanco del ojo con las esquinas recortadas
+            pygame.draw.polygon(sf, pal['e'], ((ex, 41), (ex + 8, 41), (ex + 8, 45), (ex + 6, 47), (ex + 2, 47), (ex, 45)))
+            # iris: degradado de celeste oscuro arriba a blanco abajo
+            _px(sf, (100, 180, 240), ex + 2, 40, 5, 2)
+            _px(sf, (170, 228, 255), ex + 2, 42, 5, 2)
+            _px(sf, pal['E'], ex + 2, 44, 5, 2)
+            _px(sf, WHITE, ex + 3, 45, 3, 1)
+            _px(sf, (90, 160, 230), ex + 3, 42, 3, 2)           # pupila
+            # reflejos grandes de anime
+            _px(sf, WHITE, ex + 2 + (1 if afuera > 0 else 0), 41, 2, 2)
+            _px(sf, WHITE, ex + 5 - (1 if afuera > 0 else 0), 44, 1, 1)
+            # pestaña de arriba: arco grueso con dos puntas hacia afuera
+            pygame.draw.lines(sf, CONTORNO, False, ((ix, 41), (ex + 4, 39), (ox, 40)), 2)
+            pygame.draw.line(sf, CONTORNO, (ox, 40), (ox + afuera * 3, 37))
+            pygame.draw.line(sf, CONTORNO, (ox, 41), (ox + afuera * 3, 40))
+            _px(sf, CONTORNO, ox + afuera, 46, 1, 1)
+            pygame.draw.line(sf, s, (ex + 1, 48), (ex + 7, 48))   # parpado de abajo
             if cuadro == 3:
-                _px(sf, WHITE, ex, 25, 6, 1)
-    # nariz y boca: sonrisa de lado / risa abierta
-    _px(sf, pal['s'], 33, 29)
-    _px(sf, pal['s'], 33, 30)
+                _px(sf, WHITE, ex + 1, 42, 7, 3)
+                _px(sf, brillo, ox + afuera * 2, 42, 1, 3)        # el brillo se escapa
+                _px(sf, brillo, ox + afuera * 3, 44, 1, 1)
+        # cejas finas y arqueadas
+        pygame.draw.lines(sf, PELO_OSCURO, False, ((ix, 36), (ex + 4, 35), (ox + afuera, 36)))
+        # rubor
+        for k in range(3):
+            _px(sf, RUBOR, ex + 1 + k * 2, 50, 1, 1)
+            _px(sf, RUBOR, ex + 2 + k * 2, 51, 1, 1)
+    # nariz y boca
+    _px(sf, s, 60, 50, 1, 2)
+    _px(sf, (255, 250, 252), 59, 49, 1, 1)
     if cuadro == 2:
-        _px(sf, CONTORNO, 29, 32, 8, 1)
-        _px(sf, (150, 30, 70), 30, 33, 6, 2)
-        _px(sf, WHITE, 30, 33, 6, 1)
+        pygame.draw.polygon(sf, (150, 30, 70), ((56, 53), (64, 53), (62, 56), (58, 56)))
+        _px(sf, WHITE, 57, 53, 6, 1)
+        _px(sf, (255, 120, 150), 59, 55, 3, 1)
     else:
-        _px(sf, pal['R'], 30, 33, 5, 1)
-        _px(sf, pal['R'], 35, 32)
-    # flequillo en puntas y un mechon fino sobre el ojo derecho
-    pygame.draw.polygon(sf, pal['P'], [(21, 14), (45, 14), (45, 20), (42, 23), (40, 19), (37, 22), (34, 18),
-                                       (31, 21), (28, 18), (25, 22), (22, 20)])
-    pygame.draw.line(sf, pal['P'], (39, 19), (42, 29))
-    pygame.draw.line(sf, pal['L'], (40, 19), (43, 28))
-    _px(sf, pal['L'], 25, 15, 4, 1)
-    _px(sf, pal['L'], 36, 15, 3, 1)
-    # aros de luz
-    _px(sf, pal['O'], 21, 29, 1, 2)
-    _px(sf, pal['O'], 45, 29, 1, 2)
-    # sombrero: ala enorme caida y la punta doblada hacia un lado
-    pygame.draw.polygon(sf, pal['H'], [(0, 17), (8, 12), (22, 9), (44, 9), (58, 11), (66, 15), (60, 18),
-                                       (46, 15), (33, 14), (20, 15), (6, 19)])
-    pygame.draw.line(sf, pal['h'], (8, 13), (22, 10))
-    pygame.draw.line(sf, pal['h'], (46, 10), (58, 12))
-    for x, y in ((3, 18), (12, 16), (55, 16), (63, 17)):
-        _px(sf, (0, 0, 0, 0), x, y, 2, 1)  # ala rasgada
-    pygame.draw.polygon(sf, pal['H'], [(21, 11), (45, 11), (41, 5), (46, 2), (55, 0), (47, 0), (38, 2), (28, 5)])
-    pygame.draw.line(sf, pal['h'], (30, 5), (29, 10))
-    pygame.draw.line(sf, pal['h'], (40, 3), (47, 1))
-    _px(sf, pal['B'], 21, 9, 24, 2)
+        # sonrisa suave con labios rosados
+        _px(sf, (180, 70, 100), 58, 54, 5, 1)
+        _px(sf, (180, 70, 100), 57, 53, 1, 1)
+        _px(sf, (180, 70, 100), 63, 53, 1, 1)
+        _px(sf, LABIO, 59, 55, 3, 1)
+        _px(sf, (255, 196, 214), 60, 55, 1, 1)
+
+    # flequillo en puntas, con un mechon fino entre los ojos
+    pygame.draw.polygon(sf, P, [(42, 26), (78, 26), (78, 36), (75, 40), (72, 33), (68, 38), (64, 31), (61, 37),
+                                (58, 31), (54, 38), (50, 32), (46, 40), (42, 36)])
+    for x0, x1 in ((48, 46), (56, 54), (66, 68), (73, 75)):
+        pygame.draw.line(sf, L, (x0, 27), (x1, 33))
+    pygame.draw.line(sf, P, (60, 32), (61, 46))
+    pygame.draw.line(sf, L, (61, 33), (61, 41))
+    # aros de cristal
+    for x in (42, 77):
+        _px(sf, pal['O'], x, 50, 1, 4)
+        _px(sf, WHITE, x, 53, 1, 1)
+
+    # ---- sombrero: ala enorme que cae a los costados, punta doblada
+    pygame.draw.polygon(sf, H, [(2, 30), (10, 25), (26, 21), (46, 19), (74, 19), (94, 21), (110, 25), (118, 30),
+                                (112, 31), (96, 27), (78, 25), (60, 25), (42, 25), (24, 27), (8, 31)])
+    pygame.draw.line(sf, h, (10, 26), (40, 20))
+    pygame.draw.line(sf, h, (80, 20), (110, 26))
+    for x, y in ((5, 30), (16, 28), (102, 28), (114, 30)):
+        _px(sf, (0, 0, 0, 0), x, y, 2, 1)   # ala rasgada
+    pygame.draw.polygon(sf, H, [(42, 21), (78, 21), (73, 12), (70, 6), (78, 2), (90, 0), (80, 0), (66, 2), (54, 8)])
+    pygame.draw.line(sf, h, (56, 9), (52, 19))
+    pygame.draw.line(sf, h, (68, 4), (80, 1))
+    pygame.draw.line(sf, (16, 20, 50), (70, 7), (73, 18))
+    # cinta con hebilla de estrella y moño de costado
+    _px(sf, pal['B'], 43, 17, 34, 4)
+    _px(sf, brillo, 43, 17, 34, 1)
+    pygame.draw.polygon(sf, (255, 214, 110), ((60, 16), (61, 18), (63, 18), (61.5, 19.5), (62, 21), (60, 20),
+                                               (58, 21), (58.5, 19.5), (57, 18), (59, 18)))
+    pygame.draw.polygon(sf, pal['B'], ((77, 18), (84, 14), (84, 22)))
+    pygame.draw.polygon(sf, pal['B'], ((77, 19), (82, 24), (79, 26)))
+    _px(sf, brillo, 82, 15, 1, 6)
     # dijes de cristal que cuelgan del ala
-    for x, y in ((10, 17), (52, 16)):
-        _px(sf, pal['O'], x, y, 1, 2)
-        _px(sf, pal['O'], x - 1, y + 2, 3, 1)
+    for x, y in ((14, 28), (106, 28)):
+        _px(sf, PLATA, x, y, 1, 3)
+        _px(sf, pal['O'], x - 1, y + 3, 3, 2)
         _px(sf, WHITE, x, y + 3)
-    return _contornear(sf, CONTORNO, (66, 60))
-
-
-_MANOS_BRUJA = (
-    (  # 0: abierta, con uñas violeta
-        "....KB.KB.KB....",
-        "...KSKKSKKSK....",
-        "...KSKKSKKSK.KB.",
-        "...KSKKSKKSKKSK.",
-        "...KSSKSSKSSKSK.",
-        "..KKSSSSSSSSSSK.",
-        ".KSKSSSSSSSSSSK.",
-        ".KSSSSSSSSSSSSK.",
-        "..KSSSSSSSSSSK..",
-        "...KSSSSSSSSK...",
-        "....KDDDDDDK....",
-        "....KGGGGGGK....",
-    ),
-    (  # 1: puño
-        "................",
-        "................",
-        "....KKKKKKKK....",
-        "...KSKSKSKSSK...",
-        "...KSKSKSKSSK...",
-        "..KSSSSSSSSSSK..",
-        "..KSSSSSSSSSSK..",
-        "..KSsSsSsSSSSK..",
-        "...KSSSSSSSSK...",
-        "....KSSSSSSK....",
-        "....KDDDDDDK....",
-        "....KGGGGGGK....",
-    ),
-)
-
-
-def _arte_mano_bruja(cuadro):
-    """Mano de la Bruja gigante (16x12): 0 abierta, 1 puño."""
-    return _desde_texto(_MANOS_BRUJA[cuadro], _PALETA_BRUJA)
+        _px(sf, pal['O'], x, y + 5)
+    # estrellitas en el ala
+    for x, y in ((30, 23), (88, 23), (20, 26)):
+        _px(sf, brillo, x, y)
+    return _contornear(sf, CONTORNO, (120, 92))
 
 
 def _arte_parca(cuadro):
@@ -583,7 +664,7 @@ def _arte_lapida(cuadro):
 
 _ARTES = {
     "calabaza": _arte_calabaza, "bruja": _arte_bruja, "parca": _arte_parca,
-    "bruja_gigante": _arte_bruja_gigante, "mano_bruja": _arte_mano_bruja,
+    "bruja_gigante": _arte_bruja_gigante,
     "mini_calabaza": _arte_mini_calabaza, "murcielago": _arte_murcielago,
     "calavera": _arte_calavera, "alma": _arte_alma, "pocion": _arte_pocion,
     "brazo": _arte_brazo, "lapida": _arte_lapida,
@@ -938,18 +1019,22 @@ class BrujaBoss(JefeHalloweenBase):
     modules/entities/bruja_gigante.py y main.py); mientras tanto no recibe
     daño. Despues main.py llama a volverse_gigante() y la pelea cambia: la
     bruja ocupa la parte de arriba de la pantalla, de frente, y ataca con
-    los brazos (animados de hombro a mano). Especiales del modo gigante:
-      - POCIONES: levanta una mano con una pocion y la arroja en tanda.
-      - MANOTAZO: una mano sigue a la nave, marca el lugar y lo aplasta.
-      - BARRIDO: marca la fila de la nave y la barre con el brazo."""
+    magia (ya no con los brazos). Especiales del modo gigante:
+      - POCIONES: tandas de pociones desde la mano derecha.
+      - CIRCULOS MAGICOS: aparecen circulos sobre la nave que se cargan y
+        estallan en una columna de luz.
+      - SELLO ESTELAR: un sello gigante gira en su mano izquierda y suelta
+        espirales de estrellas."""
 
     nombre = "BRUJA NEON"
     hp_base = 1000
     ESCALA = 3
     UMBRAL_GIGANTE = 0.5
-    ESCALA_GIGANTE = 5
-    ESCALA_MANO = 6
-    Y_GIGANTE = 150.0
+    ESCALA_GIGANTE = 4
+    Y_GIGANTE = 170.0
+    # manos en el arte gigante (120x92, centro 60,46), en pixeles de pantalla
+    MANO_CIRCULO = ((13 - 60) * 4, (58 - 46) * 4)
+    MANO_POCION = ((106 - 60) * 4, (52 - 46) * 4)
 
     def __init__(self, dificultad=1.0):
         super().__init__(dificultad)
@@ -967,7 +1052,8 @@ class BrujaBoss(JefeHalloweenBase):
         self.gigante = False
         self.transformando = False
         self.pide_cinematica = None
-        self.manos = []
+        self.circulos = []
+        self.sin_pocion = 0
 
     def take_damage(self, amount=1):
         if self.transformando:
@@ -982,8 +1068,8 @@ class BrujaBoss(JefeHalloweenBase):
             self.bombas = []
 
     def volverse_gigante(self):
-        """Despues de la cinematica: la bruja gigante de frente, con las
-        dos manos listas."""
+        """Despues de la cinematica: la bruja gigante de frente, con una
+        pocion en la mano derecha y la izquierda lista para la magia."""
         self.gigante = True
         self.transformando = False
         self.pide_cinematica = None
@@ -994,17 +1080,15 @@ class BrujaBoss(JefeHalloweenBase):
         self.name = "BRUJA NEON GIGANTE"
         self.x = GAME_WIDTH / 2
         self.y = self.Y_GIGANTE
-        self.size = 130
-        self.alto_sprite = 60 * self.ESCALA_GIGANTE
+        self.size = 140
+        self.alto_sprite = 92 * self.ESCALA_GIGANTE
         self.timer_especial = 120
         self.indice_especial = 0
         self.timer_pocion = 70
         self.timer_murcielagos = 160
         self.risa = 0
-        self.manos = []
-        for lado in (-1, 1):
-            rx, ry = self._reposo_mano(lado)
-            self.manos.append({'lado': lado, 'x': rx, 'y': ry, 'puno': False, 'pocion': False})
+        self.circulos = []
+        self.sin_pocion = 0
 
     def _charco(self, x, y):
         balas = []
@@ -1143,185 +1227,135 @@ class BrujaBoss(JefeHalloweenBase):
 
     # ------------------------------------------------------- modo gigante
 
-    def _hombro(self, lado):
-        return self.x + lado * 105, self.y + 100
-
-    def _reposo_mano(self, lado):
-        return self.x + lado * 235, self.y + 175 + math.sin(self.t * 0.05 + lado) * 10
-
-    def _mano_hacia(self, mano, x, y, k=0.15):
-        mano['x'] += (x - mano['x']) * k
-        mano['y'] += (y - mano['y']) * k
+    def _mano(self, cual):
+        dx, dy = cual
+        return self.x + dx, self.y + dy
 
     def _lanzar_desde(self, x0, y0, objetivo_x, objetivo_y):
         bomba = _lanzar_en_arco(x0, y0, objetivo_x, objetivo_y, sprite_halloween("pocion", 1, 4), 12,
                                 vy0=-4.0, gravedad=0.2)
         self.bombas.append((bomba, objetivo_y, self._charco))
+        self.sin_pocion = 22   # la mano queda vacia un ratito
         return bomba
 
     def _actualizar_gigante(self, ship, v):
         balas = []
         self.risa = max(0, self.risa - 1)
+        self.sin_pocion = max(0, self.sin_pocion - 1)
         self.x = GAME_WIDTH / 2 + math.sin(self.t * 0.02) * 50
         self.y = self.Y_GIGANTE + math.sin(self.t * 0.04) * 8
-        ocupadas = set()
+        balas += self._actualizar_circulos(v)
         if self.especial is not None:
-            balas += self._especial_gigante(ship, v, ocupadas)
-        else:
-            self.timer_especial -= 1
-            self.timer_pocion -= 1
-            self.timer_murcielagos -= 1
-            if self.timer_especial <= 0:
-                self.timer_especial = max(150, int((300 if not self.furioso else 220) / v))
-                tipo = ("pociones", "manotazo", "barrido")[self.indice_especial % 3]
-                self.indice_especial += 1
-                lado = -1 if ship.x < self.x else 1
-                self.especial = {'tipo': tipo, 't': 0, 'lado': lado, 'golpes': 0, 'fase': 'sube'}
-                self._anunciar({"pociones": "¡POCIONES!", "manotazo": "¡MANOTAZO!",
-                                "barrido": "¡BARRIDO!"}[tipo])
-            elif self.timer_pocion <= 0:
-                # una pocion suelta con un movimiento rapido de muñeca
-                self.timer_pocion = max(60, int((120 if not self.furioso else 80) / v))
-                mano = self.manos[0 if ship.x < self.x else 1]
-                balas.append(self._lanzar_desde(mano['x'], mano['y'] - 20, ship.x, ship.y))
-                mano['y'] -= 40
-            elif self.timer_murcielagos <= 0:
-                # murcielagos que salen del sombrero
-                self.timer_murcielagos = max(110, int((200 if not self.furioso else 140) / v))
-                for k in range(3 if self.furioso else 2):
-                    a = math.pi / 2 + (k - 0.5) * 0.9
-                    balas.append(Murcielago(self.x + (k - 0.5) * 300, self.y - 40, math.cos(a) * 3.0 * math.sqrt(v),
-                                            abs(math.sin(a)) * 3.0 * math.sqrt(v), ship))
-        for mano in self.manos:
-            if mano['lado'] not in ocupadas:
-                rx, ry = self._reposo_mano(mano['lado'])
-                self._mano_hacia(mano, rx, ry, 0.1)
-                mano['puno'] = False
-                mano['pocion'] = False
+            balas += self._especial_gigante(ship, v)
+            return balas
+        self.timer_especial -= 1
+        self.timer_pocion -= 1
+        self.timer_murcielagos -= 1
+        if self.timer_especial <= 0:
+            self.timer_especial = max(150, int((300 if not self.furioso else 220) / v))
+            tipo = ("pociones", "circulos", "sello")[self.indice_especial % 3]
+            self.indice_especial += 1
+            self.especial = {'tipo': tipo, 't': 0, 'tandas': 0, 'puestos': 0}
+            self._anunciar({"pociones": "¡POCIONES!", "circulos": "¡CÍRCULOS MÁGICOS!",
+                            "sello": "¡SELLO ESTELAR!"}[tipo])
+        elif self.timer_pocion <= 0:
+            # una pocion suelta desde la mano derecha
+            self.timer_pocion = max(60, int((120 if not self.furioso else 80) / v))
+            balas.append(self._lanzar_desde(*self._mano(self.MANO_POCION), ship.x, ship.y))
+        elif self.timer_murcielagos <= 0:
+            # murcielagos que salen del sombrero
+            self.timer_murcielagos = max(110, int((200 if not self.furioso else 140) / v))
+            for k in range(3 if self.furioso else 2):
+                a = math.pi / 2 + (k - 0.5) * 0.9
+                balas.append(Murcielago(self.x + (k - 0.5) * 300, self.y - 40, math.cos(a) * 3.0 * math.sqrt(v),
+                                        abs(math.sin(a)) * 3.0 * math.sqrt(v), ship))
         return balas
 
-    def _especial_gigante(self, ship, v, ocupadas):
+    def _actualizar_circulos(self, v):
+        """Circulos magicos en el piso: se cargan (CARGA_CIRCULO cuadros) y
+        estallan en una columna de luz con un anillo de estrellas."""
+        balas = []
+        for c in self.circulos:
+            c['t'] += 1
+            if c['t'] == self.CARGA_CIRCULO:
+                balas += _anillo(c['x'], c['y'], 10 if self.furioso else 8, 2.6 * math.sqrt(v), VIOLETA_CLARO, 12,
+                                 forma="estrella", desfase=random.uniform(0, 1))
+                self.risa = max(self.risa, 12)
+            if self.CARGA_CIRCULO <= c['t'] < self.CARGA_CIRCULO + 10:
+                balas.append(_hitbox(c['x'], c['y'], self.RADIO_CIRCULO))
+        self.circulos = [c for c in self.circulos if c['t'] < self.CARGA_CIRCULO + 24]
+        return balas
+
+    CARGA_CIRCULO = 62
+    RADIO_CIRCULO = 66
+
+    def _especial_gigante(self, ship, v):
         e = self.especial
         e['t'] += 1
         balas = []
-        mano = self.manos[0 if e['lado'] < 0 else 1]
-        ocupadas.add(e['lado'])
         if e['tipo'] == "pociones":
-            # sube la mano con la pocion, la arroja en tanda y cambia de mano
-            mano['pocion'] = True
-            arriba = (self.x + e['lado'] * 260, self.y - 40)
-            if e['t'] < 40:
-                self._mano_hacia(mano, *arriba, k=0.12)
-            elif e['t'] == 40:
+            # tandas de pociones en abanico desde la mano derecha
+            if e['t'] == 30:
                 n = 5 if self.furioso else 3
+                x0, y0 = self._mano(self.MANO_POCION)
+                corrido = 55 if e['tandas'] % 2 else 0
                 for k in range(n):
-                    dx = (k - (n - 1) / 2) * 110
+                    dx = (k - (n - 1) / 2) * 120 + corrido
                     tx = max(40, min(GAME_WIDTH - 40, ship.x + dx))
-                    balas.append(self._lanzar_desde(mano['x'], mano['y'], tx, max(GAME_HEIGHT * 0.55, ship.y)))
+                    balas.append(self._lanzar_desde(x0, y0, tx, max(GAME_HEIGHT * 0.55, ship.y)))
                 self.risa = 30
-                mano['pocion'] = False
-            elif e['t'] < 60:
-                # el brazo sigue de largo hacia adelante
-                self._mano_hacia(mano, self.x + e['lado'] * 150, self.y + 230, k=0.3)
-                mano['pocion'] = False
-            else:
-                e['golpes'] += 1
-                if e['golpes'] >= (3 if self.furioso else 2):
+            elif e['t'] >= 60:
+                e['tandas'] += 1
+                if e['tandas'] >= (3 if self.furioso else 2):
                     self.especial = None
                 else:
-                    e['t'], e['lado'] = 0, -e['lado']
-        elif e['tipo'] == "manotazo":
-            mano['puno'] = True
-            if e['fase'] == 'sube':
-                # la mano sigue a la nave desde arriba
-                self._mano_hacia(mano, ship.x, self.y + 150, k=0.12)
-                if e['t'] >= 55:
-                    e['fase'], e['t'] = 'fija', 0
-                    e['objetivo'] = (ship.x, max(GAME_HEIGHT * 0.55, ship.y))
-            elif e['fase'] == 'fija':
-                mano['y'] -= 1.5  # toma impulso
-                if e['t'] >= 18:
-                    e['fase'], e['t'] = 'golpe', 0
-                    e['desde'] = (mano['x'], mano['y'])
-            elif e['fase'] == 'golpe':
-                k = min(1.0, e['t'] / 7)
-                mano['x'] = e['desde'][0] + (e['objetivo'][0] - e['desde'][0]) * k
-                mano['y'] = e['desde'][1] + (e['objetivo'][1] - e['desde'][1]) * k * k
-                balas.append(_hitbox(mano['x'], mano['y'], 58))
-                if k >= 1.0:
-                    e['fase'], e['t'] = 'apoyada', 0
-                    n = 14 if self.furioso else 10
-                    balas += _anillo(mano['x'], mano['y'], n, 3.0 * math.sqrt(v), VIOLETA_CLARO, 12,
-                                     forma="estrella", desfase=random.uniform(0, 1))
-                    self.risa = 40
-            elif e['fase'] == 'apoyada':
-                if e['t'] < 10:
-                    balas.append(_hitbox(mano['x'], mano['y'], 50))
-                if e['t'] >= 30:
-                    e['golpes'] += 1
-                    if e['golpes'] >= (2 if self.furioso else 1):
-                        self.especial = None
-                    else:
-                        e['fase'], e['t'], e['lado'] = 'sube', 0, -e['lado']
+                    e['t'] = 0
+        elif e['tipo'] == "circulos":
+            # un circulo debajo de la nave cada tanto; termina cuando estallan todos
+            total = 5 if self.furioso else 3
+            if e['puestos'] < total and e['t'] % max(18, int(32 / v)) == 1:
+                e['puestos'] += 1
+                self.circulos.append({'x': max(60, min(GAME_WIDTH - 60, ship.x)),
+                                      'y': max(GAME_HEIGHT * 0.55, min(GAME_HEIGHT - 50, ship.y)), 't': 0,
+                                      'giro': random.uniform(0, 6)})
+            elif e['puestos'] >= total and not self.circulos:
+                self.especial = None
         else:
-            # barrido: la mano va a un costado a la altura de la fila y la cruza
-            mano['puno'] = False
-            if e['fase'] == 'sube':
-                e['fila'] = max(GAME_HEIGHT * 0.55, min(GAME_HEIGHT - 50, ship.y))
-                e['dir'] = -e['lado']
-                self._mano_hacia(mano, GAME_WIDTH / 2 + e['lado'] * (GAME_WIDTH / 2 + 30), e['fila'], k=0.1)
-                if e['t'] >= 60:
-                    e['fase'], e['t'] = 'barre', 0
-            elif e['fase'] == 'barre':
-                mano['x'] += e['dir'] * 17 * math.sqrt(v)
-                mano['y'] = e['fila'] + math.sin(e['t'] * 0.4) * 6
-                balas.append(_hitbox(mano['x'], mano['y'], 52))
-                if e['t'] % 5 == 0:
-                    balas.append(BalaPixel(mano['x'], mano['y'] - 30, random.uniform(-0.6, 0.6),
-                                           random.uniform(-2.5, -1.0), color=VERDE_TOXICO, tam=10,
-                                           forma="estrella", gravedad=0.06, vida=90))
-                if not -60 < mano['x'] < GAME_WIDTH + 60:
-                    e['golpes'] += 1
-                    self.risa = 30
-                    if self.furioso and e['golpes'] < 2:
-                        # la otra mano barre de vuelta desde el otro costado
-                        e['fase'], e['t'], e['lado'] = 'sube', 0, e['dir']
-                    else:
-                        self.especial = None
+            # sello estelar: gira en la mano izquierda y suelta espirales
+            x0, y0 = self._mano(self.MANO_CIRCULO)
+            if 30 <= e['t'] < 170 and e['t'] % 6 == 0:
+                brazos = 3 if self.furioso else 2
+                for k in range(brazos):
+                    a = e['t'] * 0.11 + 2 * math.pi * k / brazos
+                    vel = 3.0 * math.sqrt(v)
+                    balas.append(BalaPixel(x0, y0, math.cos(a) * vel, math.sin(a) * vel,
+                                           color=(170, 236, 255) if k % 2 else VIOLETA_CLARO, tam=12,
+                                           forma="estrella"))
+            if e['t'] >= 190:
+                self.especial = None
+                self.risa = 30
         return balas
 
-    def _dibujar_brazo(self, screen, mano, ox, oy):
-        hx, hy = self._hombro(mano['lado'])
-        hx, hy = hx + ox, hy + oy
-        mx, my = mano['x'] + ox, mano['y'] + oy
-        # brazo palido con contorno, constelaciones y la manga transparente
-        pygame.draw.line(screen, CONTORNO, (hx, hy), (mx, my), 30)
-        pygame.draw.circle(screen, CONTORNO, (int(hx), int(hy)), 16)
-        pygame.draw.line(screen, (238, 232, 242), (hx, hy), (mx, my), 22)
-        pygame.draw.circle(screen, (238, 232, 242), (int(hx), int(hy)), 12)
-        brillo = (240, 252, 255) if self.furioso else (170, 236, 255)
-        puntos = [(hx + (mx - hx) * k + (6 if i % 2 else -6), hy + (my - hy) * k) for i, k in enumerate((0.1, 0.25, 0.4))]
-        pygame.draw.lines(screen, brillo, False, puntos, 3)
-        for px, py in puntos:
-            screen.fill(WHITE, (int(px) - 3, int(py) - 3, 6, 6))
-        largo = math.hypot(mx - hx, my - hy) or 1
-        nx, ny = -(my - hy) / largo, (mx - hx) / largo
-        manga = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-        ondea = math.sin(self.t * 0.1) * 10
-        pygame.draw.polygon(manga, (190, 204, 230, 80), [
-            (hx + nx * 20, hy + ny * 20), (mx + nx * 40, my + ny * 40 + ondea),
-            (mx - nx * 40, my - ny * 40 + ondea), (hx - nx * 20, hy - ny * 20)])
-        pygame.draw.line(manga, (215, 225, 245, 140), (hx + nx * 20, hy + ny * 20), (mx + nx * 40, my + ny * 40 + ondea), 3)
-        screen.blit(manga, (0, 0))
-        # la mano apunta hacia afuera del brazo (el arte la tiene "hacia arriba")
-        angulo = math.degrees(math.atan2(-(my - hy), mx - hx)) - 90
-        angulo = round(angulo / 15) * 15
-        mano_spr = sprite_halloween("mano_bruja", 1 if mano['puno'] else 0, self.ESCALA_MANO,
-                                    blanco=self.flash % 2 == 1)
-        mano_spr = pygame.transform.rotate(mano_spr, angulo)
-        _blit_centrado(screen, mano_spr, mx, my)
-        if mano['pocion']:
-            _blit_centrado(screen, sprite_halloween("pocion", 1, 5), mx, my - 46)
+    @staticmethod
+    def _circulo_magico(screen, x, y, r, giro, color, color2, k=1.0):
+        """Circulo magico neon: dos anillos, runas que giran entre ellos y
+        un hexagrama adentro. k (0..1) lo va dibujando mientras se carga."""
+        x, y = int(x), int(y)
+        r = max(6, int(r))
+        pixelfx.dibujar_halo(screen, pixelfx.apagar(color, 0.35), x, y, r * 1.2)
+        pygame.draw.circle(screen, color, (x, y), r, 4)
+        pygame.draw.circle(screen, color2, (x, y), int(r * 0.8), 2)
+        n = 12
+        for i in range(int(n * k)):
+            a = -giro * 0.7 + 2 * math.pi * i / n
+            rx, ry = x + math.cos(a) * r * 0.9, y + math.sin(a) * r * 0.9
+            screen.fill(color2 if i % 3 else WHITE, (int(rx) - 3, int(ry) - 3, 6, 6))
+        if k > 0.4:
+            for desfase in (0, math.pi / 3):
+                puntos = [(x + math.cos(giro + desfase + 2 * math.pi * i / 3) * r * 0.78,
+                           y + math.sin(giro + desfase + 2 * math.pi * i / 3) * r * 0.78) for i in range(3)]
+                pygame.draw.polygon(screen, color, puntos, 2)
+        pygame.draw.circle(screen, WHITE, (x, y), max(2, int(r * 0.12)))
 
     # constelaciones del aura de la bruja gigante (coordenadas del aura)
     _CONSTELACIONES = (
@@ -1334,26 +1368,36 @@ class BrujaBoss(JefeHalloweenBase):
 
     def _dibujar_gigante(self, screen, ox, oy):
         e = self.especial
-        if e is not None and e['tipo'] == 'barrido' and e['fase'] == 'sube':
-            self._dibujar_aviso_fila(screen, e['fila'], e['t'], ox, oy)
-        if e is not None and e['tipo'] == 'manotazo' and e['fase'] in ('fija', 'golpe') and 'objetivo' in e:
-            tx, ty = int(e['objetivo'][0] + ox), int(e['objetivo'][1] + oy)
-            color = (255, 60, 80) if (self.t // 4) % 2 else (255, 200, 80)
-            pygame.draw.circle(screen, color, (tx, ty), 62, 4)
-            screen.fill(color, (tx - 74, ty - 2, 24, 4))
-            screen.fill(color, (tx + 50, ty - 2, 24, 4))
-            screen.fill(color, (tx - 2, ty - 74, 4, 24))
-            screen.fill(color, (tx - 2, ty + 50, 4, 24))
+        celeste, violeta = (170, 236, 255), VIOLETA_CLARO
+        # circulos magicos en el piso (debajo de todo)
+        for c in self.circulos:
+            k = min(1.0, c['t'] / self.CARGA_CIRCULO)
+            cx, cy = c['x'] + ox, c['y'] + oy
+            if c['t'] < self.CARGA_CIRCULO:
+                parpadea = k > 0.75 and (self.t // 3) % 2
+                self._circulo_magico(screen, cx, cy, 20 + (self.RADIO_CIRCULO - 20) * k, c['giro'] + self.t * 0.08,
+                                     WHITE if parpadea else celeste, violeta, k)
+            else:
+                # estalla: columna de luz hacia arriba
+                d = c['t'] - self.CARGA_CIRCULO
+                ancho = int(self.RADIO_CIRCULO * 1.6 * (1 - d / 24))
+                if ancho > 0:
+                    columna = pygame.Surface((ancho, int(cy)), pygame.SRCALPHA)
+                    columna.fill((200, 245, 255, int(200 * (1 - d / 24))))
+                    columna.fill((255, 255, 255, int(240 * (1 - d / 24))), (ancho // 4, 0, ancho // 2, int(cy)))
+                    screen.blit(columna, (int(cx) - ancho // 2, 0))
+                self._circulo_magico(screen, cx, cy, self.RADIO_CIRCULO + d * 2, c['giro'], WHITE, celeste)
         # aura que late detras
-        aura = pygame.Surface((480, 400), pygame.SRCALPHA)
+        aura = pygame.Surface((560, 420), pygame.SRCALPHA)
         alfa = 60 + int(30 * math.sin(self.t * 0.08))
         pygame.draw.ellipse(aura, (40, 90, 200, alfa), aura.get_rect())
-        pygame.draw.ellipse(aura, (90, 160, 255, alfa // 2), aura.get_rect().inflate(-120, -100))
+        pygame.draw.ellipse(aura, (90, 160, 255, alfa // 2), aura.get_rect().inflate(-140, -110))
         for linea in self._CONSTELACIONES:
+            linea = [(x * 1.15, y * 1.05) for x, y in linea]
             pygame.draw.lines(aura, (200, 240, 255, 150 + alfa // 2), False, linea, 2)
             for x, y in linea:
-                aura.fill((255, 255, 255, 230), (x - 3, y - 3, 6, 6))
-        _blit_centrado(screen, aura, self.x + ox, self.y + oy + 20)
+                aura.fill((255, 255, 255, 230), (int(x) - 3, int(y) - 3, 6, 6))
+        _blit_centrado(screen, aura, self.x + ox, self.y + oy + 10)
         if self.risa > 0:
             cuadro = 2
         elif self.furioso:
@@ -1363,9 +1407,23 @@ class BrujaBoss(JefeHalloweenBase):
         else:
             cuadro = 0
         cuerpo = sprite_halloween("bruja_gigante", cuadro, self.ESCALA_GIGANTE, blanco=self.flash % 2 == 1)
-        _blit_centrado(screen, cuerpo, self.x + ox, self.y + oy)
-        for mano in self.manos:
-            self._dibujar_brazo(screen, mano, ox, oy)
+        # alineado a la grilla del pixelado para que el arte no se deforme
+        bx = int(self.x + ox) // 4 * 4
+        by = int(self.y + oy) // 4 * 4
+        _blit_centrado(screen, cuerpo, bx, by)
+        # la pocion en la mano derecha
+        px, py = self._mano(self.MANO_POCION)
+        if self.sin_pocion == 0:
+            pocion = sprite_halloween("pocion", 1, 4)
+            _blit_centrado(screen, pocion, px + ox, py + oy - 22 + math.sin(self.t * 0.1) * 2)
+        # la mano izquierda: un circulito siempre encendido, o el sello estelar
+        cx, cy = self._mano(self.MANO_CIRCULO)
+        if e is not None and e['tipo'] == 'sello':
+            k = min(1.0, e['t'] / 30) * (1 if e['t'] < 170 else max(0.0, 1 - (e['t'] - 170) / 20))
+            self._circulo_magico(screen, cx + ox, cy + oy - 30, 30 + 70 * k, self.t * 0.12, celeste, violeta, k)
+        else:
+            self._circulo_magico(screen, cx + ox, cy + oy - 30, 22 + 2 * math.sin(self.t * 0.1),
+                                 self.t * 0.06, violeta, celeste, 1.0)
 
     def draw(self, screen, offset_x=0, offset_y=0):
         if self.gigante:
