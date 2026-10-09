@@ -7,7 +7,8 @@ mejoras.EstadoMejoras.aplicar):
   - CRITICO: algunas balas salen doradas y pegan triple a los jefes.
   - NOVA: cuando una bala enemiga se acerca, una onda la borra (con recarga).
   - ORBITA: esferas que giran alrededor de la nave, frenan balas y rompen rocas.
-  - RECOLECTOR: cada tantos enemigos destruidos recuperas una vida.
+  - RECOLECTOR: cada tantos enemigos destruidos recuperas una vida: suena
+    un sonido y un corazoncito vuela de la nave al CASCO (sin cartel).
   - FENIX: la primera vez que caes, renaces (ver Ship.take_damage).
 
 COMBOS: dos cartas juntas se potencian (ver COMBOS); al juntarlas sale un
@@ -47,6 +48,17 @@ COMBOS = {
     "cazadores": ("CAZADORES", "Los drones tambien lanzan misiles", ("dron", "misiles")),
 }
 RADIO_ONDA_ESFERA = 70
+VIAJE_CORAZON = 46        # cuadros que tarda el corazon del Recolector en llegar al CASCO
+BRILLO_CORAZON = 18       # cuadros que brilla el segmento al llenarse
+
+_CORAZON = (
+    ".RR.RR.",
+    "RWRRRRR",
+    "RRRRRRR",
+    ".RRRRR.",
+    "..RRR..",
+    "...R...",
+)
 
 
 def combos_activos(niveles):
@@ -122,6 +134,8 @@ class Habilidades:
         self.combos_vistos = set()
         self.espera_combo = 0     # entre un aviso de combo y el siguiente
         self.misiles_dron = 0
+        self.corazones = []       # [x, y, edad] corazones del Recolector volando al CASCO
+        self.corazon_nuevo = False  # main lo lee para hacer sonar la vida
 
     def _esferas(self, ship, nivel):
         n = 2 * nivel
@@ -221,11 +235,16 @@ class Habilidades:
             self.bajas_base = bajas
         elif bajas - self.bajas_base >= BAJAS_RECOLECTOR[min(nivel, 2)]:
             self.bajas_base = bajas
-            if ship.lives < ship.max_lives:
-                ship.lives += 1
+            if ship.lives + len(self.corazones) < ship.max_lives:
+                # la vida se suma cuando el corazon llega al CASCO
+                self.corazones.append([ship.x, ship.y, 0])
+                self.corazon_nuevo = True
+        for c in self.corazones:
+            c[2] += 1
+            if c[2] == VIAJE_CORAZON:
+                ship.lives = min(ship.max_lives, ship.lives + 1)
                 ship.health_deplete_anim = ship.lives / max(1, ship.max_lives)
-                explosiones.append(crear_explosion(ship.x, ship.y, (130, 255, 150), 26))
-                aviso = ["¡RECOLECTOR!", "Recuperas una vida"]
+        self.corazones = [c for c in self.corazones if c[2] < VIAJE_CORAZON + BRILLO_CORAZON]
         # FENIX (lo hace Ship.take_damage; aca solo el aviso y el fuego)
         if getattr(ship, "fenix_evento", False):
             ship.fenix_evento = False
@@ -254,3 +273,41 @@ class Habilidades:
             # una plumita encendida sobre la nave: el fenix sigue disponible
             neon.cuadro_pixel(surface, (255, 150, 50), ship.x, ship.y - 34, 6)
             neon.cuadro_pixel(surface, ORO, ship.x, ship.y - 38, 4)
+
+    def dibujar_corazones(self, surface, ship, offset_x, offset_y, game_w, game_h):
+        """Corazones del Recolector: salen de la nave y vuelan al segmento del
+        CASCO que van a llenar (se dibujan en la pantalla, no en el cuadro de
+        juego, porque el CASCO esta en el margen de abajo). Las medidas son las
+        de ui.draw_ship_status_bar."""
+        if not self.corazones:
+            return
+        max_vidas = max(1, int(ship.max_lives))
+        ancho_total = max_vidas * 34 + (max_vidas - 1) * 6
+        inicio_x = offset_x + game_w // 2 - ancho_total // 2
+        barra_y = offset_y + game_h + 12
+        orden = 0
+        for x, y, edad in self.corazones:
+            if edad < VIAJE_CORAZON:
+                segmento = min(max_vidas - 1, ship.lives + orden)
+                orden += 1
+            else:
+                segmento = max(0, ship.lives - 1)
+            destino = (inicio_x + segmento * 40 + 17, barra_y + 8)
+            if edad >= VIAJE_CORAZON:
+                # llego: el segmento destella
+                k = 1 - (edad - VIAJE_CORAZON) / BRILLO_CORAZON
+                pixelfx.dibujar_halo(surface, (255, 120, 170), destino[0], destino[1], 12 + 14 * k)
+                continue
+            k = edad / VIAJE_CORAZON
+            suave = k * k * (3 - 2 * k)
+            ox, oy = offset_x + x, offset_y + y - 26
+            px = ox + (destino[0] - ox) * suave
+            # arco: primero sube un poco y despues cae hacia el CASCO
+            py = oy + (destino[1] - oy) * suave - math.sin(k * math.pi) * 60
+            escala = 3 if k < 0.8 else 2
+            pixelfx.dibujar_halo(surface, (255, 90, 150), px, py, 14)
+            for fy, fila in enumerate(_CORAZON):
+                for fx, c in enumerate(fila):
+                    if c != ".":
+                        surface.fill(WHITE if c == "W" else (255, 80, 140),
+                                     (int(px) + (fx - 3) * escala, int(py) + (fy - 3) * escala, escala, escala))

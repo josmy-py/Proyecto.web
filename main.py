@@ -2096,6 +2096,10 @@ def main():
                 estado_mejoras.niveles, ship, bullets, asteroids, alien_ships, bosses,
                 (alien_bullets, boss_bullets), explosions, Explosion, _golpear_asteroide,
                 asteroid_kills + stats_alienigenas, estado_mejoras.drones)
+            if habilidades.corazon_nuevo:
+                # Recolector: solo el sonido y el corazoncito que vuela al CASCO
+                habilidades.corazon_nuevo = False
+                audio.sonido_powerup()
             if aviso is not None:
                 aviso_mascota = [aviso[0], aviso[1], 180]
                 audio.sonido_powerup()
@@ -2555,6 +2559,7 @@ def main():
 
         if mostrar_hud_margenes:
             draw_ship_status_bar(screen, ship.lives, ship.max_lives, game_offset_x, game_offset_y, pygame.time.get_ticks())
+            habilidades.dibujar_corazones(screen, ship, game_offset_x, game_offset_y, GAME_WIDTH, GAME_HEIGHT)
 
         if not game_over and frame_actual is not None:
             preview_resized = resize_frame(frame_actual, PREVIEW_WIDTH, PREVIEW_HEIGHT)
