@@ -53,16 +53,21 @@ PELO = (40, 20, 60)
 MADERA = (130, 80, 40)
 MADERA_OSCURA = (82, 46, 22)
 PAJA = (230, 190, 90)
-TUNICA = (26, 18, 40)
-TUNICA_LUZ = (58, 40, 86)
 HUESO = (236, 230, 210)
 HUESO_SOMBRA = (160, 150, 140)
 OJO_PARCA = (255, 40, 70)
-TUNICA_SOMBRA = (14, 8, 24)
-MANGO_PARCA = (34, 26, 44)
-MANGO_LUZ = (96, 70, 130)
 ACERO_OSCURO = (80, 92, 116)
-HUMO_PARCA = (90, 60, 120)
+HUMO_PARCA = (110, 40, 36)
+# la Parca: tunica rojiza, mango de madera retorcida, cadenas y reloj de arena
+TUNICA_PARCA = (90, 34, 28)
+TUNICA_PARCA_LUZ = (138, 62, 44)
+TUNICA_PARCA_SOMBRA = (42, 16, 18)
+MADERA_PARCA = (70, 44, 30)
+MADERA_PARCA_LUZ = (112, 74, 48)
+CADENA = (96, 96, 108)
+CADENA_LUZ = (168, 168, 182)
+VIDRIO_PARCA = (150, 170, 190)
+ARENA = (240, 190, 90)
 FILO = (200, 230, 255)
 ACERO = (140, 160, 185)
 PIEL_ZOMBI = (124, 176, 96)
@@ -437,99 +442,103 @@ def _arte_bruja_gigante(cuadro):
 
 
 def _arte_parca(cuadro):
-    """La Parca (44x52): capucha en punta con la calavera hundida en la
-    sombra, ojos rojos, tunica rasgada que termina en jirones de humo, un
-    alma roja latiendo entre las costillas, una garra estirada y la guadaña
-    enorme por encima de la cabeza. cuadro 0/1: los jirones ondean;
-    2: ataca (ojos y alma encendidos, boca abierta, destello en el filo)."""
-    s = pygame.Surface((44, 52), pygame.SRCALPHA)
+    """La Parca (46x58): alta, con tunica rojiza rasgada en jirones, la cara
+    perdida en la sombra de la capucha (solo se ven dos ojos rojos),
+    cadenas cruzadas sobre el pecho con una gema roja, guadaña de madera
+    retorcida en una mano y un reloj de arena en la otra.
+    cuadro 0/1: los jirones ondean y cae la arena; 2: ataca (ojos, gema y
+    reloj encendidos)."""
+    s = pygame.Surface((46, 58), pygame.SRCALPHA)
     ataca = cuadro == 2
-    # guadaña: mango negro con brillo violeta, detras del cuerpo
-    pygame.draw.line(s, MANGO_PARCA, (36, 5), (40, 51), 3)
-    pygame.draw.line(s, MANGO_LUZ, (37, 6), (41, 50), 1)
-    for y in (14, 24, 34):   # anillos de hueso en el mango
-        _px(s, HUESO_SOMBRA, 36 + (y - 5) * 4 // 46, y, 4, 1)
+    rojo = OJO_PARCA if ataca else (190, 24, 40)
+    # guadaña: mango de madera retorcida con nudos (detras del cuerpo)
+    for y in range(5, 58):
+        x = 8 + round(math.sin(y * 0.35) * 0.8) - (y - 5) // 26
+        _px(s, MADERA_PARCA, x, y, 2, 1)
+        if y % 3 == 0:
+            _px(s, MADERA_PARCA_LUZ, x, y, 1, 1)
+    for y in (16, 31, 44):
+        _px(s, MADERA_PARCA_LUZ, 7, y, 4, 2)    # nudos
     # hoja curva por encima de la capucha (el filo es la curva de abajo)
-    pygame.draw.polygon(s, ACERO, ((38, 4), (31, 1), (21, 0), (11, 2), (4, 6), (0, 12),
-                                   (6, 8), (14, 6), (23, 6), (31, 8), (38, 10)))
-    pygame.draw.polygon(s, ACERO_OSCURO, ((38, 4), (31, 1), (21, 0), (11, 2), (4, 6), (21, 3), (31, 4)))
-    pygame.draw.lines(s, FILO, False, ((1, 11), (6, 8), (14, 6), (23, 6), (31, 8), (37, 10)))
-    _px(s, MANGO_PARCA, 35, 3, 5, 9)   # la pieza que une hoja y mango
-    _px(s, OJO_PARCA, 37, 6, 1, 2)
+    pygame.draw.polygon(s, ACERO, ((8, 6), (12, 2), (20, 0), (29, 1), (36, 4), (40, 9),
+                                   (35, 6), (28, 4), (20, 4), (13, 6), (10, 9)))
+    pygame.draw.polygon(s, ACERO_OSCURO, ((12, 2), (20, 0), (29, 1), (36, 4), (28, 2), (20, 2)))
+    pygame.draw.lines(s, FILO, False, ((10, 8), (13, 6), (20, 4), (28, 4), (35, 6), (39, 9)))
+    _px(s, MADERA_PARCA, 6, 3, 5, 5)
     if ataca:
-        _px(s, WHITE, 9, 6, 2, 1)
-        _px(s, WHITE, 10, 5, 1, 3)
-    # tunica: hombros anchos que se abren hacia abajo
-    pygame.draw.polygon(s, TUNICA, ((13, 21), (28, 21), (35, 27), (37, 38), (34, 46), (8, 46), (4, 38), (6, 27)))
-    # jirones del borde: ondean y se deshacen en humo
-    for i in range(8):
-        x = 7 + i * 4
-        largo = 3 + ((i + cuadro) % 3) * 2
-        pygame.draw.polygon(s, TUNICA, ((x, 45), (x + 4, 45), (x + 2 + (1 if (i + cuadro) % 2 else -1), 45 + largo)))
-        _px(s, HUMO_PARCA, x + 1 + (i + cuadro) % 3, 46 + largo, 1, 1 + (i + cuadro) % 2)
-    for x in range(8, 35, 3):   # borde neon violeta, gastado
-        _px(s, VIOLETA, x, 45, 2, 1)
-    # pliegues
-    for x, y0, y1 in ((10, 30, 44), (15, 34, 46), (27, 34, 46), (32, 30, 43)):
-        _px(s, TUNICA_LUZ, x, y0, 1, y1 - y0)
-    pygame.draw.polygon(s, TUNICA_SOMBRA, ((25, 23), (35, 27), (37, 38), (34, 46), (29, 46), (30, 33)))
-    # pecho abierto: costillas curvas y el alma roja que late adentro
-    pygame.draw.polygon(s, NEGRO, ((17, 25), (24, 25), (23, 35), (18, 35)))
-    for y, ancho in ((27, 3), (30, 3), (33, 2)):
-        _px(s, HUESO, 20 - ancho, y, ancho, 1)
-        _px(s, HUESO, 21, y, ancho, 1)
-        _px(s, HUESO_SOMBRA, 20 - ancho, y + 1, 1, 1)
-        _px(s, HUESO_SOMBRA, 20 + ancho, y + 1, 1, 1)
-    _px(s, HUESO_SOMBRA, 20, 25, 1, 10)   # esternon
-    alma = OJO_PARCA if ataca or cuadro == 1 else (150, 16, 44)
-    _px(s, alma, 19, 29, 3, 3)
-    _px(s, alma, 20, 28, 1, 5)
+        _px(s, WHITE, 31, 4, 3, 1)
+        _px(s, WHITE, 32, 3, 1, 3)
+    # tunica larga que se abre hacia abajo
+    pygame.draw.polygon(s, TUNICA_PARCA, ((18, 15), (30, 15), (35, 22), (37, 34), (40, 50), (8, 50), (11, 34), (13, 22)))
+    pygame.draw.polygon(s, TUNICA_PARCA_SOMBRA, ((27, 17), (35, 22), (37, 34), (40, 50), (31, 50), (30, 34)))
+    for x, y0 in ((15, 30), (20, 34), (26, 36), (33, 30)):
+        _px(s, TUNICA_PARCA_LUZ, x, y0, 1, 50 - y0)   # pliegues
+    # jirones largos del borde
+    for i in range(9):
+        x = 8 + i * 3.6
+        largo = 3 + ((i * 5 + cuadro) % 4) * 2
+        punta = x + 1.5 + (1 if (i + cuadro) % 2 else -1)
+        pygame.draw.polygon(s, TUNICA_PARCA if i % 3 else TUNICA_PARCA_SOMBRA,
+                            ((x, 49), (x + 3.6, 49), (punta, 49 + largo)))
+    # cadenas: una cruza el pecho y otra cuelga de la cintura
+    for k in range(14):
+        cx, cy = 13 + k * 1.6, 20 + k * 1.3
+        _px(s, CADENA_LUZ if k % 2 else CADENA, int(cx), int(cy), 2, 1)
+    for k in range(16):
+        cx = 12 + k * 1.5
+        cy = 38 + math.sin(k * 0.4) * 2 + (k * k) * 0.02
+        _px(s, CADENA_LUZ if k % 2 else CADENA, int(cx), int(cy), 2, 1)
+    for k in range(4):   # el extremo que cuelga
+        _px(s, CADENA if k % 2 else CADENA_LUZ, 32, 40 + k * 2, 1, 2)
+    # gema roja con engarce de oro en el pecho
+    pygame.draw.circle(s, (255, 40, 50, 110 if ataca else 60), (24, 24), 6)   # resplandor
+    _px(s, ORO_OSCURO, 22, 22, 5, 5)
+    _px(s, ORO, 24, 21, 1, 1)
+    _px(s, rojo, 23, 23, 3, 3)
+    _px(s, (255, 170, 170) if ataca else (255, 90, 100), 23, 23, 1, 1)
+    # brazo izquierdo (de frente a la derecha del mango): manga y mano en el mango
+    pygame.draw.polygon(s, TUNICA_PARCA, ((15, 18), (8, 22), (7, 27), (12, 28), (17, 24)))
+    for k, x in enumerate((7, 9, 11)):
+        _px(s, TUNICA_PARCA_SOMBRA, x, 28, 2, 3 + (k + cuadro) % 2 * 3)   # manga rasgada
+    for y in (23, 25):   # dedos huesudos cerrados sobre el mango
+        _px(s, HUESO, 7, y, 4, 1)
+        _px(s, HUESO_SOMBRA, 7, y + 1, 4, 1)
+    _px(s, HUESO, 11, 23, 1, 2)
+    # brazo derecho: manga rasgada y la mano que sostiene el reloj de arena
+    pygame.draw.polygon(s, TUNICA_PARCA, ((30, 17), (37, 21), (41, 27), (36, 29), (32, 24)))
+    for k, x in enumerate((36, 38, 40)):
+        _px(s, TUNICA_PARCA_SOMBRA, x, 29, 1, 4 + (k + cuadro) % 2 * 4)
+    for x in (39, 41):   # dedos largos que cuelgan
+        _px(s, HUESO, x, 26, 1, 4)
+        _px(s, HUESO_SOMBRA, x, 30, 1, 1)
+    _px(s, HUESO, 38, 26, 4, 1)
+    # reloj de arena colgando de la mano
+    _px(s, MADERA_PARCA, 40, 30, 1, 2)
     if ataca:
-        _px(s, (255, 190, 200), 20, 30, 1, 1)
-    # brazo derecho: manga hasta la mano huesuda que aprieta el mango
-    pygame.draw.polygon(s, TUNICA, ((27, 24), (35, 27), (38, 31), (31, 33)))
-    _px(s, HUESO, 35, 28, 4, 2)
-    _px(s, HUESO, 35, 31, 4, 1)
-    _px(s, HUESO_SOMBRA, 35, 30, 4, 1)
-    # brazo izquierdo: manga rasgada y garra estirada hacia la nave
-    pygame.draw.polygon(s, TUNICA, ((12, 24), (6, 28), (2, 33), (6, 35), (11, 30)))
-    for dx, alto in ((0, 5), (2, 6), (4, 5), (6, 4)):
-        _px(s, HUESO, dx, 35, 1, alto)
-        _px(s, HUESO_SOMBRA, dx + (1 if dx < 3 else 0), 35 + alto, 1, 1)   # puntas curvas
-    _px(s, HUESO_SOMBRA, 0, 34, 8, 1)
-    # capucha en punta, alta, con la sombra cayendo sobre los hombros
-    pygame.draw.polygon(s, TUNICA, ((20, 1), (23, 4), (27, 10), (29, 18), (28, 25), (12, 25), (11, 18), (13, 10), (17, 4)))
-    pygame.draw.polygon(s, TUNICA_SOMBRA, ((22, 3), (27, 10), (29, 18), (28, 25), (24, 25), (25, 14)))
-    _px(s, TUNICA_LUZ, 14, 11, 1, 11)
-    _px(s, TUNICA_LUZ, 19, 2, 1, 4)
-    pygame.draw.ellipse(s, NEGRO, (14, 9, 12, 16))
-    # calavera hundida: solo la frente y los pomulos reciben luz
-    pygame.draw.ellipse(s, HUESO_SOMBRA, (16, 11, 8, 9))
-    pygame.draw.ellipse(s, HUESO, (16, 11, 8, 6))
-    _px(s, NEGRO, 16, 14, 3, 3)
-    _px(s, NEGRO, 21, 14, 3, 3)
-    ojo = OJO_PARCA if ataca else (190, 20, 50)
-    if ataca:   # el rojo se derrama alrededor de las cuencas
-        for ox in (16, 21):
-            _px(s, (120, 10, 30), ox - 1, 14, 1, 3)
-            _px(s, (120, 10, 30), ox + 3, 14, 1, 3)
-    _px(s, ojo, 17, 15, 1, 1)
-    _px(s, ojo, 22, 15, 1, 1)
+        pygame.draw.circle(s, (255, 140, 60, 90), (40, 38), 6)
+    _px(s, ORO_OSCURO, 36, 32, 9, 1)
+    _px(s, ORO_OSCURO, 36, 44, 9, 1)
+    _px(s, MADERA_PARCA, 36, 33, 1, 11)
+    _px(s, MADERA_PARCA, 44, 33, 1, 11)
+    pygame.draw.polygon(s, VIDRIO_PARCA, ((37, 33), (43, 33), (41, 38), (43, 43), (37, 43), (39, 38)))
+    _px(s, ARENA, 38, 34, 5, 2)          # arena de arriba
+    _px(s, ARENA, 39, 36, 3, 1)
+    pygame.draw.polygon(s, ARENA, ((37, 43), (43, 43), (40, 40)))   # monton de abajo
+    _px(s, ARENA, 40, 37 + cuadro % 2, 1, 2)   # hilo de arena que cae
+    # capucha alta en punta y la cara perdida en la sombra
+    pygame.draw.polygon(s, TUNICA_PARCA, ((24, 2), (28, 6), (31, 12), (32, 19), (16, 19), (17, 12), (20, 6)))
+    pygame.draw.polygon(s, TUNICA_PARCA_SOMBRA, ((26, 4), (31, 12), (32, 19), (28, 19), (29, 11)))
+    _px(s, TUNICA_PARCA_LUZ, 19, 9, 1, 8)
+    _px(s, TUNICA_PARCA_LUZ, 23, 3, 1, 3)
+    pygame.draw.ellipse(s, NEGRO, (19, 8, 10, 12))
+    _px(s, (30, 12, 14), 21, 16, 6, 3)   # apenas se adivina una mandibula
+    _px(s, rojo, 21, 12, 2, 1)
+    _px(s, rojo, 25, 12, 2, 1)
     if ataca:
-        _px(s, ojo, 18, 15, 1, 1)
-        _px(s, ojo, 21, 15, 1, 1)
-        _px(s, (255, 200, 210), 17, 15, 1, 1)
-        _px(s, (255, 200, 210), 22, 15, 1, 1)
-    _px(s, NEGRO, 20, 17, 1, 1)
-    _px(s, HUESO_SOMBRA, 17, 19, 6, 1)
-    for dx in range(17, 23, 2):
-        _px(s, NEGRO, dx, 19, 1, 1)
-    if ataca:   # mandibula abierta
-        _px(s, NEGRO, 17, 20, 6, 2)
-        _px(s, HUESO_SOMBRA, 17, 22, 6, 1)
-        for dx in range(17, 23, 2):
-            _px(s, NEGRO, dx, 22, 1, 1)
-    return _contornear(s, CONTORNO, (44, 52))
+        _px(s, (255, 180, 180), 21, 12, 1, 1)
+        _px(s, (255, 180, 180), 26, 12, 1, 1)
+        _px(s, (120, 10, 20), 20, 11, 8, 1)
+    return _contornear(s, CONTORNO, (46, 58))
 
 
 def _arte_mini_calabaza(cuadro):
@@ -1462,7 +1471,7 @@ class ParcaBoss(JefeHalloweenBase):
         self.y = -160.0
         self.base_y = 160.0
         self.size = 70
-        self.alto_sprite = 52 * self.ESCALA
+        self.alto_sprite = 58 * self.ESCALA
         self.humo = []   # jirones de sombra que suben desde la tunica
         self.alfa = 1.0
         self.tele = None
@@ -1644,7 +1653,7 @@ class ParcaBoss(JefeHalloweenBase):
         if self.alfa < 0.3:
             return
         latido = 0.5 + 0.5 * math.sin(self.t * 0.12)
-        color = (150, 10, 40) if self.furioso else (70, 30, 110)
+        color = (200, 20, 30) if self.furioso else (130, 30, 30)
         pixelfx.dibujar_halo(screen, pixelfx.apagar(color, 0.5 + 0.3 * latido), x, y + 20, 95 + 10 * latido)
         if self.t % 4 == 0:
             self.humo.append([random.uniform(-70, 70), random.uniform(10, 90), 0])
@@ -1654,7 +1663,8 @@ class ParcaBoss(JefeHalloweenBase):
         for hx, hy, edad in self.humo:
             k = edad / 40
             tam = int(10 * (1 - k)) + 2
-            col = pixelfx.apagar((120, 20, 50) if self.furioso else HUMO_PARCA, 1 - k * 0.8)
+            col = pixelfx.apagar((255, 120, 50) if edad % 7 == 0 else ((150, 20, 30) if self.furioso else HUMO_PARCA),
+                                 1 - k * 0.8)   # humo y alguna brasa
             screen.fill(col, (int(x + hx + math.sin(edad * 0.2 + hx) * 6) - tam // 2,
                               int(y + hy - edad * 1.6) - tam // 2, tam, tam))
 
